@@ -1,0 +1,3 @@
+netq: simple network packet queue
+  to create test in subdirectory tests invoke `cc -I .. -o netq-test netq-test.c ../netq.c'
+ 
