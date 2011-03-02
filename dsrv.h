@@ -42,8 +42,8 @@ dsrv_new_context(struct sockaddr *laddr, size_t laddrlen,
 /** 
  * Releases the memory allocated for context C. The associated socket
  * must be closed manually. */
-#define dsrv_free_context(C) do {		\
-    free((C)->rq); free((C)->wq); free(C);	\
+#define dsrv_free_context(C) do {			\
+    if (C) { free((C)->rq); free((C)->wq); free(C); }	\
 } while(0)
 
 /* Closes the socket that is associated with context C. */ 

@@ -3,6 +3,10 @@
 
 #include "netq.h" 
 
+#ifndef NDEBUG
+extern void nq_dump(struct netq_t *);
+#endif
+
 int main(int argc, char **argv) {
 #ifndef NDEBUG
   struct netq_t *nq;

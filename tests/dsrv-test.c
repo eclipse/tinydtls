@@ -32,7 +32,11 @@ handle_write(struct dsrv_context_t *ctx) {
 
 int main(int argc, char **argv) {
 
+#if 1
   struct sockaddr_in6 listen_addr = { AF_INET6, htons(20220), 0, IN6ADDR_ANY_INIT, 0 };
+#else
+  struct sockaddr_in listen_addr = { AF_INET, htons(20220), { htonl(0x7f000001) } };
+#endif
   fd_set rfds, wfds;
   struct timeval timeout;
   struct dsrv_context_t *ctx;
@@ -47,11 +51,19 @@ int main(int argc, char **argv) {
   }
 
   while (1) {
+    FD_ZERO(&rfds);
+    FD_ZERO(&wfds);
+
     dsrv_prepare(ctx, &rfds, DSRV_READ);
-    dsrv_prepare(ctx, &rfds, DSRV_WRITE);
+    dsrv_prepare(ctx, &wfds, DSRV_WRITE);
     
+#if 0
     timeout.tv_sec = 0;
     timeout.tv_usec = dsrv_get_timeout(ctx);
+#else
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+#endif
     
     result = select( FD_SETSIZE, &rfds, &wfds, 0, &timeout);
     

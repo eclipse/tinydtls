@@ -21,6 +21,10 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef NDEBUG
+#include <stdio.h>
+#include <unistd.h>
+#endif
 
 #include "netq.h"
 
@@ -76,7 +80,7 @@ nq_new(int bufsize) {
 struct packet_t *
 nq_new_packet(struct netq_t *nq, struct sockaddr *raddr, socklen_t rlen,
 	      int ifindex, char *buf, size_t len) {
-  struct packet_t *p;
+  struct packet_t *p = NULL;
   char *s_start;		/* start of available storage */
   size_t s_len;			/* max storage */
   size_t p_len = sizeof(struct packet_t) + rlen + len; /* actual length */
@@ -165,7 +169,7 @@ nq_dump(struct netq_t *nq) {
   cnt = nq_count(nq);
 
   printf("========================================================================\n");
-  printf("queue: %p (%d %s)\n", nq, cnt, cnt == 1 ? "element" : "elements");
+  printf("queue: %p (%d %s)\n", (void *)nq, cnt, cnt == 1 ? "element" : "elements");
   
   cnt = 0;
   for (p = nq->pq_first; p; p = p->next) {
@@ -176,7 +180,7 @@ nq_dump(struct netq_t *nq) {
 #    define min(A,B) ((A) <= (B) ? (A) : (B))
 #  endif
     buf[snprintf(buf, min(39,p->len+1), "%s", p->buf)] = 0;
-    printf("  %2d: %p: '%s'\n" , ++cnt, p, buf);
+    printf("  %2d: %p: '%s'\n" , ++cnt, (void *)p, buf);
 #endif
   }
 }
