@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <assert.h>
 
 #include "dsrv.h"
 
@@ -149,4 +150,57 @@ long
 dsrv_get_timeout(dsrv_context_t *ctx) {
   return 2000;			/* default timeout is two seconds */
 }
+
+struct packet_t *
+dsrv_add_packet(dsrv_context_t *ctx, struct sockaddr *raddr, socklen_t rlen,
+		int ifindex, char *buf, size_t len, int mode) {
+  struct netq_t *nq;
+
+  nq = mode & DSRV_WRITE ? ctx->wq : ctx->rq;
+  if (nq) {
+    return nq_new_packet(nq, raddr, rlen, ifindex, buf, len);
+  } else  
+    return NULL;
+}
+
+struct packet_t *
+dsrv_sendto(dsrv_context_t *ctx, struct sockaddr *raddr, socklen_t rlen,
+	   int ifindex, char *buf, size_t len) {
+  return dsrv_add_packet(ctx, raddr, rlen, ifindex, buf, len, DSRV_WRITE);
+}
+
+#ifndef min
+#  define min(A,B) ((A) <= (B) ? (A) : (B))
+#endif
+
+struct packet_t *
+dsrv_recvfrom(dsrv_context_t *ctx, struct sockaddr *raddr, socklen_t *rlen,
+	      int *ifindex, char *buf, size_t *blen) {
+  struct packet_t *p;
+  socklen_t len;
+
+  if (!ctx->rq || !nq_pending(ctx->rq)) 
+    return NULL;
+  
+  p = nq_pop(ctx->rq);
+  assert(p);			/* see nq_pending() */
+
+  if (raddr && rlen) {
+    len = min(*rlen, p->rlen);
+    memcpy(raddr, p->raddr, len);
+    *rlen = len;
+  } 
+
+  if (ifindex)
+    *ifindex = p->ifindex;
+
+  if (buf && blen) {
+    len = min(*blen, p->len);
+    memcpy(buf, p->buf, len);
+    *blen = len;    
+  }
+
+  return p;
+}
+
 

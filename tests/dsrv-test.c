@@ -14,20 +14,41 @@ handle_read(struct dsrv_context_t *ctx) {
   static char buf[200];
   struct sockaddr_storage src;
   socklen_t srclen = sizeof(src);
+  int fd = dsrv_get_fd(ctx, DSRV_READ);
 
-  len = recvfrom(dsrv_get_fd(ctx, DSRV_READ), buf, sizeof(buf), 0, 
+  len = recvfrom(fd, buf, sizeof(buf), 0, 
 		 (struct sockaddr *)&src, &srclen);
 
   if (len < 0) {
     perror("recvfrom");
   } else {
-    printf("read data: '%*s'\n", len, buf);
+    printf("read %d bytes: '%*s'\n", len, len, buf);
+    if (dsrv_sendto(ctx, (struct sockaddr *)&src, srclen, 0, buf, len) 
+	== NULL) {
+      fprintf(stderr, "cannot add packet to sendqueue\n");
+    }
   }
 }
 
-void
+int
 handle_write(struct dsrv_context_t *ctx) {
-  printf("FIXME: write pending data from ctx\n");
+  struct packet_t *p;
+  int fd = dsrv_get_fd(ctx, DSRV_WRITE);
+  int len;
+
+  p = ctx->rq ? nq_peek(ctx->wq) : NULL;
+
+  if (!p)
+    return -1;
+
+  len = sendto(fd, p->buf, p->len, 0, p->raddr, p->rlen);
+  
+  if (len < 0)
+    perror("sendto");
+  else 
+    nq_pop(ctx->wq);
+
+  return len;
 }
 
 int main(int argc, char **argv) {
@@ -73,10 +94,10 @@ int main(int argc, char **argv) {
     } else if (result == 0) {	/* timeout */
       printf(".");		
     } else {			/* ok */
-      if (dsrv_check(ctx, &rfds, DSRV_READ))
-	handle_read(ctx);
-      else if (dsrv_check(ctx, &wfds, DSRV_WRITE))
+      if (dsrv_check(ctx, &wfds, DSRV_WRITE))
 	handle_write(ctx);
+      else if (dsrv_check(ctx, &rfds, DSRV_READ))
+	handle_read(ctx);
     }
   }
 

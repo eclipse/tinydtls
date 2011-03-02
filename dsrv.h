@@ -66,6 +66,14 @@ int dsrv_check(dsrv_context_t *ctx, fd_set *fds, int mode);
 /** Returns the timeout for the next select() operation. */
 long dsrv_get_timeout(dsrv_context_t *ctx);
 
+struct packet_t *dsrv_sendto(dsrv_context_t *ctx, struct sockaddr *raddr, 
+			     socklen_t rlen, int ifindex,
+			     char *buf, size_t len);
+
+struct packet_t *dsrv_recvfrom(dsrv_context_t *ctx, struct sockaddr *raddr, 
+			       socklen_t *rlen, int *ifindex,
+			       char *buf, size_t *len);
+
 #endif /* _DSRV_H_ */
 
 
