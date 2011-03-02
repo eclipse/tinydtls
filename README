@@ -1,3 +1,21 @@
-netq: simple network packet queue
-  to create test in subdirectory tests invoke `cc -I .. -o netq-test netq-test.c ../netq.c'
+CONTENTS 
+
+This library contains functions and structures that can help
+constructing a single-threaded UDP server in C99. The following
+components are available:
+
+* netq: 
+  Simple network packet queue.
+ 
+* dsrv: 
+  Function to help dealing with netq in a simple datagram server.
+  Depends: netq
+
+* tests
+  The subdirectory tests contains test programs that show how each
+  component is used. 
+
+BUILDING
+
+Just type make and wait until compilation is complete.
  
