@@ -80,7 +80,6 @@ nq_new(int bufsize) {
 struct packet_t *
 nq_new_packet(struct netq_t *nq, struct sockaddr *raddr, socklen_t rlen,
 	      int ifindex, char *buf, size_t len) {
-  struct packet_t *p = NULL;
   char *s_start;		/* start of available storage */
   size_t s_len;			/* max storage */
   size_t p_len = sizeof(struct packet_t) + rlen + len; /* actual length */
@@ -136,9 +135,9 @@ nq_new_packet(struct netq_t *nq, struct sockaddr *raddr, socklen_t rlen,
 
   nq_push(nq, PACKET(s_start));
 
-#undef PACKET
+  return PACKET(s_start);
 
-  return p;
+#undef PACKET
 }
 
 /* count list elements */
