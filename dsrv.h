@@ -62,7 +62,10 @@ typedef struct dsrv_context_t {
   void (*cb_timeout)(struct dsrv_context_t *);
   void (*cb_read)(struct dsrv_context_t *ctx, 
 		  peer_t *peer, char *buf, int len);
-
+#ifdef WITH_PROTOCOL_DEMUX
+  void (*cb_demux)(struct sockaddr *raddr, size_t rlen,
+		   int ifindex, char *buf, int len);
+#endif
 } dsrv_context_t;
 
 struct dsrv_context_t *

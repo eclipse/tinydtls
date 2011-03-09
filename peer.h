@@ -38,6 +38,13 @@
 
 #include "uthash.h"
 
+#ifdef WITH_PROTOCOL_DEMUX
+/** 
+ * Used by demux function to indicate if special treatment is required
+ * on incoming or outgoing traffic. */
+typedef enum { DISCARD=0, RAW, DTLS } protocol_t;
+#endif
+
 typedef enum { 
   PEER_ST_ESTABLISHED, PEER_ST_PENDING, PEER_ST_CLOSED 
  } peer_state_t;
@@ -51,6 +58,9 @@ typedef struct {
     struct sockaddr_in6 sin6;
   } raddr;			/* remote address */
   int ifindex;			/* local interface */
+#ifdef WITH_PROTOCOL_DEMUX
+  protocol_t protocol;		/* what protocol do we talk? */
+#endif
 } session_t;
 
 typedef struct {
@@ -75,7 +85,11 @@ void peer_set_state(peer_t *peer, peer_state_t state);
 /** 
  * Creates a new peer for the session specified by remote address
  * raddr of len raddrlen and the local interface index ifindex. */
-peer_t *peer_new(struct sockaddr *raddr, int raddrlen, int ifindex);
+peer_t *peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
+#ifdef WITH_PROTOCOL_DEMUX
+		 , protocol_t protocol
+#endif
+		 );
 
 /** Releases any storage occupied by given peer. */
 void peer_free(peer_t *peer);

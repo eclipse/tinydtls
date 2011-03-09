@@ -483,6 +483,9 @@ handle_read(struct dsrv_context_t *ctx) {
 #ifdef WITH_DTLS  
   int wlen, err, res;
 #endif
+#ifdef WITH_PROTOCOL_DEMUX
+  protocol_t protocol;
+#endif
 
   session.rlen = sizeof(struct sockaddr_storage);
   len = recvfrom(fd, buf, sizeof(buf), 0, 
@@ -512,9 +515,25 @@ handle_read(struct dsrv_context_t *ctx) {
 	warn("new peer not allowed\n");
 	return;
       }
+#ifdef WITH_PROTOCOL_DEMUX
+      if (ctx->cb_demux) {
+	protocol = ctx->cb_demux(&session.raddr.sa, session.rlen, 
+				 session.ifindex, buf, len);
+      } else {
+#ifdef WITH_DTLS
+	protocol = DTLS;
+#else
+	protocol = RAW;
+#endif
+      }
+#endif
 
-      peer = peer_new(&session.raddr.sa, session.rlen, 
-		      session.ifindex);
+      peer = peer_new(&session.raddr.sa, session.rlen, session.ifindex
+#ifdef WITH_PROTOCOL_DEMUX
+		      , protocol
+#endif
+		      );
+
       if (peer) {
 #ifndef NDEBUG
 	debug("add new peer %s\n",
@@ -526,38 +545,44 @@ handle_read(struct dsrv_context_t *ctx) {
   }
 
 #ifdef WITH_DTLS
-  /* Handle data only if nothing is pending. */      
+#ifdef WITH_PROTOCOL_DEMUX
+  if (peer->protocol == DTLS) {
+#endif /* WITH_PROTOCOL_DEMUX */
+    /* Handle data only if nothing is pending. */      
   
-  if (BIO_flush(peer->nbio) != 1) {
-    warn("flush failed, dropping data (%d)\n", BIO_should_retry(peer->nbio));
-    return;
+    if (BIO_flush(peer->nbio) != 1) {
+      warn("flush failed, dropping data (%d)\n", BIO_should_retry(peer->nbio));
+      return;
+    }
+    
+    wlen = BIO_write(peer->nbio, buf, len);
+    if (wlen < 0) {
+      err = SSL_get_error(peer->ssl,wlen);	
+      dsrv_log(LOG_CRIT, "BIO_write: %d: %s\n", err,
+	       ERR_error_string(err, NULL));
+      return;
+    } 
+    
+    /* res = SSL_read(peer->ssl, dbuf, sizeof(dbuf)); */
+    res = SSL_read(peer->ssl, buf, sizeof(buf));
+    if (res < 0) {
+      err = SSL_get_error(peer->ssl,res);    
+      
+      if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+	dsrv_log(LOG_CRIT,"E: SSL_read: %d %s\n", 
+		 err, ERR_error_string(err, NULL));
+      
+      return;
+    } else if (res == 0) {	/* connection might have been closed */
+      if (SSL_get_shutdown(peer->ssl)) 
+	peer_set_state(peer, PEER_ST_CLOSED);
+    } 
+    
+    len = res;
+#ifdef WITH_PROTOCOL_DEMUX
   }
-
-  wlen = BIO_write(peer->nbio, buf, len);
-  if (wlen < 0) {
-    err = SSL_get_error(peer->ssl,wlen);	
-    dsrv_log(LOG_CRIT, "BIO_write: %d: %s\n", err,
-	     ERR_error_string(err, NULL));
-    return;
-  } 
-
-  /* res = SSL_read(peer->ssl, dbuf, sizeof(dbuf)); */
-  res = SSL_read(peer->ssl, buf, sizeof(buf));
-  if (res < 0) {
-    err = SSL_get_error(peer->ssl,res);    
-
-    if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
-      dsrv_log(LOG_CRIT,"E: SSL_read: %d %s\n", 
-	       err, ERR_error_string(err, NULL));
-
-    return;
-  } else if (res == 0) {	/* connection might have been closed */
-    if (SSL_get_shutdown(peer->ssl)) 
-      peer_set_state(peer, PEER_ST_CLOSED);
-  } 
-  
-  len = res;
-#endif
+#endif /* WITH_PROTOCOL_DEMUX */
+#endif /* WITH_DTLS */
 
   /* invoke user callback if set */
   if (ctx->cb_read)
@@ -606,20 +631,27 @@ handle_timeout(struct dsrv_context_t *ctx) {
     ctx->cb_timeout(ctx);
 
 #ifdef WITH_DTLS
-  HASH_ITER(hh, ctx->peers, peer, tmp) {
-    result = DTLSv1_handle_timeout(peer->ssl);
-    if (result < 0) {
-      err = SSL_get_error(peer->ssl,result);
-      info("dtls1_handle_timeout (%d): %s\n",
-	      err, ERR_error_string(err, NULL));
+#ifdef WITH_PROTOCOL_DEMUX
+  if (peer->protocol == DTLS) {
+#endif /* WITH_PROTOCOL_DEMUX */
+
+    HASH_ITER(hh, ctx->peers, peer, tmp) {
+      result = DTLSv1_handle_timeout(peer->ssl);
+      if (result < 0) {
+	err = SSL_get_error(peer->ssl,result);
+	info("dtls1_handle_timeout (%d): %s\n",
+	     err, ERR_error_string(err, NULL));
+      }
+      
+      if (peer_get_state(peer) == PEER_ST_CLOSED) {
+	dsrv_delete_peer(ctx, peer);
+	peer_free(peer);
+      }
     }
-    
-    if (peer_get_state(peer) == PEER_ST_CLOSED) {
-      dsrv_delete_peer(ctx, peer);
-      peer_free(peer);
-    }
+#ifdef WITH_PROTOCOL_DEMUX
   }
-#endif
+#endif /* WITH_PROTOCOL_DEMUX */
+#endif /* WITH_DTLS */
   return 0;
 }
 

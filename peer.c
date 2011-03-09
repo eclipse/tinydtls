@@ -52,7 +52,11 @@ peer_free(peer_t *peer) {
 }
 
 peer_t *
-peer_new(struct sockaddr *raddr, int raddrlen, int ifindex) {
+peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
+#ifdef WITH_PROTOCOL_DEMUX
+	 , protocol_t protocol
+#endif
+	 ) {
   peer_t *peer = (peer_t *)malloc(sizeof(peer_t));
 #ifdef WITH_DTLS
   BIO *ibio;
@@ -68,7 +72,14 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex) {
     peer->session.ifindex = ifindex;
     make_hashkey(&peer->session);
 
+#ifdef WITH_PROTOCOL_DEMUX
+    peer->protocol = protocol;
+#endif
+
 #ifdef WITH_DTLS
+#ifdef WITH_PROTOCOL_DEMUX
+    if (protocol == DTLS) {
+#endif /* WITH_PROTOCOL_DEMUX */
     peer->ssl = SSL_new(dsrv_get_context()->sslctx);
     if (peer->ssl) {
 
@@ -88,7 +99,10 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex) {
       peer_free(peer);
       return NULL;
     }
-#endif
+#ifdef WITH_PROTOCOL_DEMUX
+    }
+#endif /* WITH_PROTOCOL_DEMUX */
+#endif /* WITH_DTLS */
     
   } else {
     info("cannot create peer object!\n");
@@ -99,14 +113,27 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex) {
 
 size_t
 peer_write(peer_t *peer, char *buf, int len) {
+  /* The following ifdef-garbage means: If we have DTLS support and
+   * allow protocol multiplexing (i.e. usually intermixing
+   * clear/crypto and possibly STUN), then we have to check if the
+   * peer speaks DTLS. If we only have DTLS, we always send
+   * crypted. Otherwise, if we have no DTLS or if the multiplexed
+   * protocol isn't DTLS, we send in clear.
+   */
+
 #ifdef WITH_DTLS
-  return SSL_write(peer->ssl, buf, len);
-#else
+#  ifdef WITH_PROTOCOL_DEMUX
+  if (peer->protocol == DTLS)
+#  endif /* WITH_PROTOCOL_DEMUX */
+    return SSL_write(peer->ssl, buf, len);
+#endif /* WITH_DTLS */
+
+#if !defined(WITH_DTLS) || defined(WITH_PROTOCOL_DEMUX)
   if (dsrv_sendto(dsrv_get_context(), 
 		  &peer->session.raddr.sa, peer->session.rlen, 
 		  peer->session.ifindex, buf, len))
     return len;
   else 
     return -1;
-#endif  
+#endif  /* !defined(WITH_DTLS) || defined(WITH_PROTOCOL_DEMUX) */
 }
