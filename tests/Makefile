@@ -1,13 +1,15 @@
 top_builddir:=..
 top_srcdir:=..
+openssl:=/home/bergmann
 
 SOURCES:= netq-test.c dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
 CFLAGS:=-Wall -pedantic -std=c99 -g -O2 -I$(top_srcdir)
-LDFLAGS:=-L$(top_builddir)
-LDLIBS:=-lnetutil
+CFLAGS+=-DWITH_DTLS -I$(openssl)/include
+LDFLAGS:=-L$(top_builddir) -L$(openssl)/lib
+LDLIBS:=-lnetutil -lssl -lcrypto -ldl
 DISTDIR=$(top_builddir)/$(package)
 SUBDIRS:=
 FILES:=Makefile.in $(SOURCES) $(HEADERS)
