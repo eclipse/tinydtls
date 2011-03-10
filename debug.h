@@ -26,6 +26,7 @@
 #ifndef _DEBUG_H_
 #define _DEBUG_H_
 
+/** Pre-defined log levels akin to what is used in \b syslog. */
 typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
        LOG_NOTICE, LOG_INFO, LOG_DEBUG
 } log_t;
@@ -36,6 +37,10 @@ log_t get_log_level();
 /** Sets the log level to the specified value. */
 void set_log_level(log_t level);
 
+/** 
+ * Writes the given text to \c stdout. The text is output only when \p
+ * level is below or equal to the log level that set by
+ * set_log_level(). */
 void dsrv_log(log_t level, char *format, ...);
 
 /* A set of convenience macros for common log levels. */

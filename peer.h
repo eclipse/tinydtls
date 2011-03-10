@@ -23,6 +23,14 @@
  * SOFTWARE.
  */
 
+/** \file
+ * \brief Definition of session peer.
+ * 
+ * Peers are stored in a hash table indexed by the remote transport
+ * address and the local interface index. We use UTHash as hash
+ * table implementation, see 
+ * <a href="http://uthash.sourceforge.net">UThash</a>.
+ */
 #ifndef _PEER_H_
 #define _PEER_H_
 
@@ -32,9 +40,6 @@
 #include <openssl/ssl.h>
 #endif
 
-/* Peers are stored in a hash table indexed by the remote transport
- * address and the local interface index. We use UTHash as hash
- * table implementation, see http://uthash.sourceforge.net. */
 
 #include "uthash.h"
 
@@ -50,16 +55,16 @@ typedef enum {
  } peer_state_t;
 
 typedef struct {
-  socklen_t rlen;		/* actual length of raddr */
+  socklen_t rlen;		/**< actual length of raddr */
   union {
-    struct sockaddr sa;		/* the generic API structure */
-    struct sockaddr_storage ss;	/* internal representation */
+    struct sockaddr sa;		/**< the generic API structure */
+    struct sockaddr_storage ss;	/**< internal representation */
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
-  } raddr;			/* remote address */
-  int ifindex;			/* local interface */
+  } raddr;			/**< remote address */
+  int ifindex;			/**< local interface */
 #ifdef WITH_PROTOCOL_DEMUX
-  protocol_t protocol;		/* what protocol do we talk? */
+  protocol_t protocol;		/**< what protocol do we talk? */
 #endif
 } session_t;
 
@@ -70,7 +75,7 @@ typedef struct {
   BIO *nbio;
 #endif
   session_t session;
-  UT_hash_handle hh;		/* the hash handle */
+  UT_hash_handle hh;	     /**< the hash handle (used internally) */
 } peer_t;
 
 /** Returns the current state from given peer. */
