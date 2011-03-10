@@ -4,7 +4,7 @@ SOURCES:= dsrv.c peer.c netq.c debug.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 HEADERS:=dsrv.h peer.h netq.h debug.h config.h
 CFLAGS:=-Wall -pedantic -std=c99 -g -O2
-CFLAGS+=-DWITH_DTLS -I$(openssl)/include
+CFLAGS+=-I$(openssl)/include
 DISTDIR=$(top_builddir)/$(package)
 SUBDIRS:=tests
 FILES:=Makefile.in configure configure.in config.h.in $(SOURCES) $(HEADERS)

@@ -8,14 +8,12 @@
 #include <netdb.h>
 #include <signal.h>
 
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
-#endif
 
-#ifdef WITH_DTLS
 #define SERVER_CERT_PEM "./server-cert.pem"
 #define SERVER_KEY_PEM  "./server-key.pem"
 #define CA_CERT_PEM     "./ca-cert.pem"
@@ -30,13 +28,13 @@ handle_sigint(int signum) {
   dsrv_stop(dsrv_get_context());
 }
 
-#ifdef WITH_DEMUX_PROTOCOL
+#ifndef DSRV_NO_PROTOCOL_DEMUX
 protocol_t
-demux_protocol(struct sockaddr *raddr, size_t rlen,
-	       int ifindex, const char *buf, int len) {
-  return DTLS;
+demux_protocol(struct sockaddr *raddr, socklen_t rlen,
+	       int ifindex, char *buf, int len) {
+  return (buf[0] & 0xfc) == 0x14 ? DTLS : RAW;
 }
-#endif /* WITH_DEMUX_PROTOCOL */
+#endif /* DSRV_NO_PROTOCOL_DEMUX */
 
 void
 peer_handle_read(dsrv_context_t *ctx, peer_t *peer, char *buf, int len) {
@@ -47,7 +45,7 @@ peer_handle_read(dsrv_context_t *ctx, peer_t *peer, char *buf, int len) {
   peer_write(peer, buf, len);
 }
 
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
 int 
 generate_cookie(SSL *ssl, unsigned char *cookie, unsigned int *cookie_len) {
   /* FIXME: generate secure client-specific cookie */
@@ -134,7 +132,6 @@ int main(int argc, char **argv) {
 #else
   struct sockaddr_in6 listen_addr = { AF_INET6, htons(20220), 0, IN6ADDR_ANY_INIT, 0 };
 #endif
-  struct sigaction act, oact;
   static dsrv_context_t *ctx;
 
   set_log_level(LOG_DEBUG);
@@ -149,11 +146,11 @@ int main(int argc, char **argv) {
 
   dsrv_set_cb(ctx, peer_timeout, timeout);
   dsrv_set_cb(ctx, peer_handle_read, read);
-#ifdef WITH_DEMUX_PROTOCOL
+#ifndef DSRV_NO_PROTOCOL_DEMUX
   dsrv_set_cb(ctx, demux_protocol, demux);
 #endif
 
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
   if (!init_ssl(ctx->sslctx)) {
     fprintf(stderr, "E: cannot initialize SSL engine\n");
     goto end;
@@ -161,10 +158,7 @@ int main(int argc, char **argv) {
 #endif
 
   /* install signal handler for server shutdown */
-  act.sa_handler = handle_sigint;
-  sigemptyset(&act.sa_mask);
-  act.sa_flags = 0;
-  sigaction(SIGINT, &act, &oact);
+  signal(SIGINT, handle_sigint);
 
   dsrv_run(ctx);
 

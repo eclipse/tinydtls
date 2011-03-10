@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
 #include <sys/select.h>
 #include <sys/time.h>
 
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
 #include <openssl/ssl.h>
 #endif
 
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
 typedef struct dsrv_context_t {
   int fd;			/**< single file descriptor for read/write */
   struct netq_t *rq, *wq;	/**< read queue and write queue */
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
   SSL_CTX *sslctx;
 #endif
   
@@ -180,9 +180,9 @@ typedef struct dsrv_context_t {
   void (*cb_timeout)(struct dsrv_context_t *);
   void (*cb_read)(struct dsrv_context_t *ctx, 
 		  peer_t *peer, char *buf, int len);
-#ifdef WITH_PROTOCOL_DEMUX
-  void (*cb_demux)(struct sockaddr *raddr, size_t rlen,
-		   int ifindex, char *buf, int len);
+#ifndef DSRV_NO_PROTOCOL_DEMUX
+  protocol_t (*cb_demux)(struct sockaddr *raddr, socklen_t rlen,
+			 int ifindex, char *buf, int len);
 #endif
 } dsrv_context_t;
 

@@ -43,7 +43,7 @@ peer_set_state(peer_t *peer, peer_state_t state) {
 void
 peer_free(peer_t *peer) {
   if (peer) {
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
     if (peer->ssl) SSL_free(peer->ssl);
     if (peer->nbio) BIO_free(peer->nbio);
 #endif
@@ -53,12 +53,12 @@ peer_free(peer_t *peer) {
 
 peer_t *
 peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_PROTOCOL_DEMUX
 	 , protocol_t protocol
 #endif
 	 ) {
   peer_t *peer = (peer_t *)malloc(sizeof(peer_t));
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
   BIO *ibio;
 #endif
 
@@ -72,14 +72,14 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
     peer->session.ifindex = ifindex;
     make_hashkey(&peer->session);
 
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_PROTOCOL_DEMUX
     peer->protocol = protocol;
 #endif
 
-#ifdef WITH_DTLS
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_DTLS
+#ifndef DSRV_NO_PROTOCOL_DEMUX
     if (protocol == DTLS) {
-#endif /* WITH_PROTOCOL_DEMUX */
+#endif /* DSRV_NO_PROTOCOL_DEMUX */
     peer->ssl = SSL_new(dsrv_get_context()->sslctx);
     if (peer->ssl) {
 
@@ -99,10 +99,10 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
       peer_free(peer);
       return NULL;
     }
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_PROTOCOL_DEMUX
     }
-#endif /* WITH_PROTOCOL_DEMUX */
-#endif /* WITH_DTLS */
+#endif /* DSRV_NO_PROTOCOL_DEMUX */
+#endif /* DSRV_NO_DTLS */
     
   } else {
     info("cannot create peer object!\n");
@@ -121,19 +121,19 @@ peer_write(peer_t *peer, char *buf, int len) {
    * protocol isn't DTLS, we send in clear.
    */
 
-#ifdef WITH_DTLS
-#  ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_DTLS
+#  ifndef DSRV_NO_PROTOCOL_DEMUX
   if (peer->protocol == DTLS)
-#  endif /* WITH_PROTOCOL_DEMUX */
+#  endif /* DSRV_NO_PROTOCOL_DEMUX */
     return SSL_write(peer->ssl, buf, len);
-#endif /* WITH_DTLS */
+#endif /* DSRV_NO_DTLS */
 
-#if !defined(WITH_DTLS) || defined(WITH_PROTOCOL_DEMUX)
+#if defined(DSRV_NO_DTLS) || !defined(DSRV_NO_PROTOCOL_DEMUX)
   if (dsrv_sendto(dsrv_get_context(), 
 		  &peer->session.raddr.sa, peer->session.rlen, 
 		  peer->session.ifindex, buf, len))
     return len;
   else 
     return -1;
-#endif  /* !defined(WITH_DTLS) || defined(WITH_PROTOCOL_DEMUX) */
+#endif  /* defined(DSRV_NO_DTLS) || !defined(DSRV_NO_PROTOCOL_DEMUX) */
 }

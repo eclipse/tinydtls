@@ -36,14 +36,14 @@
 
 #include <arpa/inet.h>
 
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
 #include <openssl/ssl.h>
 #endif
 
 
 #include "uthash.h"
 
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_PROTOCOL_DEMUX
 /** 
  * Used by demux function to indicate if special treatment is required
  * on incoming or outgoing traffic. */
@@ -63,18 +63,18 @@ typedef struct {
     struct sockaddr_in6 sin6;
   } raddr;			/**< remote address */
   int ifindex;			/**< local interface */
-#ifdef WITH_PROTOCOL_DEMUX
-  protocol_t protocol;		/**< what protocol do we talk? */
-#endif
 } session_t;
 
 typedef struct {
   peer_state_t state;
-#ifdef WITH_DTLS
+#ifndef DSRV_NO_DTLS
   SSL *ssl;
   BIO *nbio;
 #endif
   session_t session;
+#ifndef DSRV_NO_PROTOCOL_DEMUX
+  protocol_t protocol;		/**< what protocol do we talk? */
+#endif
   UT_hash_handle hh;	     /**< the hash handle (used internally) */
 } peer_t;
 
@@ -91,7 +91,7 @@ void peer_set_state(peer_t *peer, peer_state_t state);
  * Creates a new peer for the session specified by remote address
  * raddr of len raddrlen and the local interface index ifindex. */
 peer_t *peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
-#ifdef WITH_PROTOCOL_DEMUX
+#ifndef DSRV_NO_PROTOCOL_DEMUX
 		 , protocol_t protocol
 #endif
 		 );
