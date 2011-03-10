@@ -130,6 +130,36 @@ int main(int argc, char **argv) {
  * \code
  * openssl s_client -dtls1 -servername $HOST -port $PORT  -cipher $CIPHER -psk_identity Id$n -psk $PSK
  * \endcode
+ * 
+ * \subsection demux Protocol Demultiplexing
+ * 
+ * Sometimes it may be necessary to detect if a received packet is a
+ * DTLS record or not, e.g. when the listen port is used for STUN
+ * (other examples include the multiplexing of secure and non-secure
+ * RADIUS or COAP messages on a single port). The server therefore can
+ * ask the application via call-back to classify the initial packet
+ * received from a new peer. The called function must return a valid
+ * protocol_t value to indicate if the subsequent traffic must be
+ * crypted (\c DTLS) or is sent in clear (\c RAW). When the function
+ * returns \c DISCARD, the packet is dropped.
+ * 
+ * Example usage is:
+ * \code
+protocol_t demux_protocol(struct sockaddr *raddr, socklen_t rlen, int ifindex, char *buf, int len) {
+  return (buf[0] & 0xfc) == 0x14 ? DTLS : RAW;
+}
+ * \endcode
+ * and in the main function, set the callback:
+ * \code
+dsrv_set_cb(ctx, demux_protocol, demux);
+ * \endcode
+ *
+ * In this example, a valid PDU of the application protocol never
+ * begins with a value from \c 0x14 to \c 0x17, the possible set of
+ * initial bytes of DTLSv1.1 or DTLSv1.2. This is valid for any
+ * test-based protocol and a few binary protocols such as COAP
+ * (c.f. <a
+ * href="http://tools.ietf.org/html/draft-ietf-core-coap-04#section-7.3">draft-ietf-core-coap-04</a>).
  */
 
 #ifndef _DSRV_H_

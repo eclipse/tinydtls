@@ -519,6 +519,12 @@ handle_read(struct dsrv_context_t *ctx) {
       if (ctx->cb_demux) {
 	protocol = ctx->cb_demux(&session.raddr.sa, session.rlen, 
 				 session.ifindex, buf, len);
+
+	if (protocol == DISCARD) {
+	  debug("DISCARD packet from %s\n", 
+		debug_format_addr(&session.raddr.sa, session.rlen));
+	  return;
+	}
       } else {
 #ifndef DSRV_NO_DTLS
 	protocol = DTLS;
