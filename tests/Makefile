@@ -9,7 +9,8 @@ HEADERS:=
 CFLAGS:=-Wall -pedantic -std=c99 -g -O2 -I$(top_srcdir)
 CFLAGS+=-I$(openssl)/include
 LDFLAGS:=-L$(top_builddir) -L$(openssl)/lib
-LDLIBS:=-lnetutil -lssl -lcrypto -ldl
+#LDLIBS:=-lnetutil -lssl -lcrypto -ldl
+LDLIBS:=-lnetutil /home/bergmann/src/openssl-1.0.0d/libssl.a -lcrypto -ldl
 DISTDIR=$(top_builddir)/$(package)
 SUBDIRS:=
 FILES:=Makefile.in $(SOURCES) $(HEADERS)
@@ -20,6 +21,8 @@ FILES:=Makefile.in $(SOURCES) $(HEADERS)
 .SUFFIXES:      .c .o
 
 all:	$(PROGRAMS) dirs
+
+$(PROGRAMS):: $(top_builddir)/libnetutil.a
 
 check:	
 	echo DISTDIR: $(DISTDIR)
@@ -35,7 +38,7 @@ $(LIB):	$(OBJECTS)
 	ranlib $@
 
 clean:
-	@rm -f $(PROGRAM) main.o $(LIB) $(OBJECTS)
+	@rm -f $(PROGRAMS) main.o $(LIB) $(OBJECTS)
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean ; \
 	done

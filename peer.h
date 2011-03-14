@@ -89,7 +89,21 @@ void peer_set_state(peer_t *peer, peer_state_t state);
 
 /** 
  * Creates a new peer for the session specified by remote address
- * raddr of len raddrlen and the local interface index ifindex. */
+ * raddr of len raddrlen and the local interface index ifindex. 
+ *
+ * \param raddr    The remote peer's transport address.
+ * \param rlen     The length of \p raddr.
+ * \param ifindex  The index of the local interface where the initial
+ *                 packet has arrived.
+ * \param protocol Whether or not the peer talks DTLS (not available with
+ *                 \c DSRV_NO_PROTOCOL_DEMUX).
+ * \return The new peer object or \c NULL if creation failed.
+ *
+ * \bug The SSL object is not initialized correctly because the very
+ * first record (the Hello Verify request) was sent manually. This
+ * causes retransmissions and potentially additional security flaws. I
+ * am not sure how to fix this without breaking OpenSSL security.
+ */
 peer_t *peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
 		 , protocol_t protocol

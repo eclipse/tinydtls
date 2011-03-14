@@ -1,8 +1,8 @@
 openssl:=/home/bergmann
 
-SOURCES:= dsrv.c peer.c netq.c debug.c
+SOURCES:= dsrv.c peer.c netq.c dtls.c debug.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
-HEADERS:=dsrv.h peer.h netq.h debug.h config.h
+HEADERS:=dsrv.h dtls.h peer.h netq.h debug.h config.h
 CFLAGS:=-Wall -pedantic -std=c99 -g -O2
 CFLAGS+=-I$(openssl)/include
 DISTDIR=$(top_builddir)/$(package)

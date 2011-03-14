@@ -90,10 +90,10 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
       }
 
       SSL_set_bio(peer->ssl, ibio, ibio);
-      SSL_set_options(peer->ssl, SSL_OP_COOKIE_EXCHANGE);
-	
+      /* SSL_set_options(peer->ssl, SSL_OP_COOKIE_EXCHANGE); */
       SSL_set_accept_state(peer->ssl);
-
+      peer->ssl->d1->handshake_read_seq = 1;
+      peer->ssl->d1->next_handshake_write_seq = 1;
     } else {
       dsrv_log(LOG_ALERT, "cannot create SSL object!\n");
       peer_free(peer);

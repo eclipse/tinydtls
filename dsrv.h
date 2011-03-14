@@ -75,6 +75,10 @@
  *                      serving DTLS-crypted and clear-text requests over
  *                      the same UDP socket. (Enabled by default.)
  * 
+ * When DTLS support is not switched off, \c configure will look for
+ * openssl on your system. We recommend to use at least version 1.0.0d
+ * which has been used during development of this library.
+ * 
  * \section Building
  * 
  * After configuring the software, just type
@@ -172,6 +176,7 @@ dsrv_set_cb(ctx, demux_protocol, demux);
 
 #ifndef DSRV_NO_DTLS
 #include <openssl/ssl.h>
+#include "dtls.h"
 #endif
 
 #include "uthash.h"    
@@ -199,6 +204,7 @@ typedef struct dsrv_context_t {
   struct netq_t *rq, *wq;	/**< read queue and write queue */
 #ifndef DSRV_NO_DTLS
   SSL_CTX *sslctx;
+  dtls_context_t *dtlsctx;	/**< the main context for DTLS operation */
 #endif
   
   peer_t *peers;		/**< table for peer structures */

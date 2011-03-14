@@ -126,6 +126,7 @@ void
 info_callback(const SSL *ssl, int where, int ret) {
   peer_t *peer;
 
+  debug("STATE: 0x%x\n", SSL_state(ssl));
   if (where & SSL_CB_LOOP)  /* do not care for intermediary states */
     return;
 
@@ -165,6 +166,19 @@ info_callback(const SSL *ssl, int where, int ret) {
     /* move SSL object from pending to established */
     peer_set_state(peer, PEER_ST_ESTABLISHED);
   }
+}
+
+/* Callback function registered with dtls context to send datagrams. */
+int 
+dsrv_dtls_write(struct dtls_context_t *dtlsctx, 
+		struct sockaddr *dst, socklen_t dstlen, int ifindex, 
+		uint8 *buf, int len) {
+  struct dsrv_context_t *ctx;
+
+  ctx = (dsrv_context_t *)dtls_get_app_data(dtlsctx);
+  assert(ctx);
+
+  return dsrv_sendto(ctx, dst, dstlen, ifindex, (char *)buf, len) ? len : 0;
 }
 #endif
 
@@ -252,6 +266,10 @@ dsrv_new_context(struct sockaddr *laddr, socklen_t laddrlen,
   SSL_CTX_set_read_ahead(c->sslctx, 1); /* enable read-ahead */
 
   SSL_CTX_set_info_callback(c->sslctx, info_callback);
+
+  c->dtlsctx = dtls_new_context(c);
+  if (c->dtlsctx) 
+    dtls_set_cb(c->dtlsctx, dsrv_dtls_write, write);
 #endif
 
   if (the_context)
@@ -273,6 +291,7 @@ dsrv_free_context(dsrv_context_t *ctx) {
     free(ctx->rq); 
     free(ctx->wq);
 #ifndef DSRV_NO_DTLS
+    dtls_free_context(ctx->dtlsctx);
     SSL_CTX_free(ctx->sslctx);
 #endif
     dsrv_close(ctx);
@@ -473,6 +492,19 @@ dsrv_free_peers(struct dsrv_context_t *ctx) {
   }
 }
 
+void dump(char *buf, int len) {
+  int i=0;
+
+  while(i<len) {
+    printf("%02x ", buf[i] & 0xff);
+
+    ++i;
+    if (i % 8 == 0) 
+      printf("\n");
+  }
+  printf("\n");
+}
+
 void
 handle_read(struct dsrv_context_t *ctx) {
   int len;
@@ -533,6 +565,16 @@ handle_read(struct dsrv_context_t *ctx) {
 #endif
       }
 #endif
+
+      if (protocol == DTLS) {
+	if (dtls_verify_peer(ctx->dtlsctx, &session, 
+			     (uint8 *)buf, len) <= 0) {
+	  fprintf(stderr,"peer not verified\n");
+	  return;
+	} else {
+	  fprintf(stderr,"verify peer succeeded, update SSL status\n");
+	}
+      }
 
       peer = peer_new(&session.raddr.sa, session.rlen, session.ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
