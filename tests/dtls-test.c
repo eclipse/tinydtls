@@ -46,21 +46,6 @@ peer_handle_read(dsrv_context_t *ctx, peer_t *peer, char *buf, int len) {
 }
 
 #ifndef DSRV_NO_DTLS
-int 
-generate_cookie(SSL *ssl, unsigned char *cookie, unsigned int *cookie_len) {
-  /* FIXME: generate secure client-specific cookie */
-#define DUMMYSTR "ABCDEFGHIJKLMNOP"
-  *cookie_len = strlen(DUMMYSTR);
-  memcpy(cookie, DUMMYSTR, *cookie_len);
-
-  return 1;
-}
-
-int 
-verify_cookie(SSL *ssl, unsigned char *cookie, unsigned int cookie_len) {
-  /* FIXME */
-  return 1;
-}
 
 #ifndef min
 #define min(A,B) ((A) <= (B) ? (A) : (B))
@@ -109,10 +94,6 @@ init_ssl(SSL_CTX *sslctx) {
     fprintf(stderr, "cannot read ca file '%s'\n", CA_CERT_PEM);
     return 0;
   }
-
-  /* Client has to authenticate */
-  SSL_CTX_set_cookie_generate_cb(sslctx, generate_cookie);
-  SSL_CTX_set_cookie_verify_cb(sslctx, verify_cookie);
 
   SSL_CTX_use_psk_identity_hint(sslctx, "Enter password for DTLS test server");
   SSL_CTX_set_psk_server_callback(sslctx, psk_server_callback);
