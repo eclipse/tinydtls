@@ -566,7 +566,10 @@ handle_read(struct dsrv_context_t *ctx) {
       }
 #endif
 
+#ifndef DSRV_NO_DTLS
+#ifndef DSRV_NO_PROTOCOL_DEMUX
       if (protocol == DTLS) {
+#endif
 	if (dtls_verify_peer(ctx->dtlsctx, &session, 
 			     (uint8 *)buf, len) <= 0) {
 	  fprintf(stderr,"peer not verified\n");
@@ -574,7 +577,10 @@ handle_read(struct dsrv_context_t *ctx) {
 	} else {
 	  fprintf(stderr,"verify peer succeeded, update SSL status\n");
 	}
+#ifndef DSRV_NO_PROTOCOL_DEMUX
       }
+#endif
+#endif /* DSRV_NO_DTLS */
 
       peer = peer_new(&session.raddr.sa, session.rlen, session.ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
