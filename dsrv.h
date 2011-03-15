@@ -24,7 +24,7 @@
  */
 
 /**
- * \mainpage dtlssrv -- a basic DTLS server template.
+ * \mainpage tinydtls -- a basic DTLS server template.
  * \author Olaf Bergmann, TZI Uni Bremen
  * 
  * This library provides a very simple datagram server to demonstrate
@@ -62,6 +62,13 @@
  * href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>. When
  * you link this software to OpenSSL, you have to make sure by
  * yourself that you do not infringe with anyone's patents or IPR.
+ * 
+ * \section develop Getting the Files
+ *
+ * You can get the sources either from the 
+ * <a href="http://sourceforge.net/projects/tinydtls/files">downloads</a> 
+ * section or through \c git from the 
+ * <a href="http://sourceforge.net/projects/tinydtls/develop">project develop page</a>.
  * 
  * \section Configuration
  * 
@@ -163,7 +170,13 @@ dsrv_set_cb(ctx, demux_protocol, demux);
  * initial bytes of DTLSv1.1 or DTLSv1.2. This is valid for any
  * test-based protocol and a few binary protocols such as COAP
  * (c.f. <a
- * href="http://tools.ietf.org/html/draft-ietf-core-coap-04#section-7.3">draft-ietf-core-coap-04</a>).
+ * href="http://tools.ietf.org/html/draft-ietf-core-coap-05#section-7.3">draft-ietf-core-coap-05</a>).
+ *
+ * \section join Get Involved
+ *
+ * To join this project, please contact the project administrators of this project, 
+ * as shown on the 
+ * <a href="http://sourceforge.net/projects/tinydtls/">project summary page</a>. 
  */
 
 #ifndef _DSRV_H_
