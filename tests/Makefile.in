@@ -70,13 +70,9 @@ distclean:	clean
 	@rm -rf $(DISTDIR)
 	@rm -f *~ $(DISTDIR).tar.gz
 
-dist:	$(FILES) $(SUBDIRS)
-	test -d $(DISTDIR) || mkdir $(DISTDIR)
-	cp $(FILES) $(DISTDIR)
-	for dir in $(SUBDIRS); do \
-		$(MAKE) -C $$dir dist; \
-	done
-	tar czf $(package).tar.gz $(DISTDIR)
+dist:	$(FILES)
+	test -d $(DISTDIR)/tests || mkdir $(DISTDIR)/tests
+	cp $(FILES) $(DISTDIR)/tests
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
