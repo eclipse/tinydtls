@@ -3967,6 +3967,7 @@ else
 
 $as_echo "#define DSRV_NO_DTLS /**/" >>confdefs.h
 
+  CPPFLAGS="${CPPFLAGS} -DDSRV_NO_DTLS"
 
 fi
 
@@ -3981,6 +3982,7 @@ if test "x$with_protocol_demux" = "xno"; then :
 
 $as_echo "#define DSRV_NO_PROTOCOL_DEMUX /**/" >>confdefs.h
 
+  CPPFLAGS="${CPPFLAGS} -DDSRV_NO_PROTOCOL_DEMUX"
 
 fi
 
