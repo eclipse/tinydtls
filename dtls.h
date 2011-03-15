@@ -47,8 +47,14 @@ typedef struct {
   UT_hash_handle hh;	     /**< the hash handle (used internally) */
 } dtls_peer_t;
 
+/** Length of the secret that is used for generating Hello Verify cookies. */
+#define DTLS_COOKIE_SECRET_LENGTH 12
+
 /** Holds global information of the DTLS engine. */
 typedef struct dtls_context_t {
+  unsigned char cookie_secret[DTLS_COOKIE_SECRET_LENGTH];
+  time_t cookie_secret_age;	/**< the time the secret has been generated */
+
   dtls_peer_t *peers;		/**< hash table to manage peer status */
 
   void *app;			/**< application-specific data */

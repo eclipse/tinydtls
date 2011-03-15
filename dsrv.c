@@ -258,6 +258,7 @@ dsrv_new_context(struct sockaddr *laddr, socklen_t laddrlen,
 #ifndef DSRV_NO_DTLS
   SSL_load_error_strings();
   SSL_library_init();
+  OpenSSL_add_all_digests();
   c->sslctx = SSL_CTX_new(DTLSv1_server_method());
 
   if (!c->sslctx) 

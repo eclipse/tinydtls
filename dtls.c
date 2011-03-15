@@ -25,6 +25,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
+
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <openssl/hmac.h>
 
 #include "debug.h"
 #include "dtls.h"
@@ -47,23 +53,23 @@
   (((*(unsigned char*)(Field)) << 8) | (*(((unsigned char*)(Field))+1)))
 
 #define dtls_uint24_to_int(Field)		\
-  (((*(unsigned char*)(Field)))			\
-   | (*(((unsigned char*)(Field))+1)) << 8)	\
-  | (*(((unsigned char*)(Field))+2)) << 16)	\
-
+  (((*(((unsigned char*)(Field)))) << 16)	\
+   | ((*(((unsigned char*)(Field))+1)) << 8)	\
+   | ((*(((unsigned char*)(Field))+2))))
+  
 #define dtls_uint48_to_ulong(Field)		\
   (((*(unsigned char*)(Field)) << 40)		\
-   | (*(((unsigned char*)(Field))+1)) << 32)	\
-  | (*(((unsigned char*)(Field))+2)) << 24)	\
-  | (*(((unsigned char*)(Field))+3)) << 16)	\
-  | (*(((unsigned char*)(Field))+4)) << 8)	\
-  | (*(((unsigned char*)(Field))+5)))
+   | ((*(((unsigned char*)(Field))+1)) << 32)	\
+   | ((*(((unsigned char*)(Field))+2)) << 24)	\
+   | ((*(((unsigned char*)(Field))+3)) << 16)	\
+   | ((*(((unsigned char*)(Field))+4)) << 8)	\
+   | ((*(((unsigned char*)(Field))+5))))
 
 #define dtls_get_content_type(H) ((H)->content_type & 0xff)
 #define dtls_get_version(H) dtls_uint16_to_int(&(H)->version)
 #define dtls_get_epoch(H) dtls_uint16_to_int(&(H)->epoch)
 #define dtls_get_sequence_number(H) dtls_uint48_to_ulong(&(H)->sequence_number)
-#define dtls_get_fragment_length(H) dtls_uint16_to_int(&(H)->length)
+#define dtls_get_fragment_length(H) dtls_uint24_to_int(&(H)->fragment_length)
 
 #define HASH_FIND_PEER(head,sess,out)		\
   HASH_FIND(hh,head,sess,sizeof(session_t),out)
@@ -78,6 +84,10 @@
 
 #define HIGH(V) (((V) >> 8) & 0xff)
 #define LOW(V)  ((V) & 0xff)
+
+#define RECORD(M) ((dtls_record_header_t *)(M))
+#define HANDSHAKE(M) ((dtls_handshake_header_t *)((M) + DTLS_RH_LENGTH))
+#define CLIENTHELLO(M) ((dtls_client_hello_t *)((M) + HS_HDR_LENGTH))
 
 int 
 dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie) {
@@ -103,8 +113,13 @@ int
 dtls_create_cookie(dtls_context_t *ctx, 
 		   session_t *session,
 		   uint8 *msg, int msglen,
-		   uint8 *cookie, int clen) {
-  /* FIXME: create cookie with HMAC-SHA256 over:
+		   uint8 *cookie, int *clen) {
+
+  HMAC_CTX hmac_context;
+  unsigned int len, e;
+  static unsigned char buf[EVP_MAX_MD_SIZE];
+
+  /* create cookie with HMAC-SHA256 over:
    * - SECRET
    * - session parameters (only IP address?)
    * - client version 
@@ -113,10 +128,36 @@ dtls_create_cookie(dtls_context_t *ctx,
    * - cipher_suites 
    * - compression method
    */
-
-  static uint8 cdata[] = "abcdefghijklmnopqrstuvwxyz01234567890";
   
-  memcpy(cookie, cdata, clen);
+  HMAC_Init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH, 
+	    EVP_sha256());
+
+  /* use only IP address? */
+  HMAC_Update(&hmac_context, (unsigned char *)&session->raddr, 
+	      sizeof(session->raddr));
+
+  /* feed in the beginning of the Client Hello up to and including the
+     session id */
+  e = sizeof(dtls_client_hello_t) + CLIENTHELLO(msg)->session_id_length;
+
+  HMAC_Update(&hmac_context, msg + HS_HDR_LENGTH, e);
+  
+  /* skip cookie bytes and length byte */
+  e += *(uint8 *)(msg + HS_HDR_LENGTH + e) & 0xff;
+  e += sizeof(uint8);
+
+  HMAC_Update(&hmac_context, msg + HS_HDR_LENGTH + e, 
+	      dtls_get_fragment_length(HANDSHAKE(msg)) - e);
+
+  HMAC_Final(&hmac_context, buf, &len);
+  HMAC_cleanup(&hmac_context);
+
+  if (len < *clen) {
+    memset(cookie, 0, *clen);
+    *clen = len;
+  }
+
+  memcpy(cookie, buf, *clen);
   return 1;
 }
 
@@ -125,13 +166,9 @@ dtls_verify_peer(dtls_context_t *ctx,
 		    session_t *session,
 		    uint8 *msg, int msglen) {
 
-#define RECORD(M) ((dtls_record_header_t *)(M))
-#define HANDSHAKE(M) ((dtls_handshake_header_t *)((M) + DTLS_RH_LENGTH))
-#define CLIENTHELLO(M) ((dtls_client_hello_t *)((M) + HS_HDR_LENGTH))
-
-  int len;
+  int len, clen = DTLS_COOKIE_LENGTH;
   uint8 *cookie;
-
+  int i;
   static uint8 buf[HV_HDR_LENGTH+DTLS_COOKIE_LENGTH] = { 
     /* Record header */
     DTLS_CT_HANDSHAKE,		/* handshake message */
@@ -172,8 +209,9 @@ dtls_verify_peer(dtls_context_t *ctx,
       /* FIXME: send Hello Verify request */
       
       if (dtls_create_cookie(ctx, session, msg, msglen, 
-			     buf + HV_HDR_LENGTH, DTLS_COOKIE_LENGTH) < 0)
+			     buf + HV_HDR_LENGTH, &clen) < 0)
 	return -1;
+      assert(clen == DTLS_COOKIE_LENGTH);
 
       /* send Hello Verify request using registered callback */
       ctx->cb_write(ctx,
@@ -185,11 +223,20 @@ dtls_verify_peer(dtls_context_t *ctx,
     } else {			/* found a cookie, check it */
       if (len != DTLS_COOKIE_LENGTH 
 	  || dtls_create_cookie(ctx, session, msg, msglen, 
-				buf + HV_HDR_LENGTH, DTLS_COOKIE_LENGTH) < 0) 
+				buf + HV_HDR_LENGTH, &clen) < 0) 
 	return -1;		/* discard */
+      assert(clen == DTLS_COOKIE_LENGTH);
 
       /* compare if both values match */
-      if (memcmp(cookie, buf + HV_HDR_LENGTH, DTLS_COOKIE_LENGTH) == 0)
+      debug("compare cookies:\n");
+      for (i=0; i < clen; i++) 
+	printf("%02x", *(char *)(buf + HV_HDR_LENGTH + i) & 0xff);
+      printf("\n");
+      for (i=0; i < clen; i++) 
+	printf("%02x", *(char *)(cookie + i) & 0xff);
+      printf("\n");
+
+      if (memcmp(cookie, buf + HV_HDR_LENGTH, clen) == 0)
 	return 1;
     }
   }
@@ -253,6 +300,12 @@ dtls_new_context(void *app_data) {
   if (c) {
     memset(c, 0, sizeof(dtls_context_t));
     c->app = app_data;
+
+    if (RAND_bytes(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
+      time(&c->cookie_secret_age);
+    else 
+      dsrv_log(LOG_ALERT, "cannot initalize cookie secret: %s",
+	       ERR_error_string(ERR_get_error(), NULL));
   }
 
   return c;
