@@ -3,6 +3,12 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
+/* Define if you do not want DTLS support */
+#undef DSRV_NO_DTLS
+
+/* Define if you do not want intermix cleartext with DTLS */
+#undef DSRV_NO_PROTOCOL_DEMUX
+
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
 

@@ -37,12 +37,36 @@ AC_PATH_PROG(DOXYGEN, doxygen, [:])
 AC_C_BIGENDIAN
 
 # Checks for libraries.
-AC_CHECK_LIB([crypto], [BIO_new])
-AC_CHECK_LIB([ssl], [DTLSv1_method])
-AC_CHECK_LIB([dl], [dlopen])
-
 AC_SEARCH_LIBS([gethostbyname], [nsl])
 AC_SEARCH_LIBS([socket], [socket])
+AC_CHECK_LIB([dl], [dlopen])
+
+# custom check for openssl
+AC_ARG_WITH(openssl,
+  [AS_HELP_STRING([--without-openssl],
+    [disable openssl (use --with-openssl=PATH to specify a custom path for your OpenSSL installation)])],
+  [with_openssl=$withval], 
+  [with_openssl=auto])
+
+AS_IF([test "x$with_openssl" = "xauto" -o "x$with_openssl" = "xyes"],
+ [AC_CHECK_LIB([ssl], [DTLSv1_method])
+  AC_CHECK_LIB([crypto], [BIO_new])] ,
+ [test "x$with_openssl" != "xno"],
+ [LIBS="${LIBS} -L${withval}/lib -lssl -lcrypto"
+  CPPFLAGS="${CPPFLAGS} -I${withval}/include"],
+ [AC_DEFINE([DSRV_NO_DTLS], [],
+             [Define if you do not want DTLS support])]
+ )
+
+AC_ARG_WITH(protocol_demux,
+  [AS_HELP_STRING([--without-protocol-demux],
+    [disable protocol demultiplexing (i.e. forbid cleartext on DTLS-enabled sockets)])]
+)
+
+AS_IF([test "x$with_protocol_demux" = "xno"],
+ [AC_DEFINE([DSRV_NO_PROTOCOL_DEMUX], [],
+   [Define if you do not want intermix cleartext with DTLS])]
+)
 
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h unistd.h])

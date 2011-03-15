@@ -38,7 +38,8 @@ package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 SOURCES:= dsrv.c peer.c netq.c dtls.c debug.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 HEADERS:=dsrv.h dtls.h peer.h netq.h debug.h config.h
-CFLAGS:=-Wall -pedantic -std=c99  @CFLAGS@
+CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
+CPPFLAGS:=@CPPFLAGS@
 SUBDIRS:=tests doc
 DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.in config.h.in $(SOURCES) $(HEADERS)

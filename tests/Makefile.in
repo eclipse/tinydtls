@@ -39,11 +39,12 @@ SOURCES:= netq-test.c dtls-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
-CFLAGS:=-Wall -pedantic -std=c99 -I$(top_srcdir) @CFLAGS@
-LDFLAGS:=-L$(top_builddir) -ltinydtls @LIBS@
+CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@ 
+CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
+LDFLAGS:=-L$(top_builddir) 
+LDLIBS:=-ltinydtls @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in $(SOURCES)
-libtinydtls =$(top_builddir)/libtinydtls.a
 
 .PHONY: all dirs clean distclean .gitignore doc
 
@@ -52,20 +53,9 @@ libtinydtls =$(top_builddir)/libtinydtls.a
 
 all:	$(PROGRAMS)
 
-$(PROGRAMS):: $(libtinydtls)
-
 check:	
 	echo DISTDIR: $(DISTDIR)
 	echo top_builddir: $(top_builddir)
-
-dirs:	$(SUBDIRS)
-	for dir in $^; do \
-		$(MAKE) -C $$dir ; \
-	done
-
-$(LIB):	$(OBJECTS)
-	$(AR) $(ARFLAGS) $@ $^ 
-	ranlib $@
 
 clean:
 	@rm -f $(PROGRAMS) main.o $(LIB) $(OBJECTS)
