@@ -20,6 +20,7 @@
 #endif
 
 #include "debug.h" 
+#include "config.h" 
 #include "dsrv.h" 
 
 /* SIGINT handler: set quit to 1 for graceful termination */

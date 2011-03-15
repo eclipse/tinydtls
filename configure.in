@@ -55,7 +55,8 @@ AS_IF([test "x$with_openssl" = "xauto" -o "x$with_openssl" = "xyes"],
  [LIBS="${LIBS} -L${withval}/lib -lssl -lcrypto"
   CPPFLAGS="${CPPFLAGS} -I${withval}/include"],
  [AC_DEFINE([DSRV_NO_DTLS], [],
-             [Define if you do not want DTLS support])]
+             [Define if you do not want DTLS support])
+  CPPFLAGS="${CPPFLAGS} -DDSRV_NO_DTLS"]
  )
 
 AC_ARG_WITH(protocol_demux,
@@ -65,7 +66,8 @@ AC_ARG_WITH(protocol_demux,
 
 AS_IF([test "x$with_protocol_demux" = "xno"],
  [AC_DEFINE([DSRV_NO_PROTOCOL_DEMUX], [],
-   [Define if you do not want intermix cleartext with DTLS])]
+   [Define if you do not want intermix cleartext with DTLS])
+  CPPFLAGS="${CPPFLAGS} -DDSRV_NO_PROTOCOL_DEMUX"]
 )
 
 # Checks for header files.

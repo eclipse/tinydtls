@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include <assert.h>
 
 #ifndef DSRV_NO_DTLS
@@ -676,8 +677,8 @@ handle_write(struct dsrv_context_t *ctx) {
 
 int 
 handle_timeout(struct dsrv_context_t *ctx) {
-  peer_t *peer, *tmp;
 #ifndef DSRV_NO_DTLS
+  peer_t *peer, *tmp;
   int result, err;
 #endif
 
