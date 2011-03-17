@@ -649,6 +649,9 @@ ac_user_opts='
 enable_option_checking
 with_openssl
 with_protocol_demux
+with_sha256
+with_sha384
+with_sha512
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1275,6 +1278,9 @@ Optional Packages:
                           disable protocol demultiplexing (i.e. forbid
                           cleartext on DTLS-enabled sockets)
 
+  --without-sha256        disable use of SHA256
+  --with-sha384           enable use of SHA384
+  --with-sha512           enable use of SHA512
 
 Some influential environment variables:
   CC          C compiler command
@@ -3986,6 +3992,29 @@ $as_echo "#define DSRV_NO_PROTOCOL_DEMUX /**/" >>confdefs.h
 
 fi
 
+
+# Check whether --with-sha256 was given.
+if test "${with_sha256+set}" = set; then :
+  withval=$with_sha256;
+else
+  CPPFLAGS="${CPPFLAGS} -DWITH_SHA256"
+fi
+
+
+
+# Check whether --with-sha384 was given.
+if test "${with_sha384+set}" = set; then :
+  withval=$with_sha384; CPPFLAGS="${CPPFLAGS} -DWITH_SHA384"
+fi
+
+
+
+# Check whether --with-sha512 was given.
+if test "${with_sha512+set}" = set; then :
+  withval=$with_sha512; CPPFLAGS="${CPPFLAGS} -DWITH_SHA521"
+fi
+
+
 # Checks for header files.
 for ac_header in assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h unistd.h
 do :
@@ -4140,7 +4169,7 @@ done
 ac_config_headers="$ac_config_headers config.h"
 
 
-ac_config_files="$ac_config_files Makefile doc/Makefile doc/Doxyfile tests/Makefile"
+ac_config_files="$ac_config_files Makefile doc/Makefile doc/Doxyfile tests/Makefile sha2/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -4837,6 +4866,7 @@ do
     "doc/Makefile") CONFIG_FILES="$CONFIG_FILES doc/Makefile" ;;
     "doc/Doxyfile") CONFIG_FILES="$CONFIG_FILES doc/Doxyfile" ;;
     "tests/Makefile") CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
+    "sha2/Makefile") CONFIG_FILES="$CONFIG_FILES sha2/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5 ;;
   esac
