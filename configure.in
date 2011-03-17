@@ -70,6 +70,19 @@ AS_IF([test "x$with_protocol_demux" = "xno"],
   CPPFLAGS="${CPPFLAGS} -DDSRV_NO_PROTOCOL_DEMUX"]
 )
 
+AC_ARG_WITH(sha256,
+  [AS_HELP_STRING([--without-sha256],[disable use of SHA256])],
+  [], 
+  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA256"])
+
+AC_ARG_WITH(sha384,
+  [AS_HELP_STRING([--with-sha384],[enable use of SHA384])],
+  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA384"])
+
+AC_ARG_WITH(sha512,
+  [AS_HELP_STRING([--with-sha512],[enable use of SHA512])],
+  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA521"])
+
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h unistd.h])
 
@@ -90,5 +103,6 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile
                  doc/Makefile
                  doc/Doxyfile
-                 tests/Makefile])
+                 tests/Makefile
+		 sha2/Makefile])
 AC_OUTPUT
