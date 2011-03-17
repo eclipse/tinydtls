@@ -56,12 +56,29 @@
  * 
  * This software is under the <a
  * href="http://www.opensource.org/licenses/mit-license.php">MIT
- * License</a>. It uses <a
+ * License</a>. 
+ *
+ * \subsection uthash UTHash 
+ * 
+ * This library uses <a
  * href="http://uthash.sourceforge.net/">uthash</a> to manage its
  * peers. \b uthash uses the <b>BSD revised license</b>, see <a
- * href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>. When
- * you link this software to OpenSSL, you have to make sure by
+ * href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>. 
+ * 
+ * \subsection openssl OpenSSL
+ * 
+ * When you link this software to OpenSSL, you have to make sure by
  * yourself that you do not infringe with anyone's patents or IPR.
+ * 
+ * \subsection sha2 Aaron D. Gifford's SHA256 Implementation
+ * 
+ * This library also provides HMAC-SHA256 with <a
+ * href="http://www.opensource.org/licenses/bsd-license">BSD-licensed</a>
+ * code from Aaron D. Gifford, see <a
+ * href="http://www.aarongifford.com/">www.aarongifford.com</a>. (The
+ * optional SHA-384 and SHA-512 implementations available with the
+ * configure options \c --with-sha384 and --with-sha512, respectively, are
+ * from this package.) 
  * 
  * \section develop Getting the Files
  *
