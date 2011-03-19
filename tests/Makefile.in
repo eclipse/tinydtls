@@ -35,7 +35,7 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 # files and flags
-SOURCES:= netq-test.c dtls-test.c #dsrv-test.c
+SOURCES:= netq-test.c dtls-test.c ccm-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
