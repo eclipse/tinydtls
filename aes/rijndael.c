@@ -27,9 +27,9 @@
  */
 
 #include <sys/param.h>
-#include <sys/systm.h>
+/* #include <sys/systm.h> */
 
-#include <crypto/rijndael.h>
+#include "rijndael.h"
 
 #undef FULL_UNROLL
 

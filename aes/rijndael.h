@@ -33,6 +33,7 @@
 /* for 256-bit keys, fewer for less */
 #define AES_MAXROUNDS	14
 
+typedef unsigned char	u_char;
 typedef unsigned char	u8;
 typedef unsigned short	u16;
 typedef unsigned int	u32;

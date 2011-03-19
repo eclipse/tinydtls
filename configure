@@ -4169,7 +4169,7 @@ done
 ac_config_headers="$ac_config_headers config.h"
 
 
-ac_config_files="$ac_config_files Makefile doc/Makefile doc/Doxyfile tests/Makefile sha2/Makefile"
+ac_config_files="$ac_config_files Makefile doc/Makefile doc/Doxyfile tests/Makefile sha2/Makefile aes/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -4867,6 +4867,7 @@ do
     "doc/Doxyfile") CONFIG_FILES="$CONFIG_FILES doc/Doxyfile" ;;
     "tests/Makefile") CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
     "sha2/Makefile") CONFIG_FILES="$CONFIG_FILES sha2/Makefile" ;;
+    "aes/Makefile") CONFIG_FILES="$CONFIG_FILES aes/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5 ;;
   esac
