@@ -35,7 +35,7 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 SOURCES:= sha2.c
-HEADERS;=sha2.h
+HEADERS:=sha2.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@
 CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@
