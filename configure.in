@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.0.1])
+AC_INIT([tinydtls], [0.0.2])
 AC_CONFIG_SRCDIR([netq.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
