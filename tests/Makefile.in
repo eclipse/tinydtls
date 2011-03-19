@@ -44,7 +44,7 @@ CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) 
 LDLIBS:=-ltinydtls @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
-FILES:=Makefile.in $(SOURCES)
+FILES:=Makefile.in $(SOURCES) ccm-testdata.c
 
 .PHONY: all dirs clean distclean .gitignore doc
 
