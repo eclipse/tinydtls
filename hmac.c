@@ -65,7 +65,7 @@ dtls_hmac_update(dtls_hmac_context_t *ctx,
 
 dtls_hash_t *
 dtls_new_hash(dtls_hashfunc_t h) {
-  dtls_hash_t *H;
+  dtls_hash_t *H = NULL;
   
   switch(h) {
   case SHA256:
