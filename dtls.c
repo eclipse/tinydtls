@@ -33,37 +33,12 @@
 #include <openssl/hmac.h>
 
 #include "debug.h"
+#include "numeric.h"
 #include "dtls.h"
-
-#define dtls_int_to_uint16(Field,Value) do {			\
-    *(unsigned char*)(Field) = ((Value) >> 8) & 0xff;		\
-    *(((unsigned char*)(Field))+1) = ((Value) & 0xff);		\
-  } while(0)
-
-#define dtls_int_to_uint24(Field,Value) do {			\
-    *(unsigned char*)(Field) = ((Value) >> 16) & 0xff;		\
-    dtls_int_to_uint16((((unsigned char*)(Field))+1),Value);	\
-  } while(0)
 
 #define dtls_set_version(H,V) dtls_int_to_uint16(&(H)->version, (V))
 #define dtls_set_content_type(H,V) ((H)->content_type = (V) & 0xff)
 #define dtls_set_length(H,V)  ((H)->length = (V))
-
-#define dtls_uint16_to_int(Field) \
-  (((*(unsigned char*)(Field)) << 8) | (*(((unsigned char*)(Field))+1)))
-
-#define dtls_uint24_to_int(Field)		\
-  (((*(((unsigned char*)(Field)))) << 16)	\
-   | ((*(((unsigned char*)(Field))+1)) << 8)	\
-   | ((*(((unsigned char*)(Field))+2))))
-  
-#define dtls_uint48_to_ulong(Field)		\
-  (((*(unsigned char*)(Field)) << 40)		\
-   | ((*(((unsigned char*)(Field))+1)) << 32)	\
-   | ((*(((unsigned char*)(Field))+2)) << 24)	\
-   | ((*(((unsigned char*)(Field))+3)) << 16)	\
-   | ((*(((unsigned char*)(Field))+4)) << 8)	\
-   | ((*(((unsigned char*)(Field))+5))))
 
 #define dtls_get_content_type(H) ((H)->content_type & 0xff)
 #define dtls_get_version(H) dtls_uint16_to_int(&(H)->version)

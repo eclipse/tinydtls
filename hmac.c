@@ -94,7 +94,7 @@ dtls_hmac_init(dtls_hmac_context_t *ctx,
   int i;
   assert(ctx);
 
-  ctx->H = dtls_new_hash(h);;
+  ctx->H = dtls_new_hash(h);
   if (!ctx->H)
     return -1;
 
