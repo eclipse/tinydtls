@@ -68,23 +68,26 @@ memxor(unsigned char *x, unsigned char *y, size_t n) {
   }
 }
 
-size_t
-dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
-			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
-			 unsigned char *msg, size_t lm, size_t la) {
-  size_t i, j, len;
-  unsigned long C;
-  unsigned long counter = 1; /* \bug does not work correctly on ia32 when
-			             lm >= 2^16 */
-  unsigned char A[DTLS_CCM_BLOCKSIZE]; /* A_i blocks for encryption input */
-  unsigned char B[DTLS_CCM_BLOCKSIZE]; /* B_i blocks for CBC-MAC input */
-  unsigned char S[DTLS_CCM_BLOCKSIZE]; /* S_i = encrypted A_i blocks */
-  unsigned char X[DTLS_CCM_BLOCKSIZE]; /* X_i = encrypted B_i blocks */
+/** 
+ * Creates the CBC-MAC for the additional authentication data that
+ * is sent in cleartext. 
+ *
+ * \param ctx  The crypto context for the AES encryption.
+ * \param msg  The message starting with the additional authentication data.
+ * \param la   The number of additional authentication bytes in \p msg.
+ * \param B    The input buffer for crypto operations. When this function
+ *             is called, \p B must be initialized with \c B0 (the first
+ *             authentication block.
+ * \param X    The output buffer where the result of the CBC calculation
+ *             is placed.
+ * \return     The result is written to \p X.
+ */
+void
+add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
+	      unsigned char B[DTLS_CCM_BLOCKSIZE], 
+	      unsigned char X[DTLS_CCM_BLOCKSIZE]) {
+  size_t i,j; 
 
-  len = lm;			/* save original length */
-  lm -= la;			/* detract additional auth data count */
-  /* create the initial authentication block B0 */
-  block0(M, L, la, lm, N, B);
   rijndael_encrypt(ctx, B, X);
 
   memset(B, 0, DTLS_CCM_BLOCKSIZE);
@@ -127,8 +130,54 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
     memxor(B, X, DTLS_CCM_BLOCKSIZE);
 
     rijndael_encrypt(ctx, B, X);  
-    msg += la;
-  }  
+  } 
+}
+
+void
+encrypt(rijndael_ctx *ctx, size_t L, unsigned long counter,
+	unsigned char *msg, size_t len,
+	unsigned char A[DTLS_CCM_BLOCKSIZE],
+	unsigned char S[DTLS_CCM_BLOCKSIZE]) {
+
+  static unsigned long C;
+
+  SET_COUNTER(A, L, counter, C);    
+  rijndael_encrypt(ctx, A, S);
+  memxor(msg, S, len);
+}
+
+void
+mac(rijndael_ctx *ctx, 
+    unsigned char *msg, size_t len,
+    unsigned char B[DTLS_CCM_BLOCKSIZE],
+    unsigned char X[DTLS_CCM_BLOCKSIZE]) {
+  size_t i;
+
+  for (i = 0; i < len; ++i)
+    B[i] = X[i] ^ msg[i];
+
+  rijndael_encrypt(ctx, B, X);
+
+}
+
+long int
+dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
+			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
+			 unsigned char *msg, size_t lm, size_t la) {
+  size_t i, j, len;
+  unsigned long C;
+  unsigned long counter = 1; /* \bug does not work correctly on ia32 when
+			             lm >= 2^16 */
+  unsigned char A[DTLS_CCM_BLOCKSIZE]; /* A_i blocks for encryption input */
+  unsigned char B[DTLS_CCM_BLOCKSIZE]; /* B_i blocks for CBC-MAC input */
+  unsigned char S[DTLS_CCM_BLOCKSIZE]; /* S_i = encrypted A_i blocks */
+  unsigned char X[DTLS_CCM_BLOCKSIZE]; /* X_i = encrypted B_i blocks */
+
+  len = lm;			/* save original length */
+  lm -= la;			/* detract additional auth data count */
+  /* create the initial authentication block B0 */
+  block0(M, L, la, lm, N, B);
+  add_auth_data(ctx, msg, la, B, X);
 
   /* initialize block template */
   A[0] = L-1;
@@ -136,20 +185,14 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   /* copy the nonce */
   memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
   
+  msg += la;
   while (lm > DTLS_CCM_BLOCKSIZE) {
     /* calculate MAC */
-    for (i = 0; i < DTLS_CCM_BLOCKSIZE; ++i)
-      B[i] = X[i] ^ msg[i];
+    mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X);
 
-    rijndael_encrypt(ctx, B, X);
-    
     /* encrypt */
-    SET_COUNTER(A, L, counter, C);
-    
-    rijndael_encrypt(ctx, A, S);
-    
-    memxor(msg, S, DTLS_CCM_BLOCKSIZE);
-    
+    encrypt(ctx, L, counter, msg, DTLS_CCM_BLOCKSIZE, A, S);
+
     /* update local pointers */
     lm -= DTLS_CCM_BLOCKSIZE;
     msg += DTLS_CCM_BLOCKSIZE;
@@ -160,15 +203,10 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
     /* calculate MAC */
     memset(B, 0, DTLS_CCM_BLOCKSIZE);
     memcpy(B, msg, lm);
-    memxor(B, X, DTLS_CCM_BLOCKSIZE);
+    mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X); 
 
-    rijndael_encrypt(ctx, B, X);
-
-    /* encrypt */
-    SET_COUNTER(A, L, counter, C);
-    rijndael_encrypt(ctx, A, S);
-
-    memxor(msg, S, lm);
+    /* decrypt */
+    encrypt(ctx, L, counter, msg, lm, A, S);
 
     /* update local pointers */
     msg += lm;
@@ -178,9 +216,78 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   SET_COUNTER(A, L, 0, C);
   rijndael_encrypt(ctx, A, S);
 
-  for (i = 0; i < M; ++i) 
+  for (i = 0; i < M; ++i)
     *msg++ = X[i] ^ S[i];
 
   return len + M;
 }
 
+long int
+dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
+			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
+			 unsigned char *msg, size_t lm, size_t la) {
+  
+  size_t len;
+  unsigned long C;
+  unsigned long counter = 1; /* \bug does not work correctly on ia32 when
+			             lm >= 2^16 */
+  unsigned char A[DTLS_CCM_BLOCKSIZE]; /* A_i blocks for encryption input */
+  unsigned char B[DTLS_CCM_BLOCKSIZE]; /* B_i blocks for CBC-MAC input */
+  unsigned char S[DTLS_CCM_BLOCKSIZE]; /* S_i = encrypted A_i blocks */
+  unsigned char X[DTLS_CCM_BLOCKSIZE]; /* X_i = encrypted B_i blocks */
+
+  if (lm < (la + M)) 
+    goto error;
+
+  len = lm;	      /* save original length */
+  lm -= (la + M);     /* detract additional auth data count and MAC size*/
+  /* create the initial authentication block B0 */
+  block0(M, L, la, lm, N, B);
+
+  add_auth_data(ctx, msg, la, B, X);
+
+  /* initialize block template */
+  A[0] = L-1;
+
+  /* copy the nonce */
+  memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
+  
+  msg += la;
+  while (lm > DTLS_CCM_BLOCKSIZE) {
+    /* decrypt */
+    encrypt(ctx, L, counter, msg, DTLS_CCM_BLOCKSIZE, A, S);
+    
+    /* calculate MAC */
+    mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X);
+
+    /* update local pointers */
+    lm -= DTLS_CCM_BLOCKSIZE;
+    msg += DTLS_CCM_BLOCKSIZE;
+    counter++;
+  }
+
+  if (lm) {
+    /* decrypt */
+    encrypt(ctx, L, counter, msg, lm, A, S);
+
+    /* calculate MAC */
+    memcpy(B+lm, X+lm, DTLS_CCM_BLOCKSIZE - lm);
+    mac(ctx, msg, lm, B, X); 
+
+    /* update local pointers */
+    msg += lm;
+  }
+  
+  /* calculate S_0 */  
+  SET_COUNTER(A, L, 0, C);
+  rijndael_encrypt(ctx, A, S);
+
+  memxor(msg, S, M);
+
+  /* return length if MAC is valid, otherwise continue with error handling */
+  if (memcmp(X, msg, M) == 0) 
+    return len - M;
+  
+ error:
+  return -1;
+}

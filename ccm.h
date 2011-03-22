@@ -51,8 +51,13 @@
  * \param la  The number of additional authentication octets (may be zero).
  * \return FIXME
  */
-size_t
+long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
+			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
+			 unsigned char *msg, size_t lm, size_t la);
+
+long int
+dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
 			 unsigned char *msg, size_t lm, size_t la);
 

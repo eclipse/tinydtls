@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "debug.h"
 #include "numeric.h"
 #include "ccm.h"
 
@@ -16,10 +17,23 @@ int fls(unsigned int i) {
 }
 #endif
 
+void 
+dump(unsigned char *buf, size_t len) {
+  size_t i = 0;
+  while (i < len) {
+    printf("%02x ", buf[i++]);
+    if (i % 4 == 0)
+      printf(" ");
+    if (i % 16 == 0)
+      printf("\n\t");
+  }
+  printf("\n");
+}
+
 int main(int argc, char **argv) {
-  size_t len;
+  long int len;
   size_t L;			/* max(2,(fls(lm) >> 3) + 1) */
-  int i, n;
+  int n;
 
   rijndael_ctx ctx;
 
@@ -41,18 +55,17 @@ int main(int argc, char **argv) {
     else 
       printf("OK, ");
     
-    i = 0;
     printf("result is (total length = %d):\n\t", (int)len);
-    while (i < len) {
-      printf("%02x ", data[n].msg[i++]);
-      if (i % 4 == 0)
-	printf(" ");
-      if (i % 16 == 0)
-	printf("\n\t");
-    }
-    printf("\n");
+    dump(data[n].msg, len);
+
+    len = dtls_ccm_decrypt_message(&ctx, data[n].M, L, data[n].nonce, 
+				   data[n].msg, len, data[n].la);
+    
+    if (len < 0)
+      dsrv_log(LOG_ALERT, "Packet Vector #%d: cannot decrypt message\n", n+1);
+    else
+      printf("\t*** MAC verified (total length = %d) ***\n", (int)len);
   }
 
-  /* rijndael_decrypt(&ctx, buf, uff); */
   return 0;
 }
