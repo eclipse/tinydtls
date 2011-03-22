@@ -80,6 +80,15 @@
  * configure options \c --with-sha384 and --with-sha512, respectively, are
  * from this package.) 
  * 
+ * \subsection aes Rijndael Implementation From OpenBSD 
+ * 
+ * The AES implementation is taken from rijndael.{c,h} contained in
+ * the crypto sub-system of the OpenBSD operating system. It is 
+ * copyright by Vincent Rijmen, Antoon Bosselaers and Paulo Barreto.
+ * See 
+ * <a href="http://www.openbsd.org/cgi-bin/cvsweb/src/sys/crypto/rijndael.c"
+ * >rijndael.c</a> for <b>License info</b>.
+ * 
  * \section develop Getting the Files
  *
  * You can get the sources either from the 
