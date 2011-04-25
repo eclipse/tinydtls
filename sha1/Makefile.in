@@ -40,7 +40,7 @@ OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@
 CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@
 LDLIBS=@LIBS@
-FILES:=Makefile.in $(SOURCES) $(HEADERS) README \
+FILES:=Makefile.in $(SOURCES) $(HEADERS) \
  confighelp.c hmac.c hmac_sha1.c hmac_sha1.h hmac_test.c
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
