@@ -31,8 +31,14 @@
 #define DTLS_HMAC_BLOCKSIZE 64
 #define DTLS_HMAC_MAX       64
 
- /* Aaron D. Gifford's implementation of SHA1 and SHA256
-  * see http://www.aarongifford.com/ */
+/** L. Peter Deutsch's MD5 implementation, 
+ *  see http://libmd5-rfc.sourceforge.net/ */
+#ifdef WITH_MD5
+#  include "md5/md5.h"
+#endif
+
+/** Aaron D. Gifford's implementation of SHA1 and SHA256
+ *  see http://www.aarongifford.com/ */
 #ifdef WITH_SHA1
 #  include "sha1/sha.h"
 #endif
@@ -44,6 +50,24 @@
 #include "debug.h"
 
 #include "hmac.h"
+
+#ifdef WITH_MD5
+void 
+h_md5_init(void *ctx) {
+  md5_init((md5_state_t *)ctx);
+}
+
+void 
+h_md5_update(void *ctx, const unsigned char *input, size_t len) {
+  md5_append((md5_state_t *)ctx, input, len);
+}
+
+size_t
+h_md5_finalize(unsigned char *buf, void *ctx) {
+  md5_finish((md5_state_t *)ctx, buf);
+  return 16;			/* length of MD5 digest */
+}
+#endif
 
 #ifdef WITH_SHA1
 void 
@@ -95,8 +119,19 @@ dtls_new_hash(dtls_hashfunc_t h) {
   dtls_hash_t *H = NULL;
   
   switch(h) {
+#ifdef WITH_MD5
+  case HASH_MD5:
+    H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(md5_state_t));
+    if (H) {
+      H->data = ((char *)H) + sizeof(dtls_hash_t);
+      H->init = h_md5_init;
+      H->update = h_md5_update;
+      H->finalize = h_md5_finalize;
+    } 
+    break;
+#endif
 #ifdef WITH_SHA1
-  case SHA1:
+  case HASH_SHA1:
     H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA_CTX));
     if (H) {
       H->data = ((char *)H) + sizeof(dtls_hash_t);
@@ -107,7 +142,7 @@ dtls_new_hash(dtls_hashfunc_t h) {
     break;
 #endif
 #ifdef WITH_SHA256
-  case SHA256:
+  case HASH_SHA256:
     H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA256_CTX));
     if (H) {
       H->data = ((char *)H) + sizeof(dtls_hash_t);
@@ -182,13 +217,7 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
 }
 
 #ifdef WITH_OPENSSL
-#ifdef WITH_SHA1
-#  define DIGEST EVP_sha1()
-#else
-#  ifdef WITH_SHA256
-#    define DIGEST EVP_sha1()
-#  endif /* WITH_SHA256 */
-#endif /* WITH_SHA1 */
+#define DIGEST EVP_md5()
 
 #include <openssl/evp.h>
 #include <openssl/md5.h>
@@ -232,7 +261,7 @@ int main(int argc, char **argv) {
   size_t len, i;
   dtls_hmac_context_t hmac_ctx;
 
-  dtls_hmac_init(&hmac_ctx, key, sizeof(key), SHA1);
+  dtls_hmac_init(&hmac_ctx, key, sizeof(key), HASH_MD5);
   dtls_hmac_update(&hmac_ctx, text, sizeof(text));
   
   len = dtls_hmac_finalize(&hmac_ctx, buf);

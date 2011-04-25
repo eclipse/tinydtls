@@ -70,6 +70,11 @@ AS_IF([test "x$with_protocol_demux" = "xno"],
   CPPFLAGS="${CPPFLAGS} -DDSRV_NO_PROTOCOL_DEMUX"]
 )
 
+AC_ARG_WITH(md5,
+  [AS_HELP_STRING([--without-md5],[disable use of MD5])],
+  [], 
+  [CPPFLAGS="${CPPFLAGS} -DWITH_MD5"])
+
 AC_ARG_WITH(sha1,
   [AS_HELP_STRING([--without-sha1],[disable use of SHA1])],
   [], 
@@ -109,6 +114,7 @@ AC_CONFIG_FILES([Makefile
                  doc/Makefile
                  doc/Doxyfile
                  tests/Makefile
+		 md5/Makefile
 		 sha1/Makefile
 		 sha2/Makefile
 		 aes/Makefile])
