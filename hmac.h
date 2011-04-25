@@ -41,7 +41,7 @@ typedef struct {
 } dtls_hash_t;
 
 /** List of known hash functions for use in dtls_hmac_init(). */
-typedef enum { SHA256=1 } dtls_hashfunc_t;
+typedef enum { SHA256=1, SHA1 } dtls_hashfunc_t;
 
 /**
  * Context for HMAC generation. This object is initialized with

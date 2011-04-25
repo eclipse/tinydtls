@@ -31,13 +31,39 @@
 #define DTLS_HMAC_BLOCKSIZE 64
 #define DTLS_HMAC_MAX       64
 
- /* Aaron D. Gifford's implementation of SHA256
+ /* Aaron D. Gifford's implementation of SHA1 and SHA256
   * see http://www.aarongifford.com/ */
-#include "sha2/sha2.h"
+#ifdef WITH_SHA1
+#  include "sha1/sha.h"
+#endif
+
+#if defined(WITH_SHA256) || defined(WITH_SHA384) || defined(WITH_SHA512)
+#  include "sha2/sha2.h"
+#endif
+
 #include "debug.h"
 
 #include "hmac.h"
 
+#ifdef WITH_SHA1
+void 
+h_sha_init(void *ctx) {
+  SHA1_Init((SHA_CTX *)ctx);
+}
+
+void 
+h_sha_update(void *ctx, const unsigned char *input, size_t len) {
+  SHA1_Update((SHA_CTX *)ctx, (sha1_byte *)input, len);
+}
+
+size_t
+h_sha_finalize(unsigned char *buf, void *ctx) {
+  SHA1_Final(buf, (SHA_CTX *)ctx);
+  return SHA1_DIGEST_LENGTH;
+}
+#endif
+
+#ifdef WITH_SHA256
 void 
 h_sha256_init(void *ctx) {
   SHA256_Init((SHA256_CTX *)ctx);
@@ -53,6 +79,7 @@ h_sha256_finalize(unsigned char *buf, void *ctx) {
   SHA256_Final(buf, (SHA256_CTX *)ctx);
   return SHA256_DIGEST_LENGTH;
 }
+#endif /* WITH_SHA1 */
 
 void
 dtls_hmac_update(dtls_hmac_context_t *ctx,
@@ -68,6 +95,18 @@ dtls_new_hash(dtls_hashfunc_t h) {
   dtls_hash_t *H = NULL;
   
   switch(h) {
+#ifdef WITH_SHA1
+  case SHA1:
+    H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA_CTX));
+    if (H) {
+      H->data = ((char *)H) + sizeof(dtls_hash_t);
+      H->init = h_sha_init;
+      H->update = h_sha_update;
+      H->finalize = h_sha_finalize;
+    } 
+    break;
+#endif
+#ifdef WITH_SHA256
   case SHA256:
     H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA256_CTX));
     if (H) {
@@ -77,6 +116,7 @@ dtls_new_hash(dtls_hashfunc_t h) {
       H->finalize = h_sha256_finalize;
     } 
     break;
+#endif
   default:
     dsrv_log(LOG_CRIT, "unknown hash function %d\n", h);
   }
@@ -142,7 +182,13 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
 }
 
 #ifdef WITH_OPENSSL
-#define DIGEST EVP_sha256()
+#ifdef WITH_SHA1
+#  define DIGEST EVP_sha1()
+#else
+#  ifdef WITH_SHA256
+#    define DIGEST EVP_sha1()
+#  endif /* WITH_SHA256 */
+#endif /* WITH_SHA1 */
 
 #include <openssl/evp.h>
 #include <openssl/md5.h>
@@ -186,7 +232,7 @@ int main(int argc, char **argv) {
   size_t len, i;
   dtls_hmac_context_t hmac_ctx;
 
-  dtls_hmac_init(&hmac_ctx, key, sizeof(key), SHA256);
+  dtls_hmac_init(&hmac_ctx, key, sizeof(key), SHA1);
   dtls_hmac_update(&hmac_ctx, text, sizeof(text));
   
   len = dtls_hmac_finalize(&hmac_ctx, buf);

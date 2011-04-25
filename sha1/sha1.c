@@ -23,6 +23,7 @@
  * SUCH DAMAGE.
  */
 
+#include <string.h>
 #include "sha.h"
 
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
