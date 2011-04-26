@@ -70,15 +70,19 @@
  * When you link this software to OpenSSL, you have to make sure by
  * yourself that you do not infringe with anyone's patents or IPR.
  * 
- * \subsection sha2 Aaron D. Gifford's SHA256 Implementation
+ * \subsection md5 L. Peter Deutsch's MD5 Implementation
  * 
- * This library also provides HMAC-SHA256 with <a
+ * The BSD-licensed MD5 implementation from Peter Deutsch claims to 
+ * be free from any RSA IPR. You can find this implementation at
+ * <a href="http://libmd5-rfc.sourceforge.net/"
+ * >http://libmd5-rfc.sourceforge.net/</a>.
+ * 
+ * \subsection sha2 Aaron D. Gifford's SHA256 and SHA1 Implementations
+ * 
+ * This library also provides HMAC-SHA256 and HMAC-SHA1 with <a
  * href="http://www.opensource.org/licenses/bsd-license">BSD-licensed</a>
  * code from Aaron D. Gifford, see <a
- * href="http://www.aarongifford.com/">www.aarongifford.com</a>. (The
- * optional SHA-384 and SHA-512 implementations available with the
- * configure options \c --with-sha384 and --with-sha512, respectively, are
- * from this package.) 
+ * href="http://www.aarongifford.com/">www.aarongifford.com</a>. 
  * 
  * \subsection aes Rijndael Implementation From OpenBSD 
  * 
