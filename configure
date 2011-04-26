@@ -593,6 +593,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+OPT_OBJS
 EGREP
 GREP
 CPP
@@ -652,8 +653,6 @@ with_protocol_demux
 with_md5
 with_sha1
 with_sha256
-with_sha384
-with_sha512
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1283,8 +1282,6 @@ Optional Packages:
   --without-md5           disable use of MD5
   --without-sha1          disable use of SHA1
   --without-sha256        disable use of SHA256
-  --with-sha384           enable use of SHA384
-  --with-sha512           enable use of SHA512
 
 Some influential environment variables:
   CC          C compiler command
@@ -4001,7 +3998,7 @@ fi
 if test "${with_md5+set}" = set; then :
   withval=$with_md5;
 else
-  CPPFLAGS="${CPPFLAGS} -DWITH_MD5"
+  CPPFLAGS="${CPPFLAGS} -DWITH_MD5" OPT_OBJS="${OPT_OBJS} md5/md5.o"
 fi
 
 
@@ -4010,7 +4007,7 @@ fi
 if test "${with_sha1+set}" = set; then :
   withval=$with_sha1;
 else
-  CPPFLAGS="${CPPFLAGS} -DWITH_SHA1"
+  CPPFLAGS="${CPPFLAGS} -DWITH_SHA1" OPT_OBJS="${OPT_OBJS} sha1/sha1.o"
 fi
 
 
@@ -4019,22 +4016,11 @@ fi
 if test "${with_sha256+set}" = set; then :
   withval=$with_sha256;
 else
-  CPPFLAGS="${CPPFLAGS} -DWITH_SHA256"
+  CPPFLAGS="${CPPFLAGS} -DWITH_SHA256" OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 fi
 
 
 
-# Check whether --with-sha384 was given.
-if test "${with_sha384+set}" = set; then :
-  withval=$with_sha384; CPPFLAGS="${CPPFLAGS} -DWITH_SHA384"
-fi
-
-
-
-# Check whether --with-sha512 was given.
-if test "${with_sha512+set}" = set; then :
-  withval=$with_sha512; CPPFLAGS="${CPPFLAGS} -DWITH_SHA512"
-fi
 
 
 # Checks for header files.

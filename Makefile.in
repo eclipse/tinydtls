@@ -36,7 +36,7 @@ package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
 # files and flags
 SOURCES:= dsrv.c peer.c netq.c dtls.c ccm.c hmac.c debug.c
-OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) md5/md5.o sha1/sha1.o sha2/sha2.o aes/rijndael.o
+OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o @OPT_OBJS@
 HEADERS:=dsrv.h dtls.h hmac.h peer.h netq.h debug.h config.h uthash.h numeric.h ccm.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE

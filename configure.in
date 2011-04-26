@@ -73,25 +73,27 @@ AS_IF([test "x$with_protocol_demux" = "xno"],
 AC_ARG_WITH(md5,
   [AS_HELP_STRING([--without-md5],[disable use of MD5])],
   [], 
-  [CPPFLAGS="${CPPFLAGS} -DWITH_MD5"])
+  [CPPFLAGS="${CPPFLAGS} -DWITH_MD5" OPT_OBJS="${OPT_OBJS} md5/md5.o"])
 
 AC_ARG_WITH(sha1,
   [AS_HELP_STRING([--without-sha1],[disable use of SHA1])],
   [], 
-  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA1"])
+  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA1" OPT_OBJS="${OPT_OBJS} sha1/sha1.o"])
 
 AC_ARG_WITH(sha256,
   [AS_HELP_STRING([--without-sha256],[disable use of SHA256])],
   [], 
-  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA256"])
+  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA256" OPT_OBJS="${OPT_OBJS} sha2/sha2.o"])
 
-AC_ARG_WITH(sha384,
-  [AS_HELP_STRING([--with-sha384],[enable use of SHA384])],
-  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA384"])
+dnl AC_ARG_WITH(sha384,
+dnl   [AS_HELP_STRING([--with-sha384],[enable use of SHA384])],
+dnl   [CPPFLAGS="${CPPFLAGS} -DWITH_SHA384"])
+dnl 
+dnl AC_ARG_WITH(sha512,
+dnl   [AS_HELP_STRING([--with-sha512],[enable use of SHA512])],
+dnl   [CPPFLAGS="${CPPFLAGS} -DWITH_SHA512"])
 
-AC_ARG_WITH(sha512,
-  [AS_HELP_STRING([--with-sha512],[enable use of SHA512])],
-  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA512"])
+AC_SUBST(OPT_OBJS)
 
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h unistd.h])
