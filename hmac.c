@@ -202,8 +202,6 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
   assert(ctx);
   assert(result);
   
-  memset(result, 0, DTLS_HMAC_MAX);
-
   len = ctx->H->finalize(buf, ctx->H->data);
 
   ctx->H->init(ctx->H->data);
