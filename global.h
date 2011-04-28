@@ -30,6 +30,8 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+
 /* Define our own types as at least uint32_t does not work on my amd64. */
 
 typedef unsigned char uint8;
@@ -38,7 +40,25 @@ typedef unsigned char uint24[3];
 typedef unsigned char uint32[4];
 typedef unsigned char uint48[6];
 
+#ifndef HAVE_STR
+typedef struct {
+  size_t length;		/* length of string */
+  unsigned char *s;		/* string data */
+} str;
+#endif
+
 /** Maximum size of DTLS message */
 #define DTLS_MAX_BUF 128
+
+/** 
+ * XORs \p n bytes byte-by-byte starting at \p y to the memory area
+ * starting at \p x. */
+static inline void
+memxor(unsigned char *x, unsigned char *y, size_t n) {
+  while(n--) {
+    *x ^= *y;
+    x++; y++;
+  }
+}
 
 #endif /* _GLOBAL_H_ */

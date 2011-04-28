@@ -27,16 +27,10 @@
 #define _CRYPTO_H_
 
 #include "global.h"
+#include "hmac.h"
 
 /** Maximum size of the generated keyblock. */
 #define MAX_KEYBLOCK_LENGTH       108    /* TLS_PSK_AES128_CBC_SHA */
-
-/** Known ciphersuites 
- *
- * \hideinitializer
- */
-#define TLS_PSK_WITH_AES_128_CBC_SHA { 0x00, 0x8c }
-#define TLS_NULL_WITH_NULL_NULL      { 0x00, 0x00 }
 
 /** Definition of cipher parameters. */
 typedef struct {
@@ -96,6 +90,95 @@ typedef struct {
   (ciphers[(Param)->cipher].mac_algorithm)
 #define dtls_kb_digest_size(Param)		\
   (ciphers[(Param)->cipher].mac_length)
+
+/** 
+ * Expands the secret and key to a block of DTLS_HMAC_MAX 
+ * size according to the algorithm specified in section 5 of
+ * RFC 4346.
+ *
+ * \param h       Identifier of the hash function to use.
+ * \param key     The secret.
+ * \param keylen  Length of \p key.
+ * \param seed    The seed. 
+ * \param seedlen Length of \p seed.
+ * \param buf     Output buffer where the result is XORed into
+ *                The buffe must be capable to hold at least
+ *                \p buflen bytes.
+ * \return The actual number of bytes written to \p buf or 0
+ * on error.
+ */
+size_t dtls_p_hash(dtls_hashfunc_t h, 
+		   unsigned char *key, size_t keylen,
+		   str *seeds, int num_seeds,
+		   unsigned char *buf, size_t buflen);
+
+/**
+ * This function implements the TLS PRF for DTLS_VERSION. For version
+ * 1.0, the PRF is P_MD5 ^ P_SHA1 while version 1.2 uses
+ * P_SHA256. Currently, the actual PRF is selected at compile time.
+ */
+size_t dtls_prf(unsigned char *key, size_t keylen,
+		str *seeds, int num_seeds,
+		unsigned char *buf, size_t buflen);
+
+/**
+ * Calculates MAC for record + cleartext packet and places the result
+ * in \p buf. The given \p hmac_ctx must be initialized with the HMAC
+ * function to use and the proper secret. As the DTLS mac calculation
+ * requires data from the record header, \p record must point to a
+ * buffer of at least \c sizeof(dtls_record_header_t) bytes. Usually,
+ * the remaining packet will be encrypted, therefore, the cleartext
+ * is passed separately in \p packet.
+ * 
+ * \param hmac_ctx  The HMAC context to use for MAC calculation.
+ * \param record    The record header.
+ * \param packet    Cleartext payload to apply the MAC to.
+ * \param length    Size of \p packet.
+ * \param buf       A result buffer that is large enough to hold
+ *                  the generated digest.
+ */
+void dtls_mac(dtls_hmac_context_t *hmac_ctx, 
+	      unsigned char *record,
+	      unsigned char *packet, size_t length,
+	      unsigned char *buf);
+
+/** 
+ * Decrypts the specified \p record of length \p record_length
+ * and writes the result into \p result. The result buffer must
+ * provide sufficient space to hold the cleartext contents of
+ * the encrypted message. This function returns \c 0 on error,
+ * non-zero otherwise.
+ * 
+ * \param sec     The security parameters in effect.
+ * \param record  The record to decrypt.
+ * \param record_length Length of the encrypted message pointed to
+ *                by \p record.
+ * \param result  A buffer large enough to store the result.
+ * \param result_length Will be set to the actual size of the 
+ *                decrypted data, excluding the IV.
+ * \return \c 0 on error, \c 1 otherwise.
+ */
+int dtls_decrypt(dtls_security_parameters_t *sec,
+		 unsigned char *record, size_t record_length,
+		 unsigned char *result, size_t *result_length);
+
+/**
+ * Verifies the message given in \p record according to the security
+ * parameters in \p sec. As the record's payload usually is encrypted,
+ * a pointer to the corresponding cleartext of length \p
+ * cleartext_length must be passed in \p cleartext. This function
+ * returns \c 1 on success, \c 0 otherwise.
+ *
+ * \param sec     The security parameters to apply.
+ * \param record  Pointer to the record header of the original message.
+ * \param record_length Original message length.
+ * \param cleartext Pointer to the decrypted payload data.
+ * \param cleartext_length Size of \p cleartext.
+ * \return \c 1 if MAC and padding are valid, \c 0 otherwise.
+ */
+int dtls_verify(dtls_security_parameters_t *sec,
+		unsigned char *record, size_t record_length,
+		unsigned char *cleartext, size_t cleartext_length);
 
 #endif /* _CRYPTO_H_ */
 

@@ -28,19 +28,17 @@
 
 #include <sys/types.h>
 
+#include "global.h"
+
 #define DTLS_HMAC_BLOCKSIZE 64	/**< size of hmac blocks */
 #define DTLS_HMAC_MAX       64	/**< max number of bytes in digest */
 
-/**
- * Description of hash function. The context object is carried in \c
- * data, \c init, \c update, and \c finalize reflect the typical
- * multi-stage API of hash operations, see e.g. RFC 1321. */
-typedef struct {
-  void *data;
-  void (*init)(void *);
-  void (*update)(void *, const unsigned char *, size_t);
-  size_t (*finalize)(unsigned char *, void *);
-} dtls_hash_t;
+/** Known ciphersuites 
+ *
+ * \hideinitializer
+ */
+#define TLS_PSK_WITH_AES_128_CBC_SHA { 0x00, 0x8c }
+#define TLS_NULL_WITH_NULL_NULL      { 0x00, 0x00 }
 
 /**
  * List of known hash functions for use in dtls_hmac_init(). The
@@ -52,6 +50,17 @@ typedef enum {
   HASH_NONE=0, HASH_MD5=1, HASH_SHA1=2, HASH_SHA224=3,
   HASH_SHA256=4, HASH_SHA384=5, HASH_SHA512=6
 } dtls_hashfunc_t;
+
+/**
+ * Description of hash function. The context object is carried in \c
+ * data, \c init, \c update, and \c finalize reflect the typical
+ * multi-stage API of hash operations, see e.g. RFC 1321. */
+typedef struct {
+  void *data;
+  void (*init)(void *);
+  void (*update)(void *, const unsigned char *, size_t);
+  size_t (*finalize)(unsigned char *, void *);
+} dtls_hash_t;
 
 /**
  * Context for HMAC generation. This object is initialized with
