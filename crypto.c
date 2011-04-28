@@ -44,6 +44,8 @@ dtls_cipher_t ciphers[] = {
 };
 
 
+#define HMAC_UPDATE_SEED(Context,Seed,Length)		\
+  if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 
 /** 
  * \bug dtls_hmac_finalize() releases the hash function's 
@@ -53,21 +55,23 @@ dtls_cipher_t ciphers[] = {
 size_t
 dtls_p_hash(dtls_hashfunc_t h,
 	    unsigned char *key, size_t keylen,
-	    str *seeds, int num_seeds,
+	    unsigned char *label, size_t labellen,
+	    unsigned char *random1, size_t random1len,
+	    unsigned char *random2, size_t random2len,
 	    unsigned char *buf, size_t buflen) {
   dtls_hmac_context_t hmac_a, hmac_p;
 
   static unsigned char A[DTLS_HMAC_MAX];
   static unsigned char tmp[DTLS_HMAC_MAX];
-  int i;
   size_t dlen;			/* digest length */
   size_t len = 0;			/* result length */
 
   dtls_hmac_init(&hmac_a, key, keylen, h);
 
   /* calculate A(1) from A(0) == seed */
-  for (i = 0; i < num_seeds; ++i) 
-    dtls_hmac_update(&hmac_a, seeds[i].s, seeds[i].length);
+  HMAC_UPDATE_SEED(&hmac_a, label, labellen);
+  HMAC_UPDATE_SEED(&hmac_a, random1, random1len);
+  HMAC_UPDATE_SEED(&hmac_a, random2, random2len);
 
   dlen = dtls_hmac_finalize(&hmac_a, A);
 
@@ -75,8 +79,9 @@ dtls_p_hash(dtls_hashfunc_t h,
     dtls_hmac_init(&hmac_p, key, keylen, h);
     dtls_hmac_update(&hmac_p, A, dlen);
 
-    for (i = 0; i < num_seeds; ++i) 
-      dtls_hmac_update(&hmac_p, seeds[i].s, seeds[i].length);
+    HMAC_UPDATE_SEED(&hmac_p, label, labellen);
+    HMAC_UPDATE_SEED(&hmac_p, random1, random1len);
+    HMAC_UPDATE_SEED(&hmac_p, random2, random2len);
 
     len += dtls_hmac_finalize(&hmac_p, tmp);
     memxor(buf, tmp, dlen);
@@ -90,9 +95,10 @@ dtls_p_hash(dtls_hashfunc_t h,
 
   dtls_hmac_init(&hmac_p, key, keylen, h);
   dtls_hmac_update(&hmac_p, A, dlen);
-
-  for (i = 0; i < num_seeds; ++i) 
-    dtls_hmac_update(&hmac_p, seeds[i].s, seeds[i].length);
+  
+  HMAC_UPDATE_SEED(&hmac_p, label, labellen);
+  HMAC_UPDATE_SEED(&hmac_p, random1, random1len);
+  HMAC_UPDATE_SEED(&hmac_p, random2, random2len);
   
   dtls_hmac_finalize(&hmac_p, tmp);
   memxor(buf, tmp, buflen - len);
@@ -102,7 +108,9 @@ dtls_p_hash(dtls_hashfunc_t h,
 
 size_t 
 dtls_prf(unsigned char *key, size_t keylen,
-	 str *seeds, int num_seeds,
+	 unsigned char *label, size_t labellen,
+	 unsigned char *random1, size_t random1len,
+	 unsigned char *random2, size_t random2len,
 	 unsigned char *buf, size_t buflen) {
 #if DTLS_VERSION == 0xfeff
   size_t len_2 = keylen >> 1;
@@ -111,20 +119,26 @@ dtls_prf(unsigned char *key, size_t keylen,
   memset(buf, 0, buflen);
 
   dtls_p_hash(HASH_MD5,
-		    key, len_2 + (keylen & 0x01),
-		    seeds, num_seeds,
-		    buf, buflen);
+	      key, len_2 + (keylen & 0x01),
+	      label, labellen, 
+	      random1, random1len,
+	      random2, random2len,
+	      buf, buflen);
 
   return dtls_p_hash(HASH_SHA1,
 		     key + len_2, len_2 + (keylen & 0x01),
-		     seeds, num_seeds,
+		     label, labellen, 
+		     random1, random1len,
+		     random2, random2len,
 		     buf, buflen);
 #elif DTLS_VERSION == 0xfefd
   /* Clear the result buffer */
   memset(buf, 0, buflen);
   return dtls_p_hash(HASH_SHA256, 
 		     key, keylen, 
-		     seeds, num_seeds,
+		     label, labellen, 
+		     random1, random1len,
+		     random2, random2len,
 		     buf, buflen);
 #endif
 }
@@ -147,25 +161,28 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
 }
 
 int
-dtls_decrypt(dtls_security_parameters_t *sec,
-	     unsigned char *record, size_t record_length,
-	     unsigned char *result, size_t *result_length) {
+dtls_cbc_decrypt(dtls_security_parameters_t *sec,
+		 unsigned char *record, size_t record_length,
+		 unsigned char *result, size_t *result_length) {
 
   rijndael_ctx ctx;
   unsigned char *cipher;
   int i;
 
-  if (rijndael_set_key(&ctx, 
-		       dtls_kb_client_write_key(sec),
+  if (rijndael_set_key(&ctx, dtls_kb_client_write_key(sec),
 		       8 * dtls_kb_key_size(sec)) < 0) {
+#ifndef NDEBUG
     fprintf(stderr, "cannot set key\n");
+#endif
     return 0;
   }
 
   *result_length = dtls_uint16_to_int(((dtls_record_header_t *)record)->length);
   if (record_length < *result_length + sizeof(dtls_record_header_t)
       || *result_length < ciphers[sec->cipher].blk_length) {
+#ifndef NDEBUG
     fprintf(stderr, "invalid length\n");    
+#endif
     return 0;
   }
 

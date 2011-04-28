@@ -27,10 +27,14 @@
 #define _CRYPTO_H_
 
 #include "global.h"
+#include "numeric.h"
 #include "hmac.h"
 
 /** Maximum size of the generated keyblock. */
 #define MAX_KEYBLOCK_LENGTH       108    /* TLS_PSK_AES128_CBC_SHA */
+
+/** Length of DTLS master_secret */
+#define DTLS_MASTER_SECRET_LENGTH 48
 
 /** Definition of cipher parameters. */
 typedef struct {
@@ -109,7 +113,9 @@ typedef struct {
  */
 size_t dtls_p_hash(dtls_hashfunc_t h, 
 		   unsigned char *key, size_t keylen,
-		   str *seeds, int num_seeds,
+		   unsigned char *label, size_t labellen,
+		   unsigned char *random1, size_t random1len,
+		   unsigned char *random2, size_t random2len,
 		   unsigned char *buf, size_t buflen);
 
 /**
@@ -118,7 +124,9 @@ size_t dtls_p_hash(dtls_hashfunc_t h,
  * P_SHA256. Currently, the actual PRF is selected at compile time.
  */
 size_t dtls_prf(unsigned char *key, size_t keylen,
-		str *seeds, int num_seeds,
+		unsigned char *label, size_t labellen,
+		unsigned char *random1, size_t random1len,
+		unsigned char *random2, size_t random2len,
 		unsigned char *buf, size_t buflen);
 
 /**
@@ -158,9 +166,9 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  *                decrypted data, excluding the IV.
  * \return \c 0 on error, \c 1 otherwise.
  */
-int dtls_decrypt(dtls_security_parameters_t *sec,
-		 unsigned char *record, size_t record_length,
-		 unsigned char *result, size_t *result_length);
+int dtls_cbc_decrypt(dtls_security_parameters_t *sec,
+		     unsigned char *record, size_t record_length,
+		     unsigned char *result, size_t *result_length);
 
 /**
  * Verifies the message given in \p record according to the security
@@ -179,6 +187,37 @@ int dtls_decrypt(dtls_security_parameters_t *sec,
 int dtls_verify(dtls_security_parameters_t *sec,
 		unsigned char *record, size_t record_length,
 		unsigned char *cleartext, size_t cleartext_length);
+
+/* helper functions */
+
+/** 
+ * Generates pre_master_secret from given PSK and fills the result
+ * according to the "plain PSK" case in section 2 of RFC 4279.
+ * Diffie-Hellman and RSA key exchange are currently not supported.
+ *
+ * \param key    The shared key.
+ * \param keylen Length of \p key in bytes.
+ * \param result The derived pre master secret.
+ * \return The actual length of \p result.
+ */
+static inline size_t
+dtls_pre_master_secret(unsigned char *key, size_t keylen,
+		  unsigned char *result) {
+  unsigned char *p = result;
+
+  dtls_int_to_uint16(p, keylen);
+  p += sizeof(uint16);
+
+  memset(p, 0, keylen);
+  p += keylen;
+
+  memcpy(p, result, sizeof(uint16));
+  p += sizeof(uint16);
+  
+  memcpy(p, key, keylen);
+
+  return (sizeof(uint16) + keylen) << 1;
+}
 
 #endif /* _CRYPTO_H_ */
 
