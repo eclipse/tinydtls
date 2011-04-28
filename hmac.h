@@ -62,6 +62,12 @@ typedef struct {
   size_t (*finalize)(unsigned char *, void *);
 } dtls_hash_t;
 
+/** 
+ * Creates a new hash object for hash function \p h. The storage that
+ * is allocated for this object must be freed manually.
+ */
+dtls_hash_t *dtls_new_hash(dtls_hashfunc_t h);
+
 /**
  * Context for HMAC generation. This object is initialized with
  * dtls_hmac_init() and must be passed to dtls_hmac_update() and
