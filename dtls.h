@@ -30,14 +30,18 @@
 
 #include "uthash.h"
 #include "peer.h"
+#include "crypto.h"
 
-/* Define our own types as at least uint32_t does not work on my amd64. */
-
-typedef unsigned char uint8;
-typedef unsigned char uint16[2];
-typedef unsigned char uint24[3];
-typedef unsigned char uint32[4];
-typedef unsigned char uint48[6];
+/** Known compression methods
+ *
+ * \hideinitializer
+ */
+#define TLS_COMP_NULL      0x00	/* NULL compression */
+ 
+typedef enum { 
+  DTLS_STATE_INIT = 0, DTLS_STATE_SERVERHELLO, DTLS_STATE_KEYEXCHANGE, 
+  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED
+} dtls_state_t;
 
 /** 
  * Holds security parameters, local state and the transport address
@@ -45,6 +49,16 @@ typedef unsigned char uint48[6];
 typedef struct {
   session_t session;	     /**< peer address and local interface */
   UT_hash_handle hh;	     /**< the hash handle (used internally) */
+
+  dtls_state_t state;        /**< DTLS engine state */
+  uint16 epoch;		     /**< counter for cipher state changes*/
+  uint48 rseq;		     /**< sequence number of last record sent */
+
+  uint24 mseq;		     /**< handshake message sequence number counter */
+
+  /** actual and potential security parameters */
+  dtls_security_parameters_t security_params[2]; 
+  int config;	             /**< denotes which security params are in effect */
 } dtls_peer_t;
 
 /** Length of the secret that is used for generating Hello Verify cookies. */
@@ -61,6 +75,8 @@ typedef struct dtls_context_t {
   int (*cb_write)(struct dtls_context_t *ctx, 
 		  struct sockaddr *dst, socklen_t dstlen, int ifindex, 
 		  uint8 *buf, int len);
+
+  unsigned char *psk; 
 } dtls_context_t;
 
 /** 
@@ -77,7 +93,7 @@ void dtls_free_context(dtls_context_t *ctx);
 /** Sets one of the available callbacks write, read. */
 #define dtls_set_cb(ctx,cb,CB) do { (ctx)->cb_##CB = cb; } while(0)
 
-#define DTLS_VERSION 0xfeff
+#define DTLS_VERSION 0xfeff	/* 0xfefd for DTLS 1.2 */
 
 #define DTLS_COOKIE_LENGTH 32
 
@@ -125,10 +141,9 @@ typedef struct {
   uint16 version;	  /**< Client version */
   uint32 gmt_random;	  /**< GMT time of the random byte creation */
   unsigned char random[28];	/**< Client random bytes */
-  uint8 session_id_length;	/**< length of the session ID */
-  /* up to 32 bytes session id */
+  /* session id (up to 32 bytes) */
   /* cookie (up to 32 bytes) */
-  /* cipher suite */
+  /* cipher suite (2 to 2^16 -1 bytes) */
   /* compression method */
 } dtls_client_hello_t;
 

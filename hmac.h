@@ -26,6 +26,8 @@
 #ifndef _HMAC_H_
 #define _HMAC_H_
 
+#include <sys/types.h>
+
 #define DTLS_HMAC_BLOCKSIZE 64	/**< size of hmac blocks */
 #define DTLS_HMAC_MAX       64	/**< max number of bytes in digest */
 
@@ -40,8 +42,16 @@ typedef struct {
   size_t (*finalize)(unsigned char *, void *);
 } dtls_hash_t;
 
-/** List of known hash functions for use in dtls_hmac_init(). */
-typedef enum { HASH_SHA256=1, HASH_SHA1, HASH_MD5 } dtls_hashfunc_t;
+/**
+ * List of known hash functions for use in dtls_hmac_init(). The
+ * identifiers are the same as the HashAlgorithm defined in 
+ * <a href="http://tools.ietf.org/html/rfc5246#section-7.4.1.4.1"
+ * >Section 7.4.1.4.1 of RFC 5246</a>.
+ */
+typedef enum { 
+  HASH_NONE=0, HASH_MD5=1, HASH_SHA1=2, HASH_SHA224=3,
+  HASH_SHA256=4, HASH_SHA384=5, HASH_SHA512=6
+} dtls_hashfunc_t;
 
 /**
  * Context for HMAC generation. This object is initialized with
