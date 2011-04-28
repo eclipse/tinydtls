@@ -442,6 +442,9 @@ dtls_new_peer(dtls_context_t *ctx,
   if (peer) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
+
+    /* initially allow the NULL cipher */
+    CURRENT_CONFIG(peer)->cipher = -1;
   }
   
   return peer;
