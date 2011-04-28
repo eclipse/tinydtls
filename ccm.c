@@ -25,6 +25,7 @@
 
 #include <string.h>
 
+#include "global.h"
 #include "numeric.h"
 #include "ccm.h"
 
@@ -57,14 +58,6 @@ block0(size_t M,       /* number of auth bytes */
   for (i=0; i < L; i++) {
     result[15-i] = lm & 0xff;
     lm >>= 8;
-  }
-}
-
-void
-memxor(unsigned char *x, unsigned char *y, size_t n) {
-  while(n--) {
-    *x ^= *y;
-    x++; y++;
   }
 }
 
