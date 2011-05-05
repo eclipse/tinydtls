@@ -61,8 +61,11 @@ update_hash(uint8 *record, size_t rlength,
   if (!hs_hash[0])
     return;
 
+  printf("add MAC data: ");
+  dump(data, data_length);
+  printf("\n");
   for (i = 0; i < sizeof(hs_hash) / sizeof(dtls_hash_t *); ++i) {
-    hs_hash[i]->update(hs_hash[i]->data, record, rlength);
+    /* hs_hash[i]->update(hs_hash[i]->data, record, rlength); */
     hs_hash[i]->update(hs_hash[i]->data, data, data_length);
   }
 }
@@ -71,11 +74,14 @@ static inline void
 finalize_hash(uint8 *buf) {
   if (!hs_hash[0])
     return;
-
+  
   hs_hash[0]->finalize(buf, hs_hash[0]->data);
 #if DTLS_VERSION == 0xfeff
   hs_hash[1]->finalize(buf + 16, hs_hash[1]->data);
 #endif
+  printf("finalize_hash: raw hash is: ");
+  dump(buf, 16); printf(" "); dump(buf + 16, 20);
+  printf("\n");
 }
 
 static inline void
@@ -92,17 +98,17 @@ clear_hash() {
 #define SWITCH_CONFIG  (config = !(config & 0x01))
 
 int
-decrypt_packet(uint8 *packet, size_t length,
+decrypt_record(uint8 *packet, size_t length,
 	       uint8 **cleartext, size_t *clen) {
-  static uint8 buf[200];
+  static uint8 buf[400];
 
   switch (CURRENT_CONFIG->cipher) {
-  case -1:
+  case -1:			/* no cipher suite selected */
     *cleartext = packet + sizeof(dtls_record_header_t);
-    *clen = length;
+    *clen = dtls_uint16_to_int(((dtls_record_header_t *)packet)->length);
     return 1;
   case 0:			/* TLS_PSK_WITH_AES128_CBC_SHA */
-    if (length > 200) 
+    if (length > 400) 
       return 0;
 
     if (dtls_cbc_decrypt(CURRENT_CONFIG, packet, length, buf, clen)) {
@@ -160,7 +166,7 @@ handle_packet(const u_char *packet, int length) {
     if (dtls_uint16_to_int(packet + 3) != epoch)
       goto next;
 
-    if (!decrypt_packet((uint8 *)packet, 
+    if (!decrypt_record((uint8 *)packet, 
 	      dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t),
               &data, &data_length))
       goto next;
@@ -247,11 +253,28 @@ handle_packet(const u_char *packet, int length) {
       
     }
 
+    printf("packet %d:\n", n);
+    hexdump(packet, sizeof(dtls_record_header_t));
+    printf("\n");
+    hexdump(data, data_length);
+    printf("\n");
+
     if (packet[0] == 22) {
       if (data[0] == 20) { /* Finished (from client) */
 	finalize_hash(hash_buf);
 	clear_hash();
+#if 1
+	dtls_prf(master_secret, master_secret_len,
+		 (unsigned char *)"client finished", 15,
+		 hash_buf, sizeof(hash_buf),
+		 NULL, 0,
+		 data + sizeof(dtls_handshake_header_t),
+		 verify_data_length);
+	printf("verify_data:\n");
+	dump(data, data_length);
+	printf("\n");
 
+#else
 	dtls_prf(master_secret, master_secret_len,
 		 (unsigned char *)"client finished", 15,
 		 hash_buf, sizeof(hash_buf),
@@ -261,17 +284,14 @@ handle_packet(const u_char *packet, int length) {
 	printf("verify_data:\n");
 	dump(verify_data, verify_data_length);
 	printf("\n");
+#endif
       } else {
-	update_hash((unsigned char *)packet, sizeof(dtls_record_header_t), 
-		    data, data_length);
+	update_hash((unsigned char *)packet, sizeof(dtls_record_header_t),
+		    data,
+		    sizeof(dtls_handshake_header_t) +
+		    dtls_uint24_to_int(((dtls_handshake_header_t *)data)->length));
       }
     }
-
-    printf("packet %d:\n", n);
-    hexdump(packet, sizeof(dtls_record_header_t));
-    printf("\n");
-    hexdump(data, data_length);
-    printf("\n");
 
   next:
     length -= dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t);
