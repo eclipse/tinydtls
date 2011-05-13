@@ -217,8 +217,11 @@ dsrv_set_cb(ctx, demux_protocol, demux);
 #include <sys/select.h>
 #include <sys/time.h>
 
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
 #include <openssl/ssl.h>
+#endif
+
+#ifndef DSRV_NO_DTLS
 #include "dtls.h"
 #endif
 
@@ -245,8 +248,10 @@ dsrv_set_cb(ctx, demux_protocol, demux);
 typedef struct dsrv_context_t {
   int fd;			/**< single file descriptor for read/write */
   struct netq_t *rq, *wq;	/**< read queue and write queue */
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
   SSL_CTX *sslctx;
+#endif
+#ifndef DSRV_NO_DTLS
   dtls_context_t *dtlsctx;	/**< the main context for DTLS operation */
 #endif
   

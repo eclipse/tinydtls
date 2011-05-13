@@ -43,7 +43,7 @@ peer_set_state(peer_t *peer, peer_state_t state) {
 void
 peer_free(peer_t *peer) {
   if (peer) {
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
     if (peer->ssl) SSL_free(peer->ssl);
     if (peer->nbio) BIO_free(peer->nbio);
 #endif
@@ -58,7 +58,7 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #endif
 	 ) {
   peer_t *peer = (peer_t *)malloc(sizeof(peer_t));
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
   BIO *ibio;
 #endif
 
@@ -80,6 +80,7 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     if (protocol == DTLS) {
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
+#ifdef WITH_OPENSSL
     peer->ssl = SSL_new(dsrv_get_context()->sslctx);
     if (peer->ssl) {
 
@@ -99,6 +100,7 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
       peer_free(peer);
       return NULL;
     }
+#endif /* WITH_OPENSSL */
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     }
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
@@ -125,7 +127,11 @@ peer_write(peer_t *peer, char *buf, int len) {
 #  ifndef DSRV_NO_PROTOCOL_DEMUX
   if (peer->protocol == DTLS)
 #  endif /* DSRV_NO_PROTOCOL_DEMUX */
+#ifdef WITH_OPENSSL
     return SSL_write(peer->ssl, buf, len);
+#else
+  ;
+#endif
 #endif /* DSRV_NO_DTLS */
 
 #if defined(DSRV_NO_DTLS) || !defined(DSRV_NO_PROTOCOL_DEMUX)

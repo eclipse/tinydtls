@@ -32,11 +32,15 @@
 #include <errno.h>
 #include <assert.h>
 
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
+#endif
+
+#ifndef DSRV_NO_DTLS
+#include "dtls.h"
 #endif
 
 #include "dsrv.h"
@@ -109,7 +113,7 @@ dsrv_get_context() {
   return the_context;
 }
 
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
 peer_t *
 peer_find_from_ssl(const SSL *ssl) {
   peer_t *peer, *tmp;
@@ -168,7 +172,9 @@ info_callback(const SSL *ssl, int where, int ret) {
     peer_set_state(peer, PEER_ST_ESTABLISHED);
   }
 }
+#endif
 
+#ifndef DSRV_NO_DTLS
 /* Callback function registered with dtls context to send datagrams. */
 int 
 dsrv_dtls_write(struct dtls_context_t *dtlsctx, 
@@ -255,7 +261,7 @@ dsrv_new_context(struct sockaddr *laddr, socklen_t laddrlen,
 
   }
 
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
   SSL_load_error_strings();
   SSL_library_init();
   OpenSSL_add_all_digests();
@@ -268,7 +274,9 @@ dsrv_new_context(struct sockaddr *laddr, socklen_t laddrlen,
   SSL_CTX_set_read_ahead(c->sslctx, 1); /* enable read-ahead */
 
   SSL_CTX_set_info_callback(c->sslctx, info_callback);
+#endif
 
+#ifndef DSRV_NO_DTLS
   c->dtlsctx = dtls_new_context(c);
   if (c->dtlsctx) 
     dtls_set_cb(c->dtlsctx, dsrv_dtls_write, write);
@@ -294,6 +302,8 @@ dsrv_free_context(dsrv_context_t *ctx) {
     free(ctx->wq);
 #ifndef DSRV_NO_DTLS
     dtls_free_context(ctx->dtlsctx);
+#endif
+#ifdef WITH_OPENSSL
     SSL_CTX_free(ctx->sslctx);
 #endif
     dsrv_close(ctx);
@@ -313,7 +323,7 @@ dsrv_popq(struct netq_t *q) {
 
 void
 peer_check_write(dsrv_context_t *ctx, peer_t *peer) {
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
   static char buf[1000];
   int len;
 
@@ -494,19 +504,6 @@ dsrv_free_peers(struct dsrv_context_t *ctx) {
   }
 }
 
-void dump(char *buf, int len) {
-  int i=0;
-
-  while(i<len) {
-    printf("%02x ", buf[i] & 0xff);
-
-    ++i;
-    if (i % 8 == 0) 
-      printf("\n");
-  }
-  printf("\n");
-}
-
 void
 handle_read(struct dsrv_context_t *ctx) {
   int len;
@@ -601,11 +598,11 @@ handle_read(struct dsrv_context_t *ctx) {
   }
 
 #ifndef DSRV_NO_DTLS
+#if WITH_OPENSSL
 #ifndef DSRV_NO_PROTOCOL_DEMUX
   if (peer->protocol == DTLS) {
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
     /* Handle data only if nothing is pending. */      
-  
     if (BIO_flush(peer->nbio) != 1) {
       warn("flush failed, dropping data (%d)\n", BIO_should_retry(peer->nbio));
       return;
@@ -638,6 +635,7 @@ handle_read(struct dsrv_context_t *ctx) {
 #ifndef DSRV_NO_PROTOCOL_DEMUX
   }
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
+#endif /* WITH_OPENSSL */
 #endif /* DSRV_NO_DTLS */
 
   /* invoke user callback if set */
@@ -691,6 +689,7 @@ handle_timeout(struct dsrv_context_t *ctx) {
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     if (peer->protocol == DTLS) {
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
+#ifdef WITH_OPENSSL
       result = DTLSv1_handle_timeout(peer->ssl);
       if (result < 0) {
 	err = SSL_get_error(peer->ssl,result);
@@ -702,6 +701,7 @@ handle_timeout(struct dsrv_context_t *ctx) {
 	dsrv_delete_peer(ctx, peer);
 	peer_free(peer);
       }
+#endif /* WITH_OPENSSL */
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     }
 #endif /* DSRV_NO_PROTOCOL_DEMUX */

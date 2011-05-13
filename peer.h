@@ -36,7 +36,7 @@
 
 #include <arpa/inet.h>
 
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
 #include <openssl/ssl.h>
 #endif
 
@@ -67,7 +67,7 @@ typedef struct {
 
 typedef struct {
   peer_state_t state;
-#ifndef DSRV_NO_DTLS
+#ifdef WITH_OPENSSL
   SSL *ssl;
   BIO *nbio;
 #endif
