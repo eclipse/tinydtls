@@ -65,7 +65,6 @@ update_hash(uint8 *record, size_t rlength,
   dump(data, data_length);
   printf("\n");
   for (i = 0; i < sizeof(hs_hash) / sizeof(dtls_hash_t *); ++i) {
-    /* hs_hash[i]->update(hs_hash[i]->data, record, rlength); */
     hs_hash[i]->update(hs_hash[i]->data, data, data_length);
   }
 }
@@ -98,27 +97,18 @@ clear_hash() {
 #define SWITCH_CONFIG  (config = !(config & 0x01))
 
 int
-decrypt_record(uint8 *packet, size_t length,
-	       uint8 **cleartext, size_t *clen) {
-  static uint8 buf[400];
+decrypt_record(uint8 *ciphertext, size_t length) {
+  int res = -1;
 
   switch (CURRENT_CONFIG->cipher) {
   case -1:			/* no cipher suite selected */
-    *cleartext = packet + sizeof(dtls_record_header_t);
-    *clen = dtls_uint16_to_int(((dtls_record_header_t *)packet)->length);
-    return 1;
+    return length;
+    break;
   case 0:			/* TLS_PSK_WITH_AES128_CBC_SHA */
     if (length > 400) 
-      return 0;
-
-    if (dtls_cbc_decrypt(CURRENT_CONFIG, packet, length, buf, clen)) {
-      *cleartext = buf;
-      return 1;
-    }
+      return -1;
     
-#ifndef NDEBUG
-    fprintf(stderr,"decryption failed!\n");
-#endif
+    res = dtls_decrypt(CURRENT_CONFIG->read_cipher, ciphertext, length);
     break;
   default:
 #ifndef NDEBUG
@@ -126,7 +116,7 @@ decrypt_record(uint8 *packet, size_t length,
 #endif    
   }
 
-  return 0;
+  return res;
 }
 
 void
@@ -137,7 +127,7 @@ handle_packet(const u_char *packet, int length) {
   };
   uint8 *data; 
   size_t data_length;
-  int i;
+  int i, res;
 #if DTLS_VERSION == 0xfeff
 #ifndef SHA1_DIGEST_LENGTH
 #define SHA1_DIGEST_LENGTH 20
@@ -147,7 +137,6 @@ handle_packet(const u_char *packet, int length) {
   uint8 hash_buf[SHA256_DIGEST_LENGTH];
 #endif
 #define verify_data_length 12
-  uint8 verify_data[verify_data_length];
   int is_client;
   n++;
 
@@ -166,10 +155,19 @@ handle_packet(const u_char *packet, int length) {
     if (dtls_uint16_to_int(packet + 3) != epoch)
       goto next;
 
-    if (!decrypt_record((uint8 *)packet, 
-	      dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t),
-              &data, &data_length))
+    res = decrypt_record((uint8 *)packet + sizeof(dtls_record_header_t), 
+			 dtls_uint16_to_int((uint8 *)packet + 11));
+
+    if (res < 0)
       goto next;
+    
+    data = (uint8 *)packet + sizeof(dtls_record_header_t);
+    data_length = res;
+
+    if (CURRENT_CONFIG->cipher != -1 && packet[0] == 22) {
+      data += 16;
+      data_length -= 16;
+    }
 
     if (packet[0] == 22 && data[0] == 1) { /* ClientHello */
       if (memcmp(packet, initial_hello, sizeof(initial_hello)) == 0)
@@ -217,6 +215,19 @@ handle_packet(const u_char *packet, int length) {
 	       OTHER_CONFIG->key_block, 
 	       dtls_kb_size(OTHER_CONFIG));
 
+      OTHER_CONFIG->read_cipher = 
+	dtls_new_cipher(&ciphers[0], 
+			dtls_kb_client_write_key(OTHER_CONFIG),
+			dtls_kb_key_size(OTHER_CONFIG));
+      
+      if (!OTHER_CONFIG->read_cipher) {
+	warn("cannot create cipher\n");
+      } else {
+	dtls_init_cipher(OTHER_CONFIG->read_cipher,
+			 dtls_kb_client_iv(OTHER_CONFIG),
+			 dtls_kb_iv_size(OTHER_CONFIG));
+      }
+
       SWITCH_CONFIG;
       epoch++;
 
@@ -263,7 +274,7 @@ handle_packet(const u_char *packet, int length) {
       if (data[0] == 20) { /* Finished (from client) */
 	finalize_hash(hash_buf);
 	clear_hash();
-#if 1
+
 	dtls_prf(master_secret, master_secret_len,
 		 (unsigned char *)"client finished", 15,
 		 hash_buf, sizeof(hash_buf),
@@ -273,18 +284,6 @@ handle_packet(const u_char *packet, int length) {
 	printf("verify_data:\n");
 	dump(data, data_length);
 	printf("\n");
-
-#else
-	dtls_prf(master_secret, master_secret_len,
-		 (unsigned char *)"client finished", 15,
-		 hash_buf, sizeof(hash_buf),
-		 NULL, 0,
-		 verify_data,
-		 verify_data_length);
-	printf("verify_data:\n");
-	dump(verify_data, verify_data_length);
-	printf("\n");
-#endif
       } else {
 	update_hash((unsigned char *)packet, sizeof(dtls_record_header_t),
 		    data,

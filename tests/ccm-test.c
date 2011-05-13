@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
 
-    if (rijndael_set_key(&ctx, data[n].key, 8*sizeof(data[n].key)) < 0) {
+    if (rijndael_set_key_enc_only(&ctx, data[n].key, 8*sizeof(data[n].key)) < 0) {
       fprintf(stderr, "cannot set key\n");
       exit(-1);
     }
