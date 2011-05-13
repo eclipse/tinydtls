@@ -54,7 +54,7 @@ typedef struct {
  * XORs \p n bytes byte-by-byte starting at \p y to the memory area
  * starting at \p x. */
 static inline void
-memxor(unsigned char *x, unsigned char *y, size_t n) {
+memxor(unsigned char *x, const unsigned char *y, size_t n) {
   while(n--) {
     *x ^= *y;
     x++; y++;

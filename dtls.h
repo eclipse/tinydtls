@@ -32,6 +32,8 @@
 #include "peer.h"
 #include "crypto.h"
 
+#define DTLS_VERSION 0xfeff	/* 0xfefd for DTLS 1.2 */
+
 /** Known compression methods
  *
  * \hideinitializer
@@ -59,6 +61,13 @@ typedef struct {
   /** actual and potential security parameters */
   dtls_security_parameters_t security_params[2]; 
   int config;	             /**< denotes which security params are in effect */
+
+  /* temporary storage for the final handshake hash */
+#if DTLS_VERSION == 0xfeff
+  dtls_hash_t *hs_hash[2];
+#elif DTLS_VERSION == 0xfefd
+  dtls_hash_t *hs_hash[1];
+#endif
 } dtls_peer_t;
 
 /** Length of the secret that is used for generating Hello Verify cookies. */
@@ -76,7 +85,8 @@ typedef struct dtls_context_t {
 		  struct sockaddr *dst, socklen_t dstlen, int ifindex, 
 		  uint8 *buf, int len);
 
-  unsigned char *psk; 
+  unsigned char *psk; /**< pre-shared key (set with dtls_set_psk()) */
+  size_t psk_length;  /**< length of psk  */
 } dtls_context_t;
 
 /** 
@@ -92,8 +102,6 @@ void dtls_free_context(dtls_context_t *ctx);
 
 /** Sets one of the available callbacks write, read. */
 #define dtls_set_cb(ctx,cb,CB) do { (ctx)->cb_##CB = cb; } while(0)
-
-#define DTLS_VERSION 0xfeff	/* 0xfefd for DTLS 1.2 */
 
 #define DTLS_COOKIE_LENGTH 32
 
@@ -167,6 +175,11 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
 #endif
 
 /**
+ * Sets the pre-shared key for context \p ctx. 
+ */
+int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length);
+
+/**
  * Retrieves a pointer to the cookie contained in a Client Hello message.
  *
  * \param hello_msg   Points to the received Client Hello message
@@ -195,5 +208,11 @@ int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
 int dtls_verify_peer(dtls_context_t *ctx, 
 		     session_t *session,
 		     uint8 *msg, int msglen);
+
+/** 
+ * Handles incoming data as DTLS message from given peer.
+ */
+int dtls_handle_message(dtls_context_t *ctx, session_t *session,
+			uint8 *msg, int msglen);
 
 #endif /* _DTLS_H_ */

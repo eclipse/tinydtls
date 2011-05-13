@@ -28,21 +28,26 @@
 
 #include "aes/rijndael.h"
 
+#include "global.h"
+#include "debug.h"
 #include "numeric.h"
 #include "dtls.h"
 #include "crypto.h"
+
+#ifndef NDEBUG
+extern void dump(unsigned char *, size_t);
+#endif
 
 /** 
  * The list of acceptable cipher suites. Do not include the NULL
  * cipher here as it would enable a bid-down attack.
  */
-dtls_cipher_t ciphers[] = {
-  { TLS_PSK_WITH_AES_128_CBC_SHA, 16, 16, HASH_SHA1, 20, 20, 16 },
+const dtls_cipher_t ciphers[] = {
+  { TLS_PSK_WITH_AES_128_CBC_SHA, AES_BLKLEN, 16, HASH_SHA1, 20, 20, 16 },
   /* \todo: add TLS_PSK_WITH_AES_128_CCM_8 */
 
   { { 0, 0 }, 0, 0, HASH_NONE, 0, 0, 0 } /* end marker */
 };
-
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
@@ -160,45 +165,57 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
   dtls_hmac_finalize(hmac_ctx, buf);
 }
 
-int
-dtls_cbc_decrypt(dtls_security_parameters_t *sec,
-		 unsigned char *record, size_t record_length,
-		 unsigned char *result, size_t *result_length) {
-
+typedef struct {
   rijndael_ctx ctx;
-  unsigned char *cipher;
-  int i;
+  unsigned char pad[AES_BLKLEN];
+} aes128_cbc_t;
 
-  if (rijndael_set_key(&ctx, dtls_kb_client_write_key(sec),
-		       8 * dtls_kb_key_size(sec)) < 0) {
-#ifndef NDEBUG
-    fprintf(stderr, "cannot set key\n");
-#endif
-    return 0;
+void 
+dtls_aes128_cbc_init(void *ctx, unsigned char *iv, size_t length) {
+  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
+
+  if (length < AES_BLKLEN)
+    memset(c->pad + length, 0, AES_BLKLEN - length);
+
+  memcpy(c->pad, iv, AES_BLKLEN);
+}
+
+size_t
+dtls_aes128_cbc_encrypt(void *ctx, 
+			const unsigned char *src, size_t srclen,
+			unsigned char *buf) {
+
+  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
+  unsigned char *p;
+  size_t i, j;
+
+  assert(c);
+  p = c->pad;
+
+  /* write IV to result buffer */
+  prng(buf, AES_BLKLEN);
+  memxor(c->pad, buf, AES_BLKLEN);
+  
+  rijndael_encrypt(&c->ctx, c->pad, buf);
+
+  for (i = AES_BLKLEN; i <= srclen; i += AES_BLKLEN) {
+    for (j = 0; j < AES_BLKLEN; ++j)
+      c->pad[j] = *src++ ^ *buf++;
+    
+    rijndael_encrypt(&c->ctx, c->pad, buf);
   }
 
-  *result_length = dtls_uint16_to_int(((dtls_record_header_t *)record)->length);
-  if (record_length < *result_length + sizeof(dtls_record_header_t)
-      || *result_length < ciphers[sec->cipher].blk_length) {
-#ifndef NDEBUG
-    fprintf(stderr, "invalid length\n");    
-#endif
-    return 0;
-  }
+  memcpy(c->pad, buf, AES_BLKLEN);
+  memxor(c->pad, src, srclen & (AES_BLKLEN - 1));
 
-  *result_length -= ciphers[sec->cipher].blk_length;
-  cipher = record + sizeof(dtls_record_header_t);
+  /* fill last block with padding bytes before encryption */
+  for (j = srclen & (AES_BLKLEN - 1); j < AES_BLKLEN; ++j)
+    c->pad[j] ^= ~srclen & (AES_BLKLEN - 1);
 
-  /* is it ok to skip the IV block completely? do we need it for anything? */
-  for (i = 0; i < *result_length; i += ciphers[sec->cipher].blk_length) {
-    rijndael_decrypt(&ctx, cipher + ciphers[sec->cipher].blk_length, result);
-    memxor(result, cipher, ciphers[sec->cipher].blk_length);
+  rijndael_encrypt(&c->ctx, c->pad, buf + AES_BLKLEN);
+  memcpy(c->pad, buf + AES_BLKLEN, AES_BLKLEN);
 
-    cipher += ciphers[sec->cipher].blk_length;
-    result += ciphers[sec->cipher].blk_length;
-  }
-
-  return 1;
+  return i + AES_BLKLEN;
 }
 
 static inline int
@@ -210,6 +227,89 @@ check_pattern(unsigned char *buf,
     ok = (*buf++ == pattern) & ok;
 
   return ok;
+}
+
+
+size_t
+dtls_aes128_cbc_decrypt(void *ctx,
+			unsigned char *buf, size_t buflen) {
+
+  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
+  size_t i;
+
+  assert(c);
+
+  /* The upper layer does not need the first block of the ciphertext
+   * as it contains only the random IV. Therefore, we skip it during
+   * decryption and save some buffer space. As a result, there must be
+   * at least two entire ciphertext blocks.
+   */
+
+  if (buflen < 2 * AES_BLKLEN)
+    return 0;		 /* ought to be safe as MAC check will fail */
+ 
+  for (i = 0; i <= buflen - 2 * AES_BLKLEN; i += AES_BLKLEN) {
+    rijndael_decrypt(&c->ctx, buf + AES_BLKLEN, c->pad);
+    memxor(buf, c->pad, AES_BLKLEN);
+
+    buf += AES_BLKLEN;
+  }
+  memset(c->pad, 0, AES_BLKLEN); /* avoid data leakage */
+  
+  /* check padding */
+  --buf;
+  
+  if (*buf < i && check_pattern(buf - *buf, *buf, *buf))
+    return i - (*buf + 1);
+  else
+    return i;			/* MAC check should fail */
+}
+
+void 
+dtls_init_cipher(dtls_cipher_context_t *ctx,
+		 unsigned char *iv, size_t length) {
+  assert(ctx);
+  ctx->init(ctx->data, iv, length);
+}
+
+dtls_cipher_context_t *
+dtls_new_cipher(const dtls_cipher_t *cipher,
+		unsigned char *key, size_t keylen) {
+  dtls_cipher_context_t *cipher_context = NULL;
+
+  switch (dtls_uint16_to_int(cipher->code)) {
+
+  case 0x008c: /* AES128_CBC */ 
+
+    /* Allocate memory for the dtls_cipher_context_t, the rijndael_ctx
+     * and a pad to carry the previous ciphertext block as IV for the
+     * next operation. */ 
+    cipher_context = (dtls_cipher_context_t *)
+      malloc(sizeof(dtls_cipher_context_t) + sizeof(aes128_cbc_t));
+
+    if (cipher_context) {
+      cipher_context->data = 
+	(unsigned char *)cipher_context + sizeof(dtls_cipher_context_t);
+
+      cipher_context->init = dtls_aes128_cbc_init;
+      cipher_context->encrypt = dtls_aes128_cbc_encrypt;
+      cipher_context->decrypt = dtls_aes128_cbc_decrypt;
+
+      if (rijndael_set_key(&((aes128_cbc_t *)cipher_context->data)->ctx,
+			   key, 8 * keylen) < 0) {
+	/* cleanup everything in case the key has the wrong size */
+	
+	warn("cannot set rijndael key\n");
+	free(cipher_context);
+	cipher_context = NULL;
+      }
+    } 
+    break;
+  default:
+    warn("unknown cipher %04x\n", cipher->code);
+  }
+
+  return cipher_context;
 }
 
 int
@@ -226,6 +326,7 @@ dtls_verify(dtls_security_parameters_t *sec,
 		 dtls_kb_mac_secret_size(sec),
 		 dtls_kb_mac_algorithm(sec));
 
+#if 0
   /* check padding */
   p = cleartext + cleartext_length - 1; /* point to last byte */
   
@@ -234,7 +335,10 @@ dtls_verify(dtls_security_parameters_t *sec,
     ok = 1;
   }
   ok = ok & check_pattern(p - *p, *p, *p);
-
+#else
+  ok = 1;
+  cleartext_length -= ciphers[sec->cipher].mac_length;
+#endif
   /* calculate MAC even if padding is wrong */
   dtls_mac(&hmac_ctx, 
 	   record, 		/* the pre-filled record header */

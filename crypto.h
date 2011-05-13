@@ -26,6 +26,8 @@
 #ifndef _CRYPTO_H_
 #define _CRYPTO_H_
 
+#include <stdlib.h>		/* for rand() and srand() */
+
 #include "global.h"
 #include "numeric.h"
 #include "hmac.h"
@@ -35,6 +37,20 @@
 
 /** Length of DTLS master_secret */
 #define DTLS_MASTER_SECRET_LENGTH 48
+
+/* Argh! */
+#define AES_BLKLEN 16
+
+typedef enum { AES128=0 
+} dtls_crypto_alg;
+
+typedef struct {
+  void *data;			/**< The crypto context */
+  
+  void (*init)(void *, unsigned char *, size_t);
+  size_t (*encrypt)(void *, const unsigned char *, size_t, unsigned char *);
+  size_t (*decrypt)(void *, unsigned char *, size_t);
+} dtls_cipher_context_t;
 
 /** Definition of cipher parameters. */
 typedef struct {
@@ -48,7 +64,7 @@ typedef struct {
 } dtls_cipher_t;
 
 /** The list of actual supported ciphers, excluding the NULL cipher. */
-extern dtls_cipher_t ciphers[];
+extern const dtls_cipher_t ciphers[];
 
 typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
@@ -57,6 +73,9 @@ typedef struct {
   int cipher;			/**< cipher type index */
   uint8  compression;		/**< compression method */
 
+  /** the session's master secret */
+  uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
+
   /** 
    * The key block generated from PRF applied to client and server
    * random bytes. The actual size is given by the selected cipher and
@@ -64,6 +83,9 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
+
+  dtls_cipher_context_t *read_cipher;  /**< decryption context */
+  dtls_cipher_context_t *write_cipher; /**< encryption context */
 } dtls_security_parameters_t;
 
 /* The following macros provide access to the components of the
@@ -150,25 +172,49 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
 	      unsigned char *packet, size_t length,
 	      unsigned char *buf);
 
-/** 
- * Decrypts the specified \p record of length \p record_length
- * and writes the result into \p result. The result buffer must
- * provide sufficient space to hold the cleartext contents of
- * the encrypted message. This function returns \c 0 on error,
- * non-zero otherwise.
- * 
- * \param sec     The security parameters in effect.
- * \param record  The record to decrypt.
- * \param record_length Length of the encrypted message pointed to
- *                by \p record.
- * \param result  A buffer large enough to store the result.
- * \param result_length Will be set to the actual size of the 
- *                decrypted data, excluding the IV.
- * \return \c 0 on error, \c 1 otherwise.
+/**
+ * Encrypts the specified \p src of given \p length, writing the
+ * result to \p buf. The cipher implementation may add more data to
+ * the result buffer such as an initialization vector or padding
+ * (e.g. for block cipers in CBC mode). The caller therefore must
+ * ensure that \p buf provides sufficient storage to hold the result.
+ * Usually this means ( 2 + \p length / blocksize ) * blocksize.  The
+ * function returns a value less than zero on error or otherwise the
+ * number of bytes written.
+ *
+ * \param ctx    The cipher context to use.
+ * \param src    The data to encrypt.
+ * \param length The actual size of of \p src.
+ * \param buf    The result buffer.
+ * \return The number of encrypted bytes on success, less than zero
+ *         otherwise. 
  */
-int dtls_cbc_decrypt(dtls_security_parameters_t *sec,
-		     unsigned char *record, size_t record_length,
-		     unsigned char *result, size_t *result_length);
+static inline int
+dtls_encrypt(dtls_cipher_context_t *ctx, 
+	     const unsigned char *src, size_t length,
+	     unsigned char *buf) {
+  return ctx ?  ctx->encrypt(ctx->data, src, length, buf) : -1; 
+}
+
+/** 
+ * Decrypts the given buffer \p buf with a maximum length of \p length
+ * bytes, writing the result back into \p buf. The function returns
+ * \c -1 in case of an error, or the number of bytes written. Note that
+ * for block ciphers, \p length must be a multiple of the cipher's 
+ * block size. A return value between \c 0 and the actual length 
+ * indicates that only \c n-1 block have been processed. 
+ * 
+ * \param ctx     The cipher context to use.
+ * \param buf     The buffer to decrypt.
+ * \param length  The length of the input buffer. This value must not
+ *                exceed \c INT_MAX.
+ * \return Less than zero on error, the number of decrypted bytes 
+ *         otherwise.
+ */
+static inline int
+dtls_decrypt(dtls_cipher_context_t *ctx, unsigned char *buf, size_t length) {
+  return ctx ?  ctx->decrypt(ctx->data, buf, length) : -1; 
+}
 
 /**
  * Verifies the message given in \p record according to the security
@@ -218,6 +264,60 @@ dtls_pre_master_secret(unsigned char *key, size_t keylen,
 
   return (sizeof(uint16) + keylen) << 1;
 }
+
+/**
+ * Creates a new dtls_cipher_context_t object for given \c cipher.
+ * The storage allocated for this object must be released manually
+ * using free().
+ *
+ * \param cipher  Static description of the requested cipher.
+ * \param key     The encryption and decryption key.
+ * \param keylen  Actual length of \p key.
+ * \return A new dtls_cipher_context_t object or \c NULL in case
+ *         something went wrong (e.g. insufficient memory or wrong
+ *         key length)/
+ */
+dtls_cipher_context_t *dtls_new_cipher(const dtls_cipher_t *cipher,
+				       unsigned char *key, size_t keylen);
+
+/** 
+ * Initializes the give cipher context \p ctx with the initialization
+ * vector \p iv of length \p length. */
+void dtls_init_cipher(dtls_cipher_context_t *ctx,
+		      unsigned char *iv, size_t length);
+
+/* helper functions */
+
+/**
+ * Fills \p buf with \p len random bytes. This is the default
+ * implementation for prng().  You might want to change prng() to use
+ * a better PRNG on your specific platform.
+ */
+static inline int
+prng_impl(unsigned char *buf, size_t len) {
+  while (len--)
+    *buf++ = rand() & 0xFF;
+  return 1;
+}
+
+#ifndef prng
+/** 
+ * Fills \p Buf with \p Length bytes of random data. 
+ * 
+ * \hideinitializer
+ */
+#define prng(Buf,Length) prng_impl((Buf), (Length))
+#endif
+
+#ifndef prng_init
+/** 
+ * Called by dtls_new_context() to set the PRNG seed. You
+ * may want to re-define this to allow for a better PRNG. 
+ *
+ * \hideinitializer
+ */
+#define prng_init(Value) srand((unsigned long)(Value))
+#endif
 
 #endif /* _CRYPTO_H_ */
 
