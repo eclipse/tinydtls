@@ -97,26 +97,91 @@ clear_hash() {
 #define SWITCH_CONFIG  (config = !(config & 0x01))
 
 int
-decrypt_record(uint8 *ciphertext, size_t length) {
-  int res = -1;
+pcap_verify(dtls_security_parameters_t *sec,
+	    int is_client, 
+	    const unsigned char *record, size_t record_length,
+	    const unsigned char *cleartext, size_t cleartext_length) {
 
+  unsigned char mac[DTLS_HMAC_MAX];
+  dtls_hmac_context_t hmac_ctx;
+  int ok;
+
+  if (cleartext_length < dtls_kb_digest_size(sec))
+    return 0;
+
+  dtls_hmac_init(&hmac_ctx, 
+		 is_client 
+		 ? dtls_kb_client_mac_secret(sec)
+		 : dtls_kb_server_mac_secret(sec),
+		 dtls_kb_mac_secret_size(sec),
+		 dtls_kb_mac_algorithm(sec));
+
+  cleartext_length -= dtls_kb_digest_size(sec);
+
+  /* calculate MAC even if padding is wrong */
+  dtls_mac(&hmac_ctx, 
+	   record, 		/* the pre-filled record header */
+	   cleartext, cleartext_length,
+	   mac);
+
+  ok = memcmp(mac, cleartext + cleartext_length, 
+	      dtls_kb_digest_size(sec)) == 0;
+#ifndef NDEBUG
+  printf("MAC (%s): ", ok ? "valid" : "invalid");
+  dump(mac, dtls_kb_digest_size(sec));
+  printf("\n");
+#endif
+  return ok;
+}
+		    
+int
+decrypt_verify(int is_client, const uint8 *packet, size_t length,
+	       uint8 **cleartext, size_t *clen) {
+  int res, ok = 0;
+  dtls_cipher_context_t *cipher;
+
+  static unsigned char buf[1000];
+  
   switch (CURRENT_CONFIG->cipher) {
   case -1:			/* no cipher suite selected */
-    return length;
+    *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
+    *clen = length - sizeof(dtls_record_header_t);
+
+    ok = 1;
     break;
-  case 0:			/* TLS_PSK_WITH_AES128_CBC_SHA */
-    if (length > 400) 
-      return -1;
-    
-    res = dtls_decrypt(CURRENT_CONFIG->read_cipher, ciphertext, length);
+  case AES128:			/* TLS_PSK_WITH_AES128_CBC_SHA */
+    *cleartext = buf;
+    *clen = length - sizeof(dtls_record_header_t);
+
+    if (is_client)
+      cipher = CURRENT_CONFIG->read_cipher;
+    else 
+      cipher = CURRENT_CONFIG->write_cipher; 
+
+    res = dtls_decrypt(cipher,
+		       (uint8 *)packet + sizeof(dtls_record_header_t), *clen, 
+		       buf);
+    if (res < 0) {
+      warn("decryption failed!\n");
+    } else {
+      ok = pcap_verify(CURRENT_CONFIG, is_client, (uint8 *)packet, length, 
+		       *cleartext, res);  
+
+      if (ok)
+	*clen = res - dtls_kb_digest_size(CURRENT_CONFIG);
+    }
     break;
   default:
-#ifndef NDEBUG
-    fprintf(stderr,"unknown cipher!\n");
-#endif    
+    warn("unknown cipher!\n");
+    /* fall through and fail */
+    ok = 0;
   }
-
-  return res;
+  
+  if (ok)
+    printf("verify OK\n");
+  else
+    printf("verification failed!\n");
+  return ok;
 }
 
 void
@@ -155,20 +220,18 @@ handle_packet(const u_char *packet, int length) {
     if (dtls_uint16_to_int(packet + 3) != epoch)
       goto next;
 
-    res = decrypt_record((uint8 *)packet + sizeof(dtls_record_header_t), 
-			 dtls_uint16_to_int((uint8 *)packet + 11));
+    res = decrypt_verify(is_client, packet, length,
+			 &data, &data_length);
 
-    if (res < 0)
+    if (res <= 0)
       goto next;
     
-    data = (uint8 *)packet + sizeof(dtls_record_header_t);
-    data_length = res;
-
-    if (CURRENT_CONFIG->cipher != -1 && packet[0] == 22) {
-      data += 16;
-      data_length -= 16;
-    }
-
+    printf("packet %d:\n", n);
+    hexdump(packet, sizeof(dtls_record_header_t));
+    printf("\n");
+    hexdump(data, data_length);
+    printf("\n");
+    
     if (packet[0] == 22 && data[0] == 1) { /* ClientHello */
       if (memcmp(packet, initial_hello, sizeof(initial_hello)) == 0)
 	goto next;
@@ -221,10 +284,23 @@ handle_packet(const u_char *packet, int length) {
 			dtls_kb_key_size(OTHER_CONFIG));
       
       if (!OTHER_CONFIG->read_cipher) {
-	warn("cannot create cipher\n");
+	warn("cannot create read cipher\n");
       } else {
 	dtls_init_cipher(OTHER_CONFIG->read_cipher,
 			 dtls_kb_client_iv(OTHER_CONFIG),
+			 dtls_kb_iv_size(OTHER_CONFIG));
+      }
+
+      OTHER_CONFIG->write_cipher = 
+	dtls_new_cipher(&ciphers[0], 
+			dtls_kb_server_write_key(OTHER_CONFIG),
+			dtls_kb_key_size(OTHER_CONFIG));
+      
+      if (!OTHER_CONFIG->write_cipher) {
+	warn("cannot create write cipher\n");
+      } else {
+	dtls_init_cipher(OTHER_CONFIG->write_cipher,
+			 dtls_kb_server_iv(OTHER_CONFIG),
 			 dtls_kb_iv_size(OTHER_CONFIG));
       }
 
@@ -263,12 +339,6 @@ handle_packet(const u_char *packet, int length) {
       printf("\n");
       
     }
-
-    printf("packet %d:\n", n);
-    hexdump(packet, sizeof(dtls_record_header_t));
-    printf("\n");
-    hexdump(data, data_length);
-    printf("\n");
 
     if (packet[0] == 22) {
       if (data[0] == 20) { /* Finished (from client) */

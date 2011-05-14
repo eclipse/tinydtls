@@ -51,6 +51,16 @@ typedef struct {
 #define DTLS_MAX_BUF 128
 
 /** 
+ * Known cipher suites. Note that the NULL suite is always available.
+ * Other cipher suites are included only if defined here.
+ *
+ * \hideinitializer
+ */
+#define TLS_PSK_WITH_AES_128_CBC_SHA { 0x00, 0x8c }
+#define TLS_NULL_WITH_NULL_NULL      { 0x00, 0x00 }
+/* #define TLS_PSK_WITH_AES_128_CCM_8 */
+
+/** 
  * XORs \p n bytes byte-by-byte starting at \p y to the memory area
  * starting at \p x. */
 static inline void

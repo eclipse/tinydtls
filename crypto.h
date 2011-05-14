@@ -49,7 +49,7 @@ typedef struct {
   
   void (*init)(void *, unsigned char *, size_t);
   size_t (*encrypt)(void *, const unsigned char *, size_t, unsigned char *);
-  size_t (*decrypt)(void *, unsigned char *, size_t);
+  size_t (*decrypt)(void *, const unsigned char *, size_t, unsigned char *);
 } dtls_cipher_context_t;
 
 /** Definition of cipher parameters. */
@@ -168,8 +168,8 @@ size_t dtls_prf(unsigned char *key, size_t keylen,
  *                  the generated digest.
  */
 void dtls_mac(dtls_hmac_context_t *hmac_ctx, 
-	      unsigned char *record,
-	      unsigned char *packet, size_t length,
+	      const unsigned char *record,
+	      const unsigned char *packet, size_t length,
 	      unsigned char *buf);
 
 /**
@@ -185,7 +185,8 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * \param ctx    The cipher context to use.
  * \param src    The data to encrypt.
  * \param length The actual size of of \p src.
- * \param buf    The result buffer.
+ * \param buf    The result buffer. \p src and \p buf must not 
+ *               overlap.
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
  */
@@ -197,42 +198,27 @@ dtls_encrypt(dtls_cipher_context_t *ctx,
 }
 
 /** 
- * Decrypts the given buffer \p buf with a maximum length of \p length
- * bytes, writing the result back into \p buf. The function returns
- * \c -1 in case of an error, or the number of bytes written. Note that
- * for block ciphers, \p length must be a multiple of the cipher's 
- * block size. A return value between \c 0 and the actual length 
- * indicates that only \c n-1 block have been processed. 
+ * Decrypts the given buffer \p src of given \p length, writing the
+ * result to \p buf. The function returns \c -1 in case of an error,
+ * or the number of bytes written. Note that for block ciphers, \p
+ * length must be a multiple of the cipher's block size. A return
+ * value between \c 0 and the actual length indicates that only \c n-1
+ * block have been processed. Unlike dtls_encrypt(), the source
+ * and destination of dtls_decrypt() may overlap. 
  * 
  * \param ctx     The cipher context to use.
- * \param buf     The buffer to decrypt.
- * \param length  The length of the input buffer. This value must not
- *                exceed \c INT_MAX.
+ * \param src     The buffer to decrypt.
+ * \param length  The length of the input buffer. 
+ * \param buf     The result buffer.
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
  */
 static inline int
-dtls_decrypt(dtls_cipher_context_t *ctx, unsigned char *buf, size_t length) {
-  return ctx ?  ctx->decrypt(ctx->data, buf, length) : -1; 
+dtls_decrypt(dtls_cipher_context_t *ctx, 
+	     const unsigned char *src, size_t length,
+	     unsigned char *buf) {
+  return ctx ?  ctx->decrypt(ctx->data, src, length, buf) : -1; 
 }
-
-/**
- * Verifies the message given in \p record according to the security
- * parameters in \p sec. As the record's payload usually is encrypted,
- * a pointer to the corresponding cleartext of length \p
- * cleartext_length must be passed in \p cleartext. This function
- * returns \c 1 on success, \c 0 otherwise.
- *
- * \param sec     The security parameters to apply.
- * \param record  Pointer to the record header of the original message.
- * \param record_length Original message length.
- * \param cleartext Pointer to the decrypted payload data.
- * \param cleartext_length Size of \p cleartext.
- * \return \c 1 if MAC and padding are valid, \c 0 otherwise.
- */
-int dtls_verify(dtls_security_parameters_t *sec,
-		unsigned char *record, size_t record_length,
-		unsigned char *cleartext, size_t cleartext_length);
 
 /* helper functions */
 

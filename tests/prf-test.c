@@ -16,6 +16,28 @@ void dump(unsigned char *buf, size_t len) {
     printf("%02x", *buf++);
 }
 
+void
+print_mac(dtls_security_parameters_t *sec,
+	  unsigned char *record, size_t length) {
+  dtls_hmac_context_t hmac_ctx;
+  unsigned char mac[DTLS_HMAC_MAX];
+
+  dtls_hmac_init(&hmac_ctx, 
+		 dtls_kb_client_mac_secret(sec),
+		 dtls_kb_mac_secret_size(sec),
+		 dtls_kb_mac_algorithm(sec));
+  
+  dtls_mac(&hmac_ctx, 
+	   record, 		/* the pre-filled record header */
+	   record + sizeof(dtls_record_header_t),
+	   length - sizeof(dtls_record_header_t),
+	   mac);
+
+  printf("  MAC is:\t\t");
+  dump(mac, dtls_kb_digest_size(sec));
+  printf("\n");
+}
+
 int main(int argc, char **argv) {
   unsigned char key[] = "secretPSK";
   unsigned char pre_master[2 * sizeof(key) + 2];
@@ -37,31 +59,17 @@ int main(int argc, char **argv) {
     0				/* compression */
   };
 
-#if 0
   unsigned char packet[] = {
     0x16, 0xfe, 0xff, 0x00, 0x01, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x40, 0x62, 0xf9, 0x17, 
-    0xb5, 0xa6, 0xf2, 0x4e, 0x3b, 0xda, 0x6c, 0x07, 
-    0x79, 0x04, 0xf3, 0x17, 0xb8, 0x2d, 0x12, 0x1a, 
-    0xe0, 0x67, 0xf1, 0x50, 0xab, 0xe1, 0xab, 0x1c, 
-    0x4b, 0xd9, 0xb6, 0xa9, 0x87, 0x0a, 0x9c, 0x12, 
-    0xe4, 0x1e, 0x9e, 0xcc, 0x3e, 0x8a, 0x9e, 0x78, 
-    0xc8, 0xde, 0x05, 0xbc, 0x8b, 0x0c, 0xc3, 0x13, 
-    0xc2, 0xdc, 0xad, 0xce, 0x99, 0xe9, 0xbf, 0xe9, 
-    0x9c, 0xdd, 0x7b, 0x7c, 0x40 
-  };
-#else
-  unsigned char packet[] = {
-    0x16, 0xfe, 0xff, 0x00, 0x01, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x2d, 0x14, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x2c, 0x14, 0x00, 0x00, 
     0x0c, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 
     0x0c, 0x75, 0x53, 0xb1, 0xef, 0x3d, 0xf1, 0xb0, 
-    0x86, 0x58, 0x2b, 0x43, 0xa6, 0x2b, 0xf8, 0xab, 
-    0x47, 0x43, 0xbf, 0xb6, 0x6b, 0xa8, 0x5a, 0xdc, 
-    0xca, 0x42, 0x71, 0x56, 0x8d, 0x11, 0xf1, 0xf9, 
-    0xf8
+    0x86, 0x58, 0x2b, 0x43, 0xa6, 0xf2, 0x92, 0x09, 
+    0x4f, 0xeb, 0xc9, 0xe2, 0x5e, 0xac, 0x8c, 0x18, 
+    0x71, 0x6c, 0xa9, 0xbb, 0x7a, 0x81, 0xa0, 0xac, 
+    0x76
   };
-#endif
+
   int res;
   unsigned char buf[1000];
 
@@ -121,7 +129,11 @@ int main(int argc, char **argv) {
   dump(dtls_kb_server_iv(&sec), dtls_kb_iv_size(&sec));
   printf("\n");
 
-  
+
+  printf("\n");
+  print_mac(&sec, packet, sizeof(packet) - dtls_kb_digest_size(&sec));
+  printf("\n");
+
   /**********************************************************************
    * encrypt 
    **********************************************************************/
@@ -145,8 +157,12 @@ int main(int argc, char **argv) {
     dtls_encrypt(sec.read_cipher, packet + sizeof(dtls_record_header_t), 
 		 sizeof(packet) - sizeof(dtls_record_header_t),
 		 buf);
-		 
-  printf("encrypted packet\n");  
+
+  /* fix record length according to padding and IV */
+  dtls_int_to_uint16(packet + 11, res);
+
+  printf("encrypted packet (%d bytes payload)\n", res);
+  dump(packet, sizeof(dtls_record_header_t));
   dump(buf, res);
   printf("\n");
   
@@ -160,7 +176,7 @@ int main(int argc, char **argv) {
 		   dtls_kb_iv_size(&sec));
 
 
-  res = dtls_decrypt(sec.read_cipher, buf, res);
+  res = dtls_decrypt(sec.read_cipher, buf, res, buf);
 
   if (res < 0) {
     printf("decryption failed!\n");
@@ -168,14 +184,27 @@ int main(int argc, char **argv) {
   }
 
   printf("cleartext (%d bytes):\n", res);  
+  dump(packet, sizeof(dtls_record_header_t));
   dump(buf, res);
   printf("\n");
 
-  if (!dtls_verify(&sec,
-		   packet, sizeof(packet),
-		   buf, res)) {
-    printf("invalid MAC!\n");
-    return -1;
+  {
+    unsigned char mac[DTLS_HMAC_MAX];
+    dtls_hmac_context_t hmac_ctx;
+
+    dtls_hmac_init(&hmac_ctx, 
+		   dtls_kb_client_mac_secret(&sec),
+		   dtls_kb_mac_secret_size(&sec),
+		   dtls_kb_mac_algorithm(&sec));
+
+    res -= dtls_kb_digest_size(&sec);
+
+    dtls_mac(&hmac_ctx, packet, buf, res, mac);
+      
+    if (memcmp(mac, buf + res, dtls_kb_digest_size(&sec)) == 0)
+      printf("MAC OK\n");
+    else
+      printf("invalid MAC!\n");
   }
   
   return 0;

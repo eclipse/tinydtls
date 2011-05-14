@@ -33,13 +33,6 @@
 #define DTLS_HMAC_BLOCKSIZE 64	/**< size of hmac blocks */
 #define DTLS_HMAC_MAX       64	/**< max number of bytes in digest */
 
-/** Known ciphersuites 
- *
- * \hideinitializer
- */
-#define TLS_PSK_WITH_AES_128_CBC_SHA { 0x00, 0x8c }
-#define TLS_NULL_WITH_NULL_NULL      { 0x00, 0x00 }
-
 /**
  * List of known hash functions for use in dtls_hmac_init(). The
  * identifiers are the same as the HashAlgorithm defined in 

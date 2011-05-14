@@ -825,34 +825,57 @@ int
 decrypt_verify(dtls_peer_t *peer,
 	       uint8 *packet, size_t length,
 	       uint8 **cleartext, size_t *clen) {
-  int res;
+  int res, ok = 0;
   
-  *cleartext = NULL;
-  *clen = 0;
+  *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
+  *clen = length - sizeof(dtls_record_header_t);
 
   switch (CURRENT_CONFIG(peer)->cipher) {
   case -1:			/* no cipher suite selected */
-    *cleartext = packet + sizeof(dtls_record_header_t);
-    *clen = dtls_uint16_to_int(((dtls_record_header_t *)packet)->length);
-    return 1;
-  case 0:			/* TLS_PSK_WITH_AES128_CBC_SHA */
-    if (length > sizeof(_buf))
-      return 0;
+    ok = 1;
+    break;
 
-    res = dtls_decrypt(CURRENT_CONFIG(peer)->read_cipher, packet, length);
-    if (res < 0) {
+#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
+  case AES128:
+      
+    res = dtls_decrypt(CURRENT_CONFIG(peer)->read_cipher, 
+		       *cleartext, *clen, *cleartext);
+
+    
+    if (res < dtls_kb_digest_size(CURRENT_CONFIG(peer))) {
       warn("decryption failed!\n");
-    } else {
-      *cleartext = packet;
-      *clen = res;
+    } else {			/* verify MAC */
+
+      /* We include the HMAC verification here, so we can strip the
+       * digest easily after successful verification. */
+
+      unsigned char mac[DTLS_HMAC_MAX];
+      dtls_hmac_context_t hmac_ctx;
+
+      dtls_hmac_init(&hmac_ctx, 
+		     dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)),
+		     dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)),
+		     dtls_kb_mac_algorithm(CURRENT_CONFIG(peer)));
+
+      res -= dtls_kb_digest_size(CURRENT_CONFIG(peer));
+
+      dtls_mac(&hmac_ctx, packet, *cleartext, res, mac);
+      
+      if (memcmp(mac, *cleartext + res, 
+		 dtls_kb_digest_size(CURRENT_CONFIG(peer))) == 0) {
+	*clen = res;
+	ok = 1;
+      }
     }
     break;
+#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
+
   default:
     warn("unknown cipher!\n");
-    /* fall through and let dtls_verify() fail */
+    /* fall through and fail */
   }
 
-  return dtls_verify(CURRENT_CONFIG(peer), packet, length, *cleartext, *clen);
+  return ok;
 }
 
 /** 

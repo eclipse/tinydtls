@@ -43,7 +43,12 @@ extern void dump(unsigned char *, size_t);
  * cipher here as it would enable a bid-down attack.
  */
 const dtls_cipher_t ciphers[] = {
+#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
   { TLS_PSK_WITH_AES_128_CBC_SHA, AES_BLKLEN, 16, HASH_SHA1, 20, 20, 16 },
+#else
+#error "TLS_PSK_WITH_AES_128_CBC_SHA not defined!"
+#endif
+
   /* \todo: add TLS_PSK_WITH_AES_128_CCM_8 */
 
   { { 0, 0 }, 0, 0, HASH_NONE, 0, 0, 0 } /* end marker */
@@ -150,8 +155,8 @@ dtls_prf(unsigned char *key, size_t keylen,
 
 void
 dtls_mac(dtls_hmac_context_t *hmac_ctx, 
-	 unsigned char *record,
-	 unsigned char *packet, size_t length,
+	 const unsigned char *record,
+	 const unsigned char *packet, size_t length,
 	 unsigned char *buf) {
   uint16 L;
   dtls_int_to_uint16(L, length);
@@ -165,6 +170,7 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
   dtls_hmac_finalize(hmac_ctx, buf);
 }
 
+#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
 typedef struct {
   rijndael_ctx ctx;
   unsigned char pad[AES_BLKLEN];
@@ -232,10 +238,11 @@ check_pattern(unsigned char *buf,
 
 size_t
 dtls_aes128_cbc_decrypt(void *ctx,
-			unsigned char *buf, size_t buflen) {
+			const unsigned char *src, size_t srclen,
+			unsigned char *buf) {
 
   aes128_cbc_t *c = (aes128_cbc_t *)ctx;
-  size_t i;
+  size_t i, j;
 
   assert(c);
 
@@ -245,14 +252,13 @@ dtls_aes128_cbc_decrypt(void *ctx,
    * at least two entire ciphertext blocks.
    */
 
-  if (buflen < 2 * AES_BLKLEN)
+  if (srclen < 2 * AES_BLKLEN)
     return 0;		 /* ought to be safe as MAC check will fail */
  
-  for (i = 0; i <= buflen - 2 * AES_BLKLEN; i += AES_BLKLEN) {
-    rijndael_decrypt(&c->ctx, buf + AES_BLKLEN, c->pad);
-    memxor(buf, c->pad, AES_BLKLEN);
-
-    buf += AES_BLKLEN;
+  for (i = 0; i <= srclen - 2 * AES_BLKLEN; i += AES_BLKLEN) {
+    rijndael_decrypt(&c->ctx, src + AES_BLKLEN, c->pad);
+    for (j = 0; j < AES_BLKLEN; ++j)
+      *buf++ = c->pad[j] ^ *src++;
   }
   memset(c->pad, 0, AES_BLKLEN); /* avoid data leakage */
   
@@ -264,6 +270,7 @@ dtls_aes128_cbc_decrypt(void *ctx,
   else
     return i;			/* MAC check should fail */
 }
+#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
 
 void 
 dtls_init_cipher(dtls_cipher_context_t *ctx,
@@ -279,6 +286,7 @@ dtls_new_cipher(const dtls_cipher_t *cipher,
 
   switch (dtls_uint16_to_int(cipher->code)) {
 
+#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
   case 0x008c: /* AES128_CBC */ 
 
     /* Allocate memory for the dtls_cipher_context_t, the rijndael_ctx
@@ -305,6 +313,8 @@ dtls_new_cipher(const dtls_cipher_t *cipher,
       }
     } 
     break;
+#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
+
   default:
     warn("unknown cipher %04x\n", cipher->code);
   }
@@ -312,46 +322,3 @@ dtls_new_cipher(const dtls_cipher_t *cipher,
   return cipher_context;
 }
 
-int
-dtls_verify(dtls_security_parameters_t *sec,
-	    unsigned char *record, size_t record_length,
-	    unsigned char *cleartext, size_t cleartext_length) {
-
-  unsigned char *p, mac[DTLS_HMAC_MAX];
-  dtls_hmac_context_t hmac_ctx;
-  int ok = 0;
-
-  dtls_hmac_init(&hmac_ctx, 
-		 dtls_kb_client_mac_secret(sec),
-		 dtls_kb_mac_secret_size(sec),
-		 dtls_kb_mac_algorithm(sec));
-
-#if 0
-  /* check padding */
-  p = cleartext + cleartext_length - 1; /* point to last byte */
-  
-  if (*p + ciphers[sec->cipher].mac_length + 1 <= cleartext_length) {
-    cleartext_length -= (*p + ciphers[sec->cipher].mac_length + 1);
-    ok = 1;
-  }
-  ok = ok & check_pattern(p - *p, *p, *p);
-#else
-  ok = 1;
-  cleartext_length -= ciphers[sec->cipher].mac_length;
-#endif
-  /* calculate MAC even if padding is wrong */
-  dtls_mac(&hmac_ctx, 
-	   record, 		/* the pre-filled record header */
-	   cleartext, cleartext_length,
-	   mac);
-
-  ok = ok && (memcmp(mac, cleartext + cleartext_length, 
-		     dtls_kb_digest_size(sec)) == 0);
-#ifndef NDEBUG
-  printf("MAC (%s):\n", ok ? "valid" : "invalid");
-  dump(mac, dtls_kb_digest_size(sec));
-  printf("\n");
-#endif
-  return ok;
-}
-		    
