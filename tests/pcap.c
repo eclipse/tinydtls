@@ -226,7 +226,7 @@ handle_packet(const u_char *packet, int length) {
     if (res <= 0)
       goto next;
     
-    printf("packet %d:\n", n);
+    printf("packet %d (from %s):\n", n, is_client ? "client" : "server");
     hexdump(packet, sizeof(dtls_record_header_t));
     printf("\n");
     hexdump(data, data_length);
