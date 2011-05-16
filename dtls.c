@@ -434,6 +434,7 @@ check_css(dtls_context_t *ctx,
 	   dtls_kb_size(OTHER_CONFIG(peer)));
 
   /* set crypto context for AES_128_CBC */
+  /* client */
   cipher_context = &OTHER_CONFIG(peer)->read_cipher;
   if (*cipher_context)
     free(OTHER_CONFIG(peer)->read_cipher);
@@ -445,12 +446,31 @@ check_css(dtls_context_t *ctx,
 		    dtls_kb_key_size(OTHER_CONFIG(peer)));
 
   if (!*cipher_context) {
-    warn("cannot create cipher\n");
+    warn("cannot create read cipher\n");
     return 0;
   }
 
   dtls_init_cipher(*cipher_context,
 		   dtls_kb_client_iv(OTHER_CONFIG(peer)),
+		   dtls_kb_iv_size(OTHER_CONFIG(peer)));
+
+  /* server */
+  cipher_context = &OTHER_CONFIG(peer)->write_cipher;
+  if (*cipher_context)
+    free(OTHER_CONFIG(peer)->write_cipher);
+
+  *cipher_context = 
+    dtls_new_cipher(&ciphers[OTHER_CONFIG(peer)->cipher],
+		    dtls_kb_server_write_key(OTHER_CONFIG(peer)),
+		    dtls_kb_key_size(OTHER_CONFIG(peer)));
+
+  if (!*cipher_context) {
+    warn("cannot create write cipher\n");
+    return 0;
+  }
+
+  dtls_init_cipher(*cipher_context,
+		   dtls_kb_server_iv(OTHER_CONFIG(peer)),
 		   dtls_kb_iv_size(OTHER_CONFIG(peer)));
   return 1;
 }
@@ -620,7 +640,7 @@ static int
 check_client_finished(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *record, size_t rlen,
-		      uint8 *foodata, size_t data_length) {
+		      uint8 *data, size_t data_length) {
   size_t digest_length;
   unsigned char verify_data[DTLS_FIN_LENGTH];
 
@@ -631,7 +651,7 @@ check_client_finished(dtls_context_t *ctx,
 #endif
 
   debug("checking for client Finish\n");
-  if (!IS_HANDSHAKE(record, rlen) || !IS_FINISHED(foodata, data_length)) {
+  if (!IS_HANDSHAKE(record, rlen) || !IS_FINISHED(data, data_length)) {
     debug("failed\n");
     return 0;
   }
@@ -666,7 +686,7 @@ check_client_finished(dtls_context_t *ctx,
 	   NULL, 0,
 	   verify_data, sizeof(verify_data));
 
-  return memcmp(foodata + DTLS_HS_LENGTH, verify_data, sizeof(verify_data)) == 0;
+  return memcmp(data + DTLS_HS_LENGTH, verify_data, sizeof(verify_data)) == 0;
 }
 
 int
@@ -751,74 +771,76 @@ dtls_server_hello(dtls_context_t *ctx,
 		       buf, p - buf);
 }
 
+/**
+ * Sends the data passed in \p buf as a DTLS record of type \p type to
+ * the given peer. The data will be encrypted and compressed according
+ * to the security parameters for \p peer.
+ *
+ * \param ctx    The DTLS context in effect.
+ * \param peer   The remote party where the packet is sent.
+ * \param type   The content type of this record.
+ * \param buf    The data to send.
+ * \param buflen The number of bytes to send from \p buf.
+ * \return Less than zero in case of an error or the number of
+ *   bytes that have been sent otherwise.
+ */
 int
-dtls_server_finished(dtls_context_t *ctx, 
-	      dtls_peer_t *peer,
-	      uint8 *buf, int buflen) {
+dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
+	  unsigned char type,
+	  const uint8 *buf, size_t buflen) {
+  
+  unsigned char sendbuf[DTLS_MAX_BUF], *p;
+  int res;
 
-  size_t digest_length;
-  uint8 *p = buf, *q;
-
-#ifndef NDEBUG
-  if (buflen < DTLS_RH_LENGTH + DTLS_HS_LENGTH + DTLS_FIN_LENGTH) {
-    dsrv_log(LOG_CRIT, "dtls_finished: buffer too small\n");
-#endif
+  if (DTLS_MAX_BUF < DTLS_RH_LENGTH + buflen 
+      + dtls_kb_digest_size(CURRENT_CONFIG(peer))
+      + dtls_kb_iv_size(CURRENT_CONFIG(peer))) {
+    dsrv_log(LOG_CRIT, "dtls_send: send buffer too small\n");
     return -1;
   }
 
-  p = dtls_set_record_header(DTLS_CT_HANDSHAKE, peer, p);
+  p = dtls_set_record_header(type, peer, sendbuf);
+  
+  res = dtls_encrypt(CURRENT_CONFIG(peer)->write_cipher, buf, buflen, p);
+  if (res < 0) {
+    warn("dtls_send: encryption failed, data is not sent\n");
+    return res;
+  }
 
-  /* set packet length */
-  dtls_int_to_uint16(p - sizeof(uint16), DTLS_HS_LENGTH + DTLS_FIN_LENGTH);
+  /* fix length of fragment in sendbuf */
+  dtls_int_to_uint16(sendbuf + 11, res);
 
-  /* add IV */
-  prng(p, ciphers[CURRENT_CONFIG(peer)->cipher].blk_length);
-  p += ciphers[CURRENT_CONFIG(peer)->cipher].blk_length;
+  return ctx->cb_write(ctx,
+		       &peer->session.raddr.sa, peer->session.rlen, 
+		       peer->session.ifindex,
+		       sendbuf, DTLS_RH_LENGTH + res);
+}
 
-  /* Handshake header */
-  q = p;
-  p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
-				peer,
-				DTLS_FIN_LENGTH, 
-				0, DTLS_FIN_LENGTH,
-				p);
+int
+dtls_server_finished(dtls_context_t *ctx, dtls_peer_t *peer,
+		     uint8 *buf, int buflen) {
 
-  digest_length = finalize_hs_hash(peer, _buf);
+  int length;
+  uint8 *p;
+
+ p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
+			       peer,
+			       DTLS_FIN_LENGTH, 
+			       0, DTLS_FIN_LENGTH,
+			       buf);
+
+  length = finalize_hs_hash(peer, _buf);
 
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
 	   (unsigned char *)"server finished", 15,
-	   _buf, digest_length,
+	   _buf, length,
 	   NULL, 0,
 	   p, DTLS_FIN_LENGTH);
 
   p += DTLS_FIN_LENGTH;
 
-  {
-    dtls_hmac_context_t hmac_ctx;
-
-  /* add MAC */
-    dtls_hmac_init(&hmac_ctx, 
-		   dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)),
-		   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)),
-		   dtls_kb_mac_algorithm(CURRENT_CONFIG(peer)));
-    dtls_mac(&hmac_ctx, 
-	     buf, 		/* the pre-filled record header */
-	     q, p - q,
-	     p);
-  }
-
-  /* encrypt (adds padding) */
-  /*  FIXME: something like this: 
-      dtls_cbc_encrypt(CURRENT_CONFIG(peer),
-		   buf, p - buf,
-		   result, DTLS_MAX_BUF);
-  */
-
-  return ctx->cb_write(ctx,
-		       &peer->session.raddr.sa, peer->session.rlen, 
-		       peer->session.ifindex,
-		       buf, p - buf);
+  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, buf, p - buf);
 }
 
 int
