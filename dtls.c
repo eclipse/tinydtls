@@ -487,14 +487,14 @@ dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
   DTLS_RECORD_HEADER(buf)->content_type = type;
   ++buf;
 
-  /* increment record sequence counter by 1 */
-  inc_uint(uint48, peer->rseq);
-
   dtls_int_to_uint16(buf, DTLS_VERSION);
   buf += sizeof(uint16);
 
   memcpy(buf, &peer->epoch, sizeof(uint16) + sizeof(uint48));
   buf += sizeof(uint16) + sizeof(uint48);
+
+  /* increment record sequence counter by 1 */
+  inc_uint(uint48, peer->rseq);
   
   memset(buf, 0, sizeof(uint16));
   return buf + sizeof(uint16);
@@ -544,6 +544,15 @@ dtls_new_peer(dtls_context_t *ctx,
   if (peer) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
+
+    /* Initialize sequence number for first "real" message. (Need this
+     * because dtls_peer_t objects are created only after successful
+     * ClientHello verification, i.e. a HelloVerify request with
+     * sequence number 0 preceeded the first message sent within the
+     * new security context. Whenever a ChangeCipherSpec is handled,
+     * the sequence number is reset to zero.)
+     */
+    peer->rseq[5] = 1;
 
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = -1;
@@ -787,7 +796,7 @@ dtls_server_hello(dtls_context_t *ctx,
 int
 dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 	  unsigned char type,
-	  const uint8 *buf, size_t buflen) {
+	  uint8 *buf, size_t buflen) {
   
   unsigned char sendbuf[DTLS_MAX_BUF], *p;
   int res;
@@ -800,11 +809,39 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   p = dtls_set_record_header(type, peer, sendbuf);
-  
-  res = dtls_encrypt(CURRENT_CONFIG(peer)->write_cipher, buf, buflen, p);
-  if (res < 0) {
-    warn("dtls_send: encryption failed, data is not sent\n");
-    return res;
+
+  switch (CURRENT_CONFIG(peer)->cipher) {
+  case -1:			/* no cipher suite */
+    memcpy(p, buf, buflen);
+    res = buflen;
+    break;
+
+#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
+  case AES128:
+    {				/* add MAC */
+      dtls_hmac_context_t hmac_ctx;
+
+      dtls_int_to_uint16(sendbuf + 11, buflen);
+
+      dtls_hmac_init(&hmac_ctx, 
+		     dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)),
+		     dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)),
+		     dtls_kb_mac_algorithm(CURRENT_CONFIG(peer)));
+
+      dtls_mac(&hmac_ctx, sendbuf, buf, buflen, buf + buflen);
+      buflen += dtls_kb_digest_size(CURRENT_CONFIG(peer));
+      
+      res = dtls_encrypt(CURRENT_CONFIG(peer)->write_cipher, buf, buflen, p);
+      if (res < 0) {
+	warn("dtls_send: encryption failed, data is not sent\n");
+	return res;
+      }
+    }
+    break;
+#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
+  default:
+    warn("unknown cipher, no data sent\n");
+    return -1;
   }
 
   /* fix length of fragment in sendbuf */
@@ -816,6 +853,12 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 		       sendbuf, DTLS_RH_LENGTH + res);
 }
 
+static inline int 
+dtls_change_cipher_spec(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *buf) {
+  *buf = 1;
+  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, buf, 1);
+}
+
 int
 dtls_server_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 		     uint8 *buf, int buflen) {
@@ -823,7 +866,7 @@ dtls_server_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   int length;
   uint8 *p;
 
- p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
+  p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
 			       peer,
 			       DTLS_FIN_LENGTH, 
 			       0, DTLS_FIN_LENGTH,
@@ -1048,10 +1091,16 @@ dtls_handle_message(dtls_context_t *ctx,
 	return 0;
       }
 
-      SWITCH_CONFIG(peer);
-      inc_uint(uint16, peer->epoch);
+      /* aend change cipher spec message and switch to new configuration */
+      if (dtls_change_cipher_spec(ctx, peer, buf) < 0) {
+	warn("cannot send CSS message");
+      } else {
+	SWITCH_CONFIG(peer);
+	inc_uint(uint16, peer->epoch);
+	memset(peer->rseq, 0, sizeof(peer->rseq));
 
-      peer->state = DTLS_STATE_WAIT_FINISHED; /* wait for finished message */
+	peer->state = DTLS_STATE_WAIT_FINISHED; /* wait for finished message */
+      }
       break;
 
     case DTLS_STATE_WAIT_FINISHED:
