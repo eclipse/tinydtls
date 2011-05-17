@@ -58,6 +58,8 @@
   HASH_FIND(hh,head,sess,sizeof(session_t),out)
 #define HASH_ADD_PEER(head,sess,add)		\
   HASH_ADD(hh,head,sess,sizeof(session_t),add)
+#define HASH_DEL_PEER(head,delptr)		\
+  HASH_DELETE(hh,head,delptr)
 
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
@@ -230,13 +232,6 @@ is_client_hello(uint8 *msg, int msglen) {
     && HANDSHAKE(msg)->msg_type == DTLS_HT_CLIENT_HELLO;
 }
 
-static inline int 
-is_change_cipher_spec(uint8 *msg, int msglen) {
-  return DTLS_RECORD_HEADER(msg)->content_type == DTLS_CT_CHANGE_CIPHER_SPEC
-    && dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->length) == 1
-    && *(msg + DTLS_RH_LENGTH) == 0x01;
-}
-
 int
 dtls_verify_peer(dtls_context_t *ctx, 
 		    session_t *session,
@@ -399,8 +394,7 @@ check_client_keyexchange(dtls_context_t *ctx,
 static int
 check_css(dtls_context_t *ctx, 
 	  dtls_peer_t *peer,
-	  uint8 *record, size_t  rlen,
-	  uint8 *data, size_t data_length) {
+	  uint8 *record, uint8 *data, size_t data_length) {
 
   unsigned char pre_master_secret[60];
   size_t pre_master_len = 0;
@@ -648,10 +642,11 @@ dtls_free_peer(dtls_peer_t *peer) {
 static int
 check_client_finished(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
-		      uint8 *record, size_t rlen,
+		      uint8 *record, 
 		      uint8 *data, size_t data_length) {
   size_t digest_length;
   unsigned char verify_data[DTLS_FIN_LENGTH];
+  unsigned char buf[DTLS_HMAC_MAX];
 
 #if DTLS_VERSION == 0xfeff
   unsigned char statebuf[sizeof(md5_state_t) + sizeof(SHA_CTX)];
@@ -660,7 +655,7 @@ check_client_finished(dtls_context_t *ctx,
 #endif
 
   debug("checking for client Finish\n");
-  if (!IS_HANDSHAKE(record, rlen) || !IS_FINISHED(data, data_length)) {
+  if (record[0] != DTLS_CT_HANDSHAKE || !IS_FINISHED(data, data_length)) {
     debug("failed\n");
     return 0;
   }
@@ -675,7 +670,7 @@ check_client_finished(dtls_context_t *ctx,
   memcpy(statebuf, hs_peer->hash[0]->data, sizeof(statebuf));
 #endif
 
-  digest_length = finalize_hs_hash(peer, _buf);
+  digest_length = finalize_hs_hash(peer, buf);
   /* clear_hash(); */
 
   /* restore hash status */
@@ -691,7 +686,7 @@ check_client_finished(dtls_context_t *ctx,
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
 	   (unsigned char *)"client finished", 15,
-	   _buf, digest_length,
+	   buf, digest_length,
 	   NULL, 0,
 	   verify_data, sizeof(verify_data));
 
@@ -699,14 +694,13 @@ check_client_finished(dtls_context_t *ctx,
 }
 
 int
-dtls_server_hello(dtls_context_t *ctx, 
-		  dtls_peer_t *peer,
-		  uint8 *buf, int buflen) {
+dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 
-  uint8 *p = buf, *q;
+  uint8 *p = ctx->sendbuf, *q;
 
 #ifndef NDEBUG
-  if (buflen < (DTLS_RH_LENGTH + DTLS_HS_LENGTH) * 2 + DTLS_SH_LENGTH) {
+  if (sizeof(ctx->sendbuf) 
+      < (DTLS_RH_LENGTH + DTLS_HS_LENGTH) * 2 + DTLS_SH_LENGTH) {
     dsrv_log(LOG_CRIT, "dtls_server_hello: buffer too small\n");
 #endif
     return -1;
@@ -731,13 +725,15 @@ dtls_server_hello(dtls_context_t *ctx,
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
 
-  /* FIXME: set server random */
+  /* Set server random: First generate 32 bytes of random data and then 
+   * overwrite the leading 4 bytes with the timestamp. */
+  prng(OTHER_CONFIG(peer)->server_random, 
+       sizeof(OTHER_CONFIG(peer)->server_random));
   dtls_int_to_uint32(&OTHER_CONFIG(peer)->server_random, time(NULL));
-  OTHER_CONFIG(peer)->server_random[4] = 0xAB; /* random... */
-  OTHER_CONFIG(peer)->server_random[31] = 0x13;
 
   /* random gmt and server random bytes */
-  memcpy(p, &OTHER_CONFIG(peer)->server_random, 32);
+  memcpy(p, &OTHER_CONFIG(peer)->server_random, 
+	 sizeof(OTHER_CONFIG(peer)->server_random));
   p += 32;
 
   *p++ = 0;			/* no session id */
@@ -777,7 +773,7 @@ dtls_server_hello(dtls_context_t *ctx,
   return ctx->cb_write(ctx,
 		       &peer->session.raddr.sa, peer->session.rlen, 
 		       peer->session.ifindex,
-		       buf, p - buf);
+		       ctx->sendbuf, p - ctx->sendbuf);
 }
 
 /**
@@ -798,9 +794,16 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 	  unsigned char type,
 	  uint8 *buf, size_t buflen) {
   
+  /* We cannot use ctx->sendbuf here as it is reserved for collecting
+   * the input for this function, i.e. buf == ctx->sendbuf.
+   *
+   * TODO: check if we can use the receive buf here. This would mean
+   * that we might not be able to handle multiple records stuffed in
+   * one UDP datagram */
   unsigned char sendbuf[DTLS_MAX_BUF], *p;
   int res;
 
+  /* FIXME: padding! */
   if (DTLS_MAX_BUF < DTLS_RH_LENGTH + buflen 
       + dtls_kb_digest_size(CURRENT_CONFIG(peer))
       + dtls_kb_iv_size(CURRENT_CONFIG(peer))) {
@@ -854,36 +857,43 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 }
 
 static inline int 
-dtls_change_cipher_spec(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *buf) {
-  *buf = 1;
-  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, buf, 1);
+dtls_send_css(dtls_context_t *ctx, dtls_peer_t *peer) {
+  ctx->sendbuf[0] = 1;
+  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, ctx->sendbuf, 1);
 }
 
+#define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
+  ((Length + dtls_kb_iv_size(CURRENT_CONFIG(Peer)) + \
+    dtls_kb_digest_size(CURRENT_CONFIG(Peer))) /     \
+    (ciphers[CURRENT_CONFIG(Peer)->cipher].blk_length) + 1) * \
+    ciphers[CURRENT_CONFIG(Peer)->cipher].blk_length)
+
 int
-dtls_server_finished(dtls_context_t *ctx, dtls_peer_t *peer,
-		     uint8 *buf, int buflen) {
+dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   int length;
-  uint8 *p;
+  uint8 buf[DTLS_HMAC_MAX];
+  uint8 *p = ctx->sendbuf;
+
+  assert(msg_overhead(peer, DTLS_HS_LENGTH + DTLS_FIN_LENGTH) 
+	 < sizeof(ctx->sendbuf));
 
   p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
-			       peer,
-			       DTLS_FIN_LENGTH, 
-			       0, DTLS_FIN_LENGTH,
-			       buf);
-
-  length = finalize_hs_hash(peer, _buf);
+                                peer, DTLS_FIN_LENGTH, 0, DTLS_FIN_LENGTH, p);
+  
+  length = finalize_hs_hash(peer, buf);
 
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
 	   (unsigned char *)"server finished", 15,
-	   _buf, length,
+	   buf, length,
 	   NULL, 0,
 	   p, DTLS_FIN_LENGTH);
 
   p += DTLS_FIN_LENGTH;
 
-  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, buf, p - buf);
+  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
+		   ctx->sendbuf, p - ctx->sendbuf);
 }
 
 int
@@ -943,6 +953,125 @@ decrypt_verify(dtls_peer_t *peer,
   return ok;
 }
 
+
+int
+handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, 
+		 uint8 *record_header, uint8 *data, size_t data_length) {
+
+  /* The following switch construct handles the given message with
+   * respect to the current internal state for this peer. In case of
+   * error, it is left with return 0. */
+
+  switch (peer->state) {
+
+  case DTLS_STATE_SERVERHELLO:
+    /* here we expect a ClientHello */
+    /* handle ClientHello, update msg and msglen and goto next if not finished */
+
+    debug("DTLS_STATE_SERVERHELLO\n");
+    if (!check_client_keyexchange(ctx, peer, data, data_length)) {
+      warn("check_client_keyexchange failed (%d, %d)\n", data_length, data[0]);
+      return 0;			/* drop it, whatever it is */
+    }
+    
+    update_hs_hash(peer, data, data_length);
+    peer->state = DTLS_STATE_KEYEXCHANGE;
+    break;
+    
+  case DTLS_STATE_WAIT_FINISHED:
+    debug("DTLS_STATE_WAIT_FINISHED\n");
+    if (check_client_finished(ctx, peer, record_header, data, data_length)) {
+      debug("finished!\n");
+	
+      /* send ServerFinished */
+      update_hs_hash(peer, data, data_length);
+
+      if (dtls_send_server_finished(ctx, peer) > 0) {
+	peer->state = DTLS_STATE_IDLE;
+      } else {
+	warn("sending server Finished failed\n");
+      }
+    } else {
+      /* send alert */
+    }
+    break;
+      
+  case DTLS_STATE_IDLE:
+    /* At this point, we have a good relationship with this peer. This
+     * state is left for re-negotiation of key material. */
+    
+    debug("DTLS_STATE_IDLE\n");
+    break;
+    
+  case DTLS_STATE_INIT:		/* these two states should not occur here */
+  case DTLS_STATE_KEYEXCHANGE:
+  default:
+    dsrv_log(LOG_CRIT, "unhandled state %d\n", peer->state);
+    assert(0);
+  }
+
+  return 1;
+}
+
+int
+handle_css(dtls_context_t *ctx, dtls_peer_t *peer, 
+	   uint8 *record_header, uint8 *data, size_t data_length) {
+
+  /* A CSS message is handled after a KeyExchange message was
+   * received from the client. When security parameters have been
+   * updated successfully and a ChangeCipherSpec message was sent
+   * by ourself, the security context is switched and the record
+   * sequence number is reset. */
+  
+  if (peer->state != DTLS_STATE_KEYEXCHANGE
+      || !check_css(ctx, peer, record_header, data, data_length)) {
+    /* signal error? */
+    warn("expected ChangeCipherSpec during handshake\n");
+    return 0;
+
+  }
+
+  /* send change cipher spec message and switch to new configuration */
+  if (dtls_send_css(ctx, peer) < 0) {
+    warn("cannot send CSS message");
+    return 0;
+  } 
+  
+  SWITCH_CONFIG(peer);
+  inc_uint(uint16, peer->epoch);
+  memset(peer->rseq, 0, sizeof(peer->rseq));
+  
+  peer->state = DTLS_STATE_WAIT_FINISHED;
+
+  return 1;
+}  
+
+#define DTLS_ALERT_CLOSE 0
+
+/** 
+ * Handles incoming Alert messages. This function returns \c 1 if the
+ * connection should be closed and the peer is to be invalidated.
+ */
+int
+handle_alert(dtls_context_t *ctx, dtls_peer_t *peer, 
+	     uint8 *record_header, uint8 *data, size_t data_length) {
+  if (data_length < 2)
+    return 0;
+
+  info("** Alert: level %d, description %d\n", data[0], data[1]);
+
+  switch (data[1]) {
+  case DTLS_ALERT_CLOSE:
+    memcpy(ctx->sendbuf, data, 2);
+    dtls_send(ctx, peer, DTLS_CT_ALERT, ctx->sendbuf, 2);
+    return 1;
+  default:
+    ;
+  }
+  
+  return 1;
+}
+
 /** 
  * Handles incoming data as DTLS message from given peer.
  */
@@ -951,18 +1080,12 @@ dtls_handle_message(dtls_context_t *ctx,
 		    session_t *session,
 		    uint8 *msg, int msglen) {
   dtls_peer_t *peer = NULL;
-  uint8 buf[DTLS_MAX_BUF];
   unsigned int rlen;		/* record length */
   uint8 *data; 			/* (decrypted) payload */
   size_t data_length;		/* length of decrypted payload 
 				   (without MAC and padding) */
 
-  /* check if we can send everything in one message */
-#if DTLS_MAX_BUF < 88
-#error "DTLS_MAX_BUF too small!"
-#endif
-
-  /* TODO: check if we have DTLS state for raddr/ifindex */
+  /* check if we have DTLS state for raddr/ifindex */
   HASH_FIND_PEER(ctx->peers, session, peer);
 
   if (!peer) {			
@@ -1027,7 +1150,7 @@ dtls_handle_message(dtls_context_t *ctx,
     /* update finish MAC */
     update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
  
-    if (dtls_server_hello(ctx, peer, buf, sizeof(buf)) > 0)
+    if (dtls_send_server_hello(ctx, peer) > 0)
       peer->state = DTLS_STATE_SERVERHELLO;
     
     /* after sending the ServerHelloDone, we expect the 
@@ -1059,78 +1182,42 @@ dtls_handle_message(dtls_context_t *ctx,
       goto next;
     }
 
-    switch (peer->state) {
+    /* Handle received record according to the first byte of the
+     * message, i.e. the subprotocol. We currently do not support
+     * combining multiple fragments of one type into a single
+     * record. */
 
-    case DTLS_STATE_INIT:
-      /* this should not happen */
-      assert(0);
-      msglen = rlen = 0;
+    switch (msg[0]) {
+
+    case DTLS_CT_CHANGE_CIPHER_SPEC:
+      handle_css(ctx, peer, msg, data, data_length);
       break;
 
-    case DTLS_STATE_SERVERHELLO:
-      /* here we expect a ClientHello */
-      /* handle ClientHello, update msg and msglen and goto next if not finished */
+    case DTLS_CT_ALERT:
+      if (handle_alert(ctx, peer, msg, data, data_length)) {
 
-      debug("DTLS_STATE_SERVERHELLO\n");
-      if (!check_client_keyexchange(ctx, peer, data, data_length)) {
-	warn("check_client_keyexchange failed (%d, %d)\n", data_length, data[0]);
-	return 0;		/* drop it, whatever it is */
-      }
+	/* invalidate peer */
+	HASH_DEL_PEER(ctx->peers, peer);
+	free(peer);
 
-      update_hs_hash(peer, data, data_length);
-      peer->state = DTLS_STATE_KEYEXCHANGE;
-      break;
-
-    case DTLS_STATE_KEYEXCHANGE:
-      /* here we expect a ChangeCipherSpec message */
-
-      debug("DTLS_STATE_KEYEXCHANGE\n");
-      if (!check_css(ctx, peer, msg, rlen, data, data_length)) {
-	/* signal error? */
-	warn("expected ChangeCipherSpec during handshake\n");
 	return 0;
       }
+      break;
 
-      /* aend change cipher spec message and switch to new configuration */
-      if (dtls_change_cipher_spec(ctx, peer, buf) < 0) {
-	warn("cannot send CSS message");
-      } else {
-	SWITCH_CONFIG(peer);
-	inc_uint(uint16, peer->epoch);
-	memset(peer->rseq, 0, sizeof(peer->rseq));
+    case DTLS_CT_HANDSHAKE:
+      handle_handshake(ctx, peer, msg, data, data_length);
+      break;
 
-	peer->state = DTLS_STATE_WAIT_FINISHED; /* wait for finished message */
+    case DTLS_CT_APPLICATION_DATA:
+      info("** application data:\n");
+      {
+	int i;
+	for (i = 0; i < data_length; ++i)
+	  printf("%c", data[i]);
       }
       break;
-
-    case DTLS_STATE_WAIT_FINISHED:
-      debug("DTLS_STATE_WAIT_FINISHED\n");
-      if (check_client_finished(ctx, peer, msg, rlen, data, data_length)) {
-	debug("finished!\n");
-	
-	/* send ServerFinished */
-	update_hs_hash(peer, data, data_length);
-
-	if (dtls_server_finished(ctx, peer, buf, sizeof(buf)) > 0) {
-	  peer->state = DTLS_STATE_FINISHED;
-	} else {
-	  warn("sending server Finished failed\n");
-	}
-      } else {
-	/* send alert */
-      }
-      break;
-      
-    case DTLS_STATE_FINISHED:
-      /* handshake is finished */
-      
-      debug("TODO: check for finished\n");
-      msglen = 0;
-      break;
-
     default:
-      dsrv_log(LOG_CRIT, "unhandled state %d\n", peer->state);
-      assert(0);
+      info("dropped unknown message of type %d\n",msg[0]);
     }
 
   next:

@@ -42,7 +42,7 @@
  
 typedef enum { 
   DTLS_STATE_INIT = 0, DTLS_STATE_SERVERHELLO, DTLS_STATE_KEYEXCHANGE, 
-  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED
+  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED, DTLS_STATE_IDLE
 } dtls_state_t;
 
 /** 
@@ -87,6 +87,9 @@ typedef struct dtls_context_t {
 
   unsigned char *psk; /**< pre-shared key (set with dtls_set_psk()) */
   size_t psk_length;  /**< length of psk  */
+
+  unsigned char readbuf[DTLS_MAX_BUF];
+  unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
 
 /** 
