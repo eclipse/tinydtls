@@ -46,6 +46,11 @@
     while (i && !++((Var)[--i]));		\
   }
 
+/* this one is for consistency... */
+#define dtls_int_to_uint8(Field,Value) do {			\
+    *(unsigned char*)(Field) = (Value) & 0xff;			\
+  } while(0)
+
 #define dtls_int_to_uint16(Field,Value) do {			\
     *(unsigned char*)(Field) = ((Value) >> 8) & 0xff;		\
     *(((unsigned char*)(Field))+1) = ((Value) & 0xff);		\
