@@ -194,24 +194,6 @@ int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length);
  */
 int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
 
-/**
- * Checks a received Client Hello message for a valid cookie. When the
- * Client Hello contains no cookie, the function fails and a Hello
- * Verify Request is sent to the peer (using the write callback function
- * registered with \p ctx). The return value is \c -1 on error, \c 0 when
- * undecided, and \c 1 if the Client Hello was good. 
- * 
- * \param ctx     The DTLS context.
- * \param session Transport address of the remote peer.
- * \param msg     The received datagram.
- * \param msglen  Length of \p msg.
- * \return \c 1 if msg is a Client Hello with a valid cookie, \c 0 or
- * \c -1 otherwise.
- */
-int dtls_verify_peer(dtls_context_t *ctx, 
-		     session_t *session,
-		     uint8 *msg, int msglen);
-
 /** 
  * Handles incoming data as DTLS message from given peer.
  */

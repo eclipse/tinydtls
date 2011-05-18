@@ -78,11 +78,8 @@
 #define DTLS_RECORD_HEADER(M) ((dtls_record_header_t *)(M))
 #define DTLS_HANDSHAKE_HEADER(M) ((dtls_handshake_header_t *)(M))
 
-#define HANDSHAKE(M) ((dtls_handshake_header_t *)((M) + DTLS_RH_LENGTH))
 #define CLIENTHELLO(M) ((dtls_client_hello_t *)((M) + HS_HDR_LENGTH))
 
-#define IS_HANDSHAKE(M,L) \
-      ((L) >= DTLS_RH_LENGTH + DTLS_HS_LENGTH && (M)[0] == DTLS_CT_HANDSHAKE)
 #define IS_FINISHED(M,L) \
       ((L) >= DTLS_HS_LENGTH + DTLS_FIN_LENGTH && (M)[0] == DTLS_HT_FINISHED)
 
@@ -111,25 +108,42 @@ void hexdump(const unsigned char *packet, int length);
 void dump(unsigned char *buf, size_t len);
 #endif
 
+/** 
+ * Sends the fragment of length \p buflen given in \p buf to the
+ * specified \p peer. The data will be MAC-protected and encrypted
+ * according to the selected cipher and split into one or more DTLS
+ * records of the specified \p type. This function returns the number
+ * of bytes that were sent, or \c -1 if an error occurred.
+ *
+ * \param ctx    The DTLS context to use.
+ * \param peer   The remote peer.
+ * \param type   The content type of the record. 
+ * \param buf    The data to send.
+ * \param buflen The actual length of \p buf.
+ * \return Less than zero on error, the number of bytes written otherwise.
+ */
+int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
+	      uint8 *buf, size_t buflen);
+
 int 
-dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie) {
+dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
   /* To access the cookie, we have to determine the session id's
    * length and skip the whole thing. */
-  if (msglen < DTLS_CH_LENGTH + sizeof(uint8)
-      || dtls_uint16_to_int(hello_msg) != DTLS_VERSION)
+  if (msglen < DTLS_HS_LENGTH + DTLS_CH_LENGTH + sizeof(uint8)
+      || dtls_uint16_to_int(msg + DTLS_HS_LENGTH) != DTLS_VERSION)
     return -1;
 
-  msglen -= DTLS_CH_LENGTH;
-  hello_msg += DTLS_CH_LENGTH;
+  msglen -= DTLS_HS_LENGTH + DTLS_CH_LENGTH;
+  msg += DTLS_HS_LENGTH + DTLS_CH_LENGTH;
 
-  SKIP_VAR_FIELD(hello_msg, msglen, uint8); /* skip session id */
+  SKIP_VAR_FIELD(msg, msglen, uint8); /* skip session id */
 
-  if (msglen < (*hello_msg & 0xff) + sizeof(uint8))
+  if (msglen < (*msg & 0xff) + sizeof(uint8))
     return -1;
   
-  *cookie = hello_msg + sizeof(uint8);
-  debug("found cookie field (len: %d)\n", *hello_msg & 0xff);
-  return *hello_msg & 0xff;
+  *cookie = msg + sizeof(uint8);
+  debug("found cookie field (len: %d)\n", *msg & 0xff);
+  return *msg & 0xff;
 
  error:
   return -1;
@@ -142,6 +156,7 @@ dtls_create_cookie(dtls_context_t *ctx,
 		   uint8 *cookie, int *clen) {
 
   dtls_hmac_context_t hmac_context;
+  unsigned char buf[DTLS_HMAC_MAX];
   size_t len, e;
 
   /* create cookie with HMAC-SHA256 over:
@@ -153,10 +168,17 @@ dtls_create_cookie(dtls_context_t *ctx,
    * - cipher_suites 
    * - compression method
    */
-  
+
   dtls_hmac_init(&hmac_context, 
 		 ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH, 
-		 HASH_SHA256);
+#ifdef WITH_SHA256
+		 HASH_SHA256
+#elif WITH_SHA1
+		 HASH_SHA1
+#elif WITH_MD5
+		 HASH_MD5
+#endif
+		 );
 
   dtls_hmac_update(&hmac_context, 
 		   (unsigned char *)&session->raddr, 
@@ -165,26 +187,26 @@ dtls_create_cookie(dtls_context_t *ctx,
   /* feed in the beginning of the Client Hello up to and including the
      session id */
   e = sizeof(dtls_client_hello_t);
-  e += (*(msg + HS_HDR_LENGTH + e) & 0xff) + sizeof(uint8);
+  e += (*(msg + DTLS_HS_LENGTH + e) & 0xff) + sizeof(uint8);
 
-  dtls_hmac_update(&hmac_context, msg + HS_HDR_LENGTH, e);
+  dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
   
   /* skip cookie bytes and length byte */
-  e += *(uint8 *)(msg + HS_HDR_LENGTH + e) & 0xff;
+  e += *(uint8 *)(msg + DTLS_HS_LENGTH + e) & 0xff;
   e += sizeof(uint8);
 
   dtls_hmac_update(&hmac_context, 
-		   msg + HS_HDR_LENGTH + e, 
-		   dtls_get_fragment_length(HANDSHAKE(msg)) - e);
+		   msg + DTLS_HS_LENGTH + e,
+		   dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg)) - e);
 
-  len = dtls_hmac_finalize(&hmac_context, _buf);
+  len = dtls_hmac_finalize(&hmac_context, buf);
 
   if (len < *clen) {
     memset(cookie + len, 0, *clen - len);
     *clen = len;
   }
   
-  memcpy(cookie, _buf, *clen);
+  memcpy(cookie, buf, *clen);
   return 1;
 }
 
@@ -225,82 +247,176 @@ is_record(uint8 *msg, int msglen) {
   return rlen;
 }
 
-static inline int 
-is_client_hello(uint8 *msg, int msglen) {
-  return  (msglen > HS_HDR_LENGTH)
-    && DTLS_RECORD_HEADER(msg)->content_type == DTLS_CT_HANDSHAKE
-    && HANDSHAKE(msg)->msg_type == DTLS_HT_CLIENT_HELLO;
-}
+/**
+ * Initializes \p buf as record header. The caller must ensure that \p
+ * buf is capable of holding at least \c sizeof(dtls_record_header_t)
+ * bytes. Increments sequence number counter of \p peer.
+ * \return pointer to the next byte after the written header
+ */ 
+static inline uint8 *
+dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
+  
+  dtls_int_to_uint8(buf, type);
+  buf += sizeof(uint8);
 
-int
-dtls_verify_peer(dtls_context_t *ctx, 
-		    session_t *session,
-		    uint8 *msg, int msglen) {
+  dtls_int_to_uint16(buf, DTLS_VERSION);
+  buf += sizeof(uint16);
 
-  int len, clen = DTLS_COOKIE_LENGTH;
-  uint8 *cookie;
+  if (peer) {
+    memcpy(buf, &peer->epoch, sizeof(uint16) + sizeof(uint48));
 
-  static uint8 buf[HV_HDR_LENGTH+DTLS_COOKIE_LENGTH] = { 
-    /* Record header */
-    DTLS_CT_HANDSHAKE,		/* handshake message */
-    HIGH(DTLS_VERSION),		/* DTLS version (1.0) */
-    LOW(DTLS_VERSION), 		
-    0, 0,			/* epoch */
-    0, 0, 0, 0, 0, 0,		/* sequence number */
-    HIGH(DTLS_HS_LENGTH + DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH),
-    LOW(DTLS_HS_LENGTH + DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH),
-
-    /* Handshake header */
-    DTLS_HT_HELLO_VERIFY_REQUEST, /* handshake type: hello verify */
-    0, 0, LOW(DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH), /* length of Hello verfy */
-    0, 0,			/* message sequence */
-    0, 0, 0,			/* fragment offset */
-    0, 0, LOW(DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH), /* fragment length */
-
-    /* Hello Verify request */
-    HIGH(DTLS_VERSION),		/* DTLS version (1.0) */
-    LOW(DTLS_VERSION), 		
-    DTLS_COOKIE_LENGTH			/* cookie length */
-    /* 32 bytes cookie */
-  };
-
-  /* check if we can access at least all fields from the handshake header */
-  if (is_client_hello(msg, msglen)) {
-    
-    /* Perform rough cookie check. */
-    len = dtls_get_cookie((uint8 *)CLIENTHELLO(msg), 
-			  msglen - HS_HDR_LENGTH,
-			  &cookie);
-
-    if (len == 0) {		/* no cookie */
-      if (dtls_create_cookie(ctx, session, msg, msglen, 
-			     buf + HV_HDR_LENGTH, &clen) < 0)
-	return -1;
-      assert(clen == DTLS_COOKIE_LENGTH);
-      
-      /* send Hello Verify request using registered callback */
-      ctx->cb_write(ctx,
-		    &session->raddr.sa, session->rlen, session->ifindex,
-		    buf, sizeof(buf));
-      
-      return 0;			/* cannot do anything but wait */
-      
-    } else {			/* found a cookie, check it */
-      if (len != DTLS_COOKIE_LENGTH 
-	  || dtls_create_cookie(ctx, session, msg, msglen, 
-				buf + HV_HDR_LENGTH, &clen) < 0) 
-	return -1;		/* discard */
-      assert(clen == DTLS_COOKIE_LENGTH);
-    
-      /* compare if both values match */
-      if (memcmp(cookie, buf + HV_HDR_LENGTH, clen) == 0)
-	return 1;
-
-      debug("accepted cookie\n");
-    }
+    /* increment record sequence counter by 1 */
+    inc_uint(uint48, peer->rseq);
+  } else {
+    memset(buf, 0, sizeof(uint16) + sizeof(uint48));
   }
 
-  return -1;
+  buf += sizeof(uint16) + sizeof(uint48);
+
+  memset(buf, 0, sizeof(uint16));
+  return buf + sizeof(uint16);
+}
+
+/**
+ * Initializes \p buf as handshake header. The caller must ensure that \p
+ * buf is capable of holding at least \c sizeof(dtls_handshake_header_t)
+ * bytes. Increments message sequence number counter of \p peer.
+ * \return pointer to the next byte after \p buf
+ */ 
+static inline uint8 *
+dtls_set_handshake_header(uint8 type, dtls_peer_t *peer, 
+			  int length, 
+			  int frag_offset, int frag_length, 
+			  uint8 *buf) {
+  
+  dtls_int_to_uint8(buf, type);
+  buf += sizeof(uint8);
+
+  dtls_int_to_uint24(buf, length);
+  buf += sizeof(uint24);
+
+  if (peer) {
+    /* increment handshake message sequence counter by 1 */
+    inc_uint(uint16, peer->mseq);
+  
+    /* and copy the result to buf */
+    memcpy(buf, &peer->mseq, sizeof(uint16));
+  } else {
+    memset(buf, 0, sizeof(uint16));    
+  }
+  buf += sizeof(uint16);
+  
+  dtls_int_to_uint24(buf, frag_offset);
+  buf += sizeof(uint24);
+
+  dtls_int_to_uint24(buf, frag_length);
+  buf += sizeof(uint24);
+  
+  return buf;
+}
+  
+/**
+ * Checks a received Client Hello message for a valid cookie. When the
+ * Client Hello contains no cookie, the function fails and a Hello
+ * Verify Request is sent to the peer (using the write callback function
+ * registered with \p ctx). The return value is \c -1 on error, \c 0 when
+ * undecided, and \c 1 if the Client Hello was good. 
+ * 
+ * \param ctx     The DTLS context.
+ * \param peer    The remote party we are talking to, if any.
+ * \param session Transport address of the remote peer.
+ * \param msg     The received datagram.
+ * \param msglen  Length of \p msg.
+ * \return \c 1 if msg is a Client Hello with a valid cookie, \c 0 or
+ * \c -1 otherwise.
+ */
+int
+dtls_verify_peer(dtls_context_t *ctx, 
+		 dtls_peer_t *peer, 
+		 session_t *session,
+		 uint8 *record, 
+		 uint8 *data, size_t data_length) {
+
+  int len = DTLS_COOKIE_LENGTH;
+  uint8 *cookie, *p;
+#undef mycookie
+#define mycookie (ctx->sendbuf + HV_HDR_LENGTH)
+
+  /* check if we can access at least all fields from the handshake header */
+  if (record[0] == DTLS_CT_HANDSHAKE
+      && data_length >= DTLS_HS_LENGTH 
+      && data[0] == DTLS_HT_CLIENT_HELLO) {
+
+    /* Store cookie where we can reuse it for the HelloVerify request. */
+    if (dtls_create_cookie(ctx, session, data, data_length,
+			   mycookie, &len) < 0)
+      return -1;
+    debug("create cookie: ");
+    dump(mycookie, len);
+    printf("\n");
+
+    assert(len == DTLS_COOKIE_LENGTH);
+    
+    /* Perform cookie check. */
+    len = dtls_get_cookie(data, data_length, &cookie);
+
+    /* check if cookies match */
+    if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
+    debug("found matching cookie\n");
+      return 1;      
+    }
+    debug("invalid cookie:");
+    dump(cookie, len);
+    printf("\n");
+
+    /* ClientHello did not contain any valid cookie, hence we send a
+     * HelloVerify request. */
+
+    p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST,
+				  peer, DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH,
+				  0, DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH, 
+				  ctx->sendbuf + DTLS_RH_LENGTH);
+
+    dtls_int_to_uint16(p, DTLS_VERSION);
+    p += sizeof(uint16);
+
+    dtls_int_to_uint8(p, DTLS_COOKIE_LENGTH);
+    p += sizeof(uint8);
+
+    assert(p == mycookie);
+    
+    p += DTLS_COOKIE_LENGTH;
+
+    if (!peer) {
+      /* It's an initial ClientHello, so we set the record header
+       * manually and send the HelloVerify request using the
+       * registered write callback. */
+
+      dtls_set_record_header(DTLS_CT_HANDSHAKE, NULL, ctx->sendbuf);
+      /* set packet length */
+      dtls_int_to_uint16(ctx->sendbuf + 11, 
+			 p - (ctx->sendbuf + DTLS_RH_LENGTH));
+
+      ctx->cb_write(ctx,
+		    &session->raddr.sa, session->rlen, session->ifindex,
+		    ctx->sendbuf, p - ctx->sendbuf);
+    } else {
+      debug("send HelloVerify:\n");
+      hexdump(ctx->sendbuf + DTLS_RH_LENGTH, p - (ctx->sendbuf + DTLS_RH_LENGTH));
+      printf("\n");
+      if (dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
+		    ctx->sendbuf + DTLS_RH_LENGTH, 
+		    p - (ctx->sendbuf + DTLS_RH_LENGTH)) < 0) {
+	warn("cannot send HelloVerify request\n");
+	return -1;
+      }
+  }
+
+    return 0; /* HelloVerify is sent, now we cannot do anything but wait */
+  }
+
+  return -1;			/* not a ClientHello, signal error */
+#undef mycookie
 }
 
 /** only one compression method is currently defined */
@@ -469,65 +585,6 @@ check_css(dtls_context_t *ctx,
   return 1;
 }
 
-/**
- * Initializes \p buf as record header. The caller must ensure that \p
- * buf is capable of holding at least \c sizeof(dtls_record_header_t)
- * bytes. Increments sequence number counter of \p peer.
- * \return pointer to the next byte after the written header
- */ 
-static inline uint8 *
-dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
-  
-  DTLS_RECORD_HEADER(buf)->content_type = type;
-  ++buf;
-
-  dtls_int_to_uint16(buf, DTLS_VERSION);
-  buf += sizeof(uint16);
-
-  memcpy(buf, &peer->epoch, sizeof(uint16) + sizeof(uint48));
-  buf += sizeof(uint16) + sizeof(uint48);
-
-  /* increment record sequence counter by 1 */
-  inc_uint(uint48, peer->rseq);
-  
-  memset(buf, 0, sizeof(uint16));
-  return buf + sizeof(uint16);
-}
-
-/**
- * Initializes \p buf as handshake header. The caller must ensure that \p
- * buf is capable of holding at least \c sizeof(dtls_handshake_header_t)
- * bytes. Increments message sequence number counter of \p peer.
- * \return pointer to the next byte after \p buf
- */ 
-static inline uint8 *
-dtls_set_handshake_header(uint8 type, dtls_peer_t *peer, 
-			  int length, 
-			  int frag_offset, int frag_length, 
-			  uint8 *buf) {
-  
-  DTLS_HANDSHAKE_HEADER(buf)->msg_type = type;
-  ++buf;
-
-  dtls_int_to_uint24(buf, length);
-  buf += sizeof(uint24);
-
-  /* increment handshake message sequence counter by 1 */
-  inc_uint(uint16, peer->mseq);
-  
-  /* and copy the result to buf */
-  memcpy(buf, &peer->mseq, sizeof(uint16));
-  buf += sizeof(uint16);
-  
-  dtls_int_to_uint24(buf, frag_offset);
-  buf += sizeof(uint24);
-
-  dtls_int_to_uint24(buf, frag_length);
-  buf += sizeof(uint24);
-  
-  return buf;
-}
-  
 
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
@@ -1001,9 +1058,35 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
      * state is left for re-negotiation of key material. */
     
     debug("DTLS_STATE_IDLE\n");
+
+    /* renogotiation */
+    if (dtls_verify_peer(ctx, peer, &peer->session, 
+			 record_header, data, data_length) > 0) {
+
+      if (!dtls_update_parameters(ctx, &peer->session, 
+				  data, data_length,
+				  OTHER_CONFIG(peer))) {
+	
+	warn("error updating security parameters\n");
+	/* FIXME: send Alert */
+	return 0;
+      }
+
+      /* update finish MAC */
+      update_hs_hash(peer, data, data_length); 
+
+      if (dtls_send_server_hello(ctx, peer) > 0)
+	peer->state = DTLS_STATE_SERVERHELLO;
+    
+      /* after sending the ServerHelloDone, we expect the 
+       * ClientKeyExchange (possibly containing the PSK id),
+       * followed by a ChangeCipherSpec and an encrypted Finished.
+       */
+    }
+
     break;
     
-  case DTLS_STATE_INIT:		/* these two states should not occur here */
+  case DTLS_STATE_INIT:	      /* these states should not occur here */
   case DTLS_STATE_KEYEXCHANGE:
   default:
     dsrv_log(LOG_CRIT, "unhandled state %d\n", peer->state);
@@ -1104,6 +1187,10 @@ dtls_handle_message(dtls_context_t *ctx,
       return 0;
     }
 
+    /* is_record() ensures that msg contains at least a record header */
+    data = msg + DTLS_RH_LENGTH;
+    data_length = rlen - DTLS_RH_LENGTH;
+
     /* When no DTLS state exists for this peer, we only allow a
        Client Hello message with 
         
@@ -1114,7 +1201,7 @@ dtls_handle_message(dtls_context_t *ctx,
        here as it would require peer state as well.
     */
 
-    if (dtls_verify_peer(ctx, session, msg, rlen) <= 0) {
+    if (dtls_verify_peer(ctx, NULL, session, msg, data, data_length) <= 0) {
       warn("cannot verify peer\n");
       return -1;
     }
