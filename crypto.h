@@ -66,10 +66,14 @@ typedef struct {
 /** The list of actual supported ciphers, excluding the NULL cipher. */
 extern const dtls_cipher_t ciphers[];
 
+typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
+
 typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
   uint8  server_random[32];	/**< server random gmt and bytes */
 
+  dtls_peer_type role;    	/**< denotes if the remote peer is DTLS_CLIENT
+				     or DTLS_SERVER */
   int cipher;			/**< cipher type index */
   uint8  compression;		/**< compression method */
 
@@ -94,17 +98,41 @@ typedef struct {
 #define dtls_kb_client_mac_secret(Param) ((Param)->key_block)
 #define dtls_kb_server_mac_secret(Param)				\
   (dtls_kb_client_mac_secret(Param) + ciphers[(Param)->cipher].mac_key_length)
+#define dtls_kb_remote_mac_secret(Param)				\
+  ((Param)->role == DTLS_CLIENT						\
+   ? dtls_kb_client_mac_secret(Param)					\
+   : dtls_kb_server_mac_secret(Param))
+#define dtls_kb_local_mac_secret(Param)					\
+  ((Param)->role == DTLS_SERVER						\
+   ? dtls_kb_client_mac_secret(Param)					\
+   : dtls_kb_server_mac_secret(Param))
 #define dtls_kb_mac_secret_size(Param) \
   (ciphers[(Param)->cipher].mac_key_length)
 #define dtls_kb_client_write_key(Param)					\
   (dtls_kb_server_mac_secret(Param) + ciphers[(Param)->cipher].mac_key_length)
 #define dtls_kb_server_write_key(Param)					\
   (dtls_kb_client_write_key(Param) + ciphers[(Param)->cipher].key_length)
+#define dtls_kb_remote_write_key(Param)				\
+  ((Param)->role == DTLS_CLIENT					\
+   ? dtls_kb_client_write_key(Param)				\
+   : dtls_kb_server_write_key(Param)))
+#define dtls_kb_local_write_key(Param)				\
+  ((Param)->role == DTLS_SERVER					\
+   ? dtls_kb_client_write_key(Param)				\
+   : dtls_kb_server_write_key(Param)))
 #define dtls_kb_key_size(Param) (ciphers[(Param)->cipher].key_length)
 #define dtls_kb_client_iv(Param)					\
   (dtls_kb_server_write_key(Param) + ciphers[(Param)->cipher].key_length)
 #define dtls_kb_server_iv(Param)					\
   (dtls_kb_client_iv(Param) + ciphers[(Param)->cipher].iv_length)
+#define dtls_kb_remote_iv(Param)				\
+  ((Param)->role == DTLS_CLIENT					\
+   ? dtls_kb_client_iv(Param)					\
+   : dtls_kb_server_iv(Param)))
+#define dtls_kb_local_iv(Param)					\
+  ((Param)->role == DTLS_SERVER					\
+   ? dtls_kb_client_iv(Param)					\
+   : dtls_kb_server_iv(Param)))
 #define dtls_kb_iv_size(Param) (ciphers[(Param)->cipher].iv_length)
 
 #define dtls_kb_size(Param)					\
