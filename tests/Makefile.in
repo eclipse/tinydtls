@@ -35,12 +35,13 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 # files and flags
-SOURCES:= netq-test.c dtls-test.c ccm-test.c prf-test.c \
+SOURCES:= netq-test.c dtls-server.c ccm-test.c prf-test.c \
+  dtls-client.c
   #cbc_aes128-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
-CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@ 
+CFLAGS:=-Wall @CFLAGS@ 
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) 
 LDLIBS:=-ltinydtls @LIBS@
