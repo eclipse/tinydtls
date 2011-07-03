@@ -15,11 +15,13 @@
 #include "config.h" 
 #include "dsrv.h" 
 
+#if 0
 /* SIGINT handler: set quit to 1 for graceful termination */
 void
 handle_sigint(int signum) {
   dsrv_stop(dsrv_get_context());
 }
+#endif
 
 #ifndef DSRV_NO_PROTOCOL_DEMUX
 protocol_t
@@ -33,24 +35,25 @@ void
 peer_timeout(struct dsrv_context_t *ctx) {
 }
 
-int write_func(struct dtls_context_t *ctx, 
-	       struct sockaddr *dst, socklen_t dstlen, int ifindex, 
-	       uint8 *buf, int len) {
-  int fd = *(int *)dtls_get_app_data(ctx);
-
-  return sendto(fd, buf, len, 0, dst, dstlen);
-}
-
-#if 0
 void
-peer_handle_read(dsrv_context_t *ctx, peer_t *peer, char *buf, int len) {
-  int i;
-  for (i=0; i<len; i++)
-    printf("%c", buf[i]);
+read_from_peer(struct dtls_context_t *ctx, 
+	       session_t *session, uint8 *data, size_t len) {
+  size_t i;
+  for (i = 0; i < len; i++)
+    printf("%c", data[i]);
 
-  peer_write(peer, buf, len);
+  dtls_write(ctx, session, data, len);
 }
-#else
+
+int
+send_to_peer(struct dtls_context_t *ctx, 
+	     session_t *session, uint8 *data, size_t len) {
+
+  int fd = *(int *)dtls_get_app_data(ctx);
+  return sendto(fd, data, len, MSG_DONTWAIT,
+		&session->raddr.sa, session->rlen);
+}
+
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
@@ -78,52 +81,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   return dtls_handle_message(ctx, &session, buf, len);
 }    
-#endif
 
-#if 0
-int main(int argc, char **argv) {
-
-#ifdef WANT_IP4
-  struct sockaddr_in listen_addr = { AF_INET, htons(20220), { htonl(0x7f000001) } };
-#else
-  struct sockaddr_in6 listen_addr = { AF_INET6, htons(20220), 0, IN6ADDR_ANY_INIT, 0 };
-#endif
-  static dsrv_context_t *ctx;
-
-  set_log_level(LOG_DEBUG);
-  ctx = dsrv_new_context((struct sockaddr *)&listen_addr, 
-			 sizeof(listen_addr), 
-			 2000,2000);
-
-  if (!ctx) {
-    fprintf(stderr, "E: cannot create server context\n");
-    return -1;
-  }
-
-  dsrv_set_cb(ctx, peer_timeout, timeout);
-  dsrv_set_cb(ctx, peer_handle_read, read);
-#ifndef DSRV_NO_PROTOCOL_DEMUX
-  dsrv_set_cb(ctx, demux_protocol, demux);
-#endif
-
-#ifdef WITH_OPENSSL
-  if (!init_ssl(ctx->sslctx)) {
-    fprintf(stderr, "E: cannot initialize SSL engine\n");
-    goto end;
-  }
-#endif
-
-  /* install signal handler for server shutdown */
-  signal(SIGINT, handle_sigint);
-
-  dsrv_run(ctx);
-
- end:
-  dsrv_free_context(ctx);
-
-  return 0;
-}
-#else
 int 
 main(int argc, char **argv) {
   dtls_context_t *the_context = NULL;
@@ -166,7 +124,8 @@ main(int argc, char **argv) {
   the_context = dtls_new_context(&fd);
   dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9);
 
-  dtls_set_cb(the_context, write_func, write);
+  dtls_set_cb(the_context, read_from_peer, read);
+  dtls_set_cb(the_context, send_to_peer, write);
 
   while (1) {
     FD_ZERO(&rfds);
@@ -197,7 +156,6 @@ main(int argc, char **argv) {
   dtls_free_context(the_context);
   exit(0);
 }
-#endif
 
 #else
 /* just include a no-op when built without DTLS */

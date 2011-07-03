@@ -18,8 +18,28 @@
 #include "config.h" 
 #include "dsrv.h" 
 
+static char buf[200];
+static size_t len = 0;
+
 void 
 peer_timeout(struct dsrv_context_t *ctx) {
+}
+
+void
+try_send(struct dtls_context_t *ctx, session_t *dst) {
+  int res;
+  res = dtls_write(ctx, dst, (uint8 *)buf, len);
+  if (res >= 0) {
+    fprintf(stderr, "res: %d (len: %d)\n", res, len);
+    memmove(buf, buf + res, len - res);
+    len -= res;
+  }
+}
+
+void
+handle_stdin() {
+  if (fgets(buf + len, sizeof(buf) - len, stdin))
+    len += strlen(buf + len);
 }
 
 void
@@ -28,8 +48,6 @@ read_from_peer(struct dtls_context_t *ctx,
   size_t i;
   for (i = 0; i < len; i++)
     printf("%c", data[i]);
-
-  dtls_write(ctx, session, data, len);
 }
 
 int
@@ -168,14 +186,14 @@ main(int argc, char **argv) {
 
   dst.rlen = result;
   dst.raddr.sin.sin_port = htons(20220);
-  
-  /* FIXME: handle result */
-  dtls_connect(the_context, &dst);
 
+  dtls_connect(the_context, &dst);
+  
   while (1) {
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
 
+    FD_SET(fileno(stdin), &rfds);
     FD_SET(fd, &rfds);
     /* FD_SET(fd, &wfds); */
     
@@ -190,14 +208,16 @@ main(int argc, char **argv) {
     } else if (result == 0) {	/* timeout */
     } else {			/* ok */
       if (FD_ISSET(fd, &wfds))
-	;
-      else if (FD_ISSET(fd, &rfds)) {
+	/* FIXME */;
+      else if (FD_ISSET(fd, &rfds))
 	dtls_handle_read(the_context);
-      }
+      else if (FD_ISSET(fileno(stdin), &rfds))
+	handle_stdin();
     }
+    if (len)
+      try_send(the_context, &dst);
   }
   
- error:
   dtls_free_context(the_context);
   exit(0);
 }

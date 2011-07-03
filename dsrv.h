@@ -27,25 +27,17 @@
  * \mainpage tinydtls -- a basic DTLS server template.
  * \author Olaf Bergmann, TZI Uni Bremen
  * 
- * This library provides a very simple datagram server to demonstrate
- * session multiplexing with the DTLS implementation in <a
- * href="http://www.openssl.org/">OpenSSL</a>. Several people have
- * pointed out that the Datagram BIO of OpenSSL is not suitable for
+ * This library provides a very simple datagram server with DTLS support.
+ * It is designed to support session multiplexing in single-threaded 
+ * applications and thus targets specifically on embedded systems.
+ *
+ * A previous release of this library was based on <a
+ * href="http://www.openssl.org/">OpenSSL</a> to show issues with 
+ * the Datagram BIO which is not suited very well for
  * DTLS as it reads too much data from the UDP socket once the initial
  * handshake is done (c.f.  <a
  * href="http://www.net-snmp.org/wiki/index.php/DTLS_Implementation_Notes">Net-SNMP
- * Wiki</a>). This package contains a demo server to illustrate this
- * issue. I tried to fix OpenSSL to skip packets from other peers but
- * that turned out to be too difficult, see file \c tests/secure-server.c.
- *
- * As a new solution, I followed the ideas from the Net-SNMP folks
- * (see link above) and used a memory BIO to first read the data and
- * then feed it to the right peer. Credits therefore go to the
- * Net-SNMP community as well as Robin Seggelmann and Michael Tuexen
- * from FH M&uuml;nster for their <a
- * href="http://sctp.fh-muenster.de/dtls-samples.html">DTLS Echo
- * Server example</a> that helped a lot to understand the DTLS API of
- * OpenSSL.
+ * Wiki</a>).
  *
  * Additional literature: 
  * \li Nagendra Modadugu and Eric Rescorla: <em>The Design and Implementation of Datagram TLS</em>. In: Proc. NDSS, 2004. 
@@ -64,11 +56,6 @@
  * href="http://uthash.sourceforge.net/">uthash</a> to manage its
  * peers. \b uthash uses the <b>BSD revised license</b>, see <a
  * href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>. 
- * 
- * \subsection openssl OpenSSL
- * 
- * When you link this software to OpenSSL, you have to make sure by
- * yourself that you do not infringe with anyone's patents or IPR.
  * 
  * \subsection md5 L. Peter Deutsch's MD5 Implementation
  * 
@@ -106,15 +93,9 @@
  * to the well-known GNU configure options, there are two specific switches
  * that affect what is included in the build:
  * 
- * \li \c --with-openssl   Build with DTLS support from OpenSSL. (Enabled
- *                      by default.) 
  * \li \c --with-protocol-demux Add code for demuxing protocols, usually for
  *                      serving DTLS-crypted and clear-text requests over
  *                      the same UDP socket. (Enabled by default.)
- * 
- * When DTLS support is not switched off, \c configure will look for
- * openssl on your system. We recommend to use at least version 1.0.0d
- * which has been used during development of this library.
  * 
  * \section Building
  * 
@@ -136,7 +117,7 @@
  * "connections" from remote peers and echos any data that it
  * receives. Basically, you have to create a new server context using
  * dsrv_new_context(). Then, register a callback function for received
- * data with drsv_set_cb(). \todo SSL context initialization.
+ * data with drsv_set_cb(). 
  * To run the server, just call dsrv_run(). Cleanup is done with
  * dsrv_free_context().
  * \code
@@ -162,14 +143,11 @@ int main(int argc, char **argv) {
 }
  * \endcode
  *
- * \subsection certs Certificate Creation
- * 
- * 
  * \subsection testing Use OpenSSL for Testing
  * 
  * You can connect to the example echo server using <tt>openssl s_client</tt>:
  * \code
- * openssl s_client -dtls1 -servername $HOST -port $PORT  -cipher $CIPHER -psk_identity Id$n -psk $PSK
+ * openssl s_client -dtls1 -servername $HOST -port $PORT  -cipher $CIPHER -psk $PSK
  * \endcode
  * 
  * \subsection demux Protocol Demultiplexing
@@ -200,7 +178,7 @@ dsrv_set_cb(ctx, demux_protocol, demux);
  * initial bytes of DTLSv1.1 or DTLSv1.2. This is valid for any
  * test-based protocol and a few binary protocols such as COAP
  * (c.f. <a
- * href="http://tools.ietf.org/html/draft-ietf-core-coap-05#section-7.3">draft-ietf-core-coap-05</a>).
+ * href="http://tools.ietf.org/html/draft-ietf-core-coap-06#section-7.3">draft-ietf-core-coap-06</a>).
  *
  * \section join Get Involved
  *
@@ -216,10 +194,6 @@ dsrv_set_cb(ctx, demux_protocol, demux);
 #include <unistd.h>
 #include <sys/select.h>
 #include <sys/time.h>
-
-#ifdef WITH_OPENSSL
-#include <openssl/ssl.h>
-#endif
 
 #ifndef DSRV_NO_DTLS
 #include "dtls.h"
@@ -248,9 +222,6 @@ dsrv_set_cb(ctx, demux_protocol, demux);
 typedef struct dsrv_context_t {
   int fd;			/**< single file descriptor for read/write */
   struct netq_t *rq, *wq;	/**< read queue and write queue */
-#ifdef WITH_OPENSSL
-  SSL_CTX *sslctx;
-#endif
 #ifndef DSRV_NO_DTLS
   dtls_context_t *dtlsctx;	/**< the main context for DTLS operation */
 #endif

@@ -23,6 +23,11 @@
  * SOFTWARE.
  */
 
+/**
+ * \file dtls.h
+ * \brief High level DTLS API and visible structures. 
+ */
+
 #ifndef _DTLS_H_
 #define _DTLS_H_
 
@@ -32,7 +37,11 @@
 #include "peer.h"
 #include "crypto.h"
 
-#define DTLS_VERSION 0xfeff	/* 0xfefd for DTLS 1.2 */
+#ifndef DTLSv12
+#define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
+#else
+#define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
+#endif
 
 /** Known compression methods
  *
@@ -42,7 +51,12 @@
  
 typedef enum { 
   DTLS_STATE_INIT = 0, DTLS_STATE_SERVERHELLO, DTLS_STATE_KEYEXCHANGE, 
-  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED, DTLS_STATE_IDLE
+  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED, 
+  /* client states */
+  DTLS_STATE_CLIENTHELLO, DTLS_STATE_WAIT_SERVERHELLODONE,
+  DTLS_STATE_WAIT_SERVERFINISHED, 
+
+  DTLS_STATE_CONNECTED
 } dtls_state_t;
 
 /** 
@@ -82,8 +96,9 @@ typedef struct dtls_context_t {
 
   void *app;			/**< application-specific data */
   int (*cb_write)(struct dtls_context_t *ctx, 
-		  struct sockaddr *dst, socklen_t dstlen, int ifindex, 
-		  uint8 *buf, int len);
+		  session_t *session, uint8 *buf, size_t len);
+  void (*cb_read)(struct dtls_context_t *ctx, 
+		  session_t *session, uint8 *buf, size_t len);
 
   unsigned char *psk; /**< pre-shared key (set with dtls_set_psk()) */
   size_t psk_length;  /**< length of psk  */
@@ -105,6 +120,20 @@ void dtls_free_context(dtls_context_t *ctx);
 
 /** Sets one of the available callbacks write, read. */
 #define dtls_set_cb(ctx,cb,CB) do { (ctx)->cb_##CB = cb; } while(0)
+
+/** 
+ * Writes the application data given in @p buf to the peer specified
+ * by @p session. 
+ * 
+ * @param ctx      The DTLS context to use.
+ * @param session  The remote transport address and local interface.
+ * @param buf      The data to write.
+ * @param len      The actual length of @p data.
+ * 
+ * @return The number of bytes written of @c -1 on error.
+ */
+int dtls_write(struct dtls_context_t *ctx, session_t *session, 
+	       uint8 *buf, size_t len);
 
 #define DTLS_COOKIE_LENGTH 32
 
@@ -182,7 +211,7 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
  */
 int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length);
 
-/**
+/** 
  * Retrieves a pointer to the cookie contained in a Client Hello message.
  *
  * \param hello_msg   Points to the received Client Hello message

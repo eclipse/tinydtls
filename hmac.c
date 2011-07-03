@@ -214,40 +214,6 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
   return len;
 }
 
-#ifdef WITH_OPENSSL
-#define DIGEST EVP_md5()
-
-#include <openssl/evp.h>
-#include <openssl/md5.h>
-#include <openssl/hmac.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#endif
-
-void
-reference(unsigned char *secret, int keylen, 
-	  unsigned char *text, int textlen) {
-#ifdef WITH_OPENSSL
-  HMAC_CTX hmac_context;
-
-  static unsigned char buf[EVP_MAX_MD_SIZE];
-  unsigned int len, i;
-
-  OpenSSL_add_all_digests();
-
-  HMAC_Init(&hmac_context, secret, keylen, DIGEST);
-  HMAC_Update(&hmac_context, text, textlen);
-
-  HMAC_Final(&hmac_context, buf, &len);
-
-  for(i = 0; i < len; i++) 
-    printf("%02x", buf[i]);
-  printf("\n");
-#else
-  fprintf(stderr,"Error: no OpenSSL\n");
-#endif
-}
-
 #ifdef HMAC_TEST
 int main(int argc, char **argv) {
   static unsigned char key[] = { 0x0b, 0x0b, 0x0b, 0x0b, 
@@ -267,8 +233,6 @@ int main(int argc, char **argv) {
   for(i = 0; i < len; i++) 
     printf("%02x", buf[i]);
   printf("\n");
-
-  reference(key, sizeof(key), text, sizeof(text));
 
   return 0;
 }

@@ -24,8 +24,8 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.1.0])
-AC_CONFIG_SRCDIR([netq.c])
+AC_INIT([tinydtls], [0.2.0])
+AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.
@@ -33,32 +33,23 @@ AC_PROG_MAKE_SET
 AC_PROG_CC
 AC_PROG_RANLIB
 AC_PATH_PROG(DOXYGEN, doxygen, [:])
+AC_PATH_PROG(ETAGS, etags, [/bin/false])
 
 AC_C_BIGENDIAN
 
 # Checks for libraries.
 AC_SEARCH_LIBS([gethostbyname], [nsl])
 AC_SEARCH_LIBS([socket], [socket])
-AC_CHECK_LIB([dl], [dlopen])
+dnl AC_CHECK_LIB([dl], [dlopen])
 
-dnl from version 0.1.0, openssl is not included anymore
-dnl # custom check for openssl
-dnl AC_ARG_WITH(openssl,
-dnl   [AS_HELP_STRING([--without-openssl],
-dnl     [disable openssl (use --with-openssl=PATH to specify a custom path for your OpenSSL installation)])],
-dnl   [with_openssl=$withval], 
-dnl   [with_openssl=auto])
+AC_ARG_WITH(debug,
+  [AS_HELP_STRING([--without-debug],[disable all debug output and assertions])],
+  [CPPFLAGS="${CPPFLAGS} -DNDEBUG"], 
+  [])
 
-dnl AS_IF([test "x$with_openssl" = "xauto" -o "x$with_openssl" = "xyes"],
-dnl  [AC_CHECK_LIB([ssl], [DTLSv1_method])
-dnl   AC_CHECK_LIB([crypto], [BIO_new])] ,
-dnl  [test "x$with_openssl" != "xno"],
-dnl  [LIBS="${LIBS} -L${withval}/lib -lssl -lcrypto"
-dnl   CPPFLAGS="${CPPFLAGS} -I${withval}/include"],
-dnl  [AC_DEFINE([DSRV_NO_DTLS], [],
-dnl              [Define if you do not want DTLS support])
-dnl   CPPFLAGS="${CPPFLAGS} -DDSRV_NO_DTLS"]
-dnl  )
+AC_ARG_WITH(dtls12,
+  [AS_HELP_STRING([--with-dtls12],[use DTLS 1.2])],
+  [CPPFLAGS="${CPPFLAGS} -DDTLSv12"])
 
 AC_ARG_WITH(protocol_demux,
   [AS_HELP_STRING([--without-protocol-demux],

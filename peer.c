@@ -43,10 +43,6 @@ peer_set_state(peer_t *peer, peer_state_t state) {
 void
 peer_free(peer_t *peer) {
   if (peer) {
-#ifdef WITH_OPENSSL
-    if (peer->ssl) SSL_free(peer->ssl);
-    if (peer->nbio) BIO_free(peer->nbio);
-#endif
     free(peer);
   }
 }
@@ -58,9 +54,6 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #endif
 	 ) {
   peer_t *peer = (peer_t *)malloc(sizeof(peer_t));
-#ifdef WITH_OPENSSL
-  BIO *ibio;
-#endif
 
   if (peer) {
 
@@ -80,27 +73,6 @@ peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     if (protocol == DTLS) {
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
-#ifdef WITH_OPENSSL
-    peer->ssl = SSL_new(dsrv_get_context()->sslctx);
-    if (peer->ssl) {
-
-      if ( ! BIO_new_bio_pair(&ibio, 0, &peer->nbio, 0) ) {
-	dsrv_log(LOG_ALERT, "cannot create bio pair\n");
-	peer_free(peer);
-	return NULL;
-      }
-
-      SSL_set_bio(peer->ssl, ibio, ibio);
-      /* SSL_set_options(peer->ssl, SSL_OP_COOKIE_EXCHANGE); */
-      SSL_set_accept_state(peer->ssl);
-      peer->ssl->d1->handshake_read_seq = 1;
-      peer->ssl->d1->next_handshake_write_seq = 1;
-    } else {
-      dsrv_log(LOG_ALERT, "cannot create SSL object!\n");
-      peer_free(peer);
-      return NULL;
-    }
-#endif /* WITH_OPENSSL */
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     }
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
@@ -127,11 +99,7 @@ peer_write(peer_t *peer, char *buf, int len) {
 #  ifndef DSRV_NO_PROTOCOL_DEMUX
   if (peer->protocol == DTLS)
 #  endif /* DSRV_NO_PROTOCOL_DEMUX */
-#ifdef WITH_OPENSSL
-    return SSL_write(peer->ssl, buf, len);
-#else
   ;
-#endif
 #endif /* DSRV_NO_DTLS */
 
 #if defined(DSRV_NO_DTLS) || !defined(DSRV_NO_PROTOCOL_DEMUX)

@@ -7,6 +7,8 @@
 #include "dtls.h"
 #include "numeric.h"
 #include "hmac.h"
+#include "md5/md5.h"
+#include "sha1/sha.h"
 
 /** dumps packets in usual hexdump format */
 void hexdump(const unsigned char *packet, int length) {
@@ -45,7 +47,7 @@ size_t master_secret_len = 0;
 
 dtls_security_parameters_t security_params[2]; 
 int config = 0;
-unsigned int epoch = 0;
+unsigned int epoch[2] = { 0, 0 };
 
 #if DTLS_VERSION == 0xfeff
 dtls_hash_t *hs_hash[2];
@@ -61,9 +63,6 @@ update_hash(uint8 *record, size_t rlength,
   if (!hs_hash[0])
     return;
 
-  printf("add MAC data: ");
-  dump(data, data_length);
-  printf("\n");
   for (i = 0; i < sizeof(hs_hash) / sizeof(dtls_hash_t *); ++i) {
     hs_hash[i]->update(hs_hash[i]->data, data, data_length);
   }
@@ -71,16 +70,39 @@ update_hash(uint8 *record, size_t rlength,
 
 static inline void
 finalize_hash(uint8 *buf) {
+#if DTLS_VERSION == 0xfeff
+  unsigned char statebuf[sizeof(md5_state_t) + sizeof(SHA_CTX)];
+#elif DTLS_VERSION == 0xfefd
+  unsigned char statebuf[sizeof(SHA256_CTX)];
+#endif
+
   if (!hs_hash[0])
     return;
-  
+
+  /* temporarily store hash status for roll-back after finalize */
+#if DTLS_VERSION == 0xfeff
+  memcpy(statebuf, hs_hash[0]->data, sizeof(md5_state_t));
+  memcpy(statebuf + sizeof(md5_state_t), 
+	 hs_hash[1]->data, 
+	 sizeof(SHA_CTX));
+#elif DTLS_VERSION == 0xfefd
+  memcpy(statebuf, hs_hash[0]->data, sizeof(statebuf));
+#endif
+
   hs_hash[0]->finalize(buf, hs_hash[0]->data);
 #if DTLS_VERSION == 0xfeff
   hs_hash[1]->finalize(buf + 16, hs_hash[1]->data);
 #endif
-  printf("finalize_hash: raw hash is: ");
-  dump(buf, 16); printf(" "); dump(buf + 16, 20);
-  printf("\n");
+
+  /* restore hash status */
+#if DTLS_VERSION == 0xfeff
+  memcpy(hs_hash[0]->data, statebuf, sizeof(md5_state_t));
+  memcpy(hs_hash[1]->data, 
+	 statebuf + sizeof(md5_state_t), 
+	 sizeof(SHA_CTX));
+#elif DTLS_VERSION == 0xfefd
+  memcpy(hs_hash[0]->data, statebuf, sizeof(statebuf));
+#endif
 }
 
 static inline void
@@ -161,6 +183,7 @@ decrypt_verify(int is_client, const uint8 *packet, size_t length,
     res = dtls_decrypt(cipher,
 		       (uint8 *)packet + sizeof(dtls_record_header_t), *clen, 
 		       buf);
+
     if (res < 0) {
       warn("decryption failed!\n");
     } else {
@@ -184,6 +207,29 @@ decrypt_verify(int is_client, const uint8 *packet, size_t length,
   return ok;
 }
 
+#define SKIP_ETH_HEADER(M,L) 			\
+  if ((L) < 14)					\
+    return;					\
+  else {					\
+    (M) += 14;					\
+    (L) -= 14;					\
+  }
+
+#define SKIP_IP_HEADER(M,L)				\
+  if (((M)[0] & 0xF0) == 0x40) {	/* IPv4 */	\
+    (M) += (M[0] & 0x0F) * 4;				\
+    (L) -= (M[0] & 0x0F) * 4;				\
+  } else						\
+    if (((M)[0] & 0xF0) == 0x60) { /* IPv6 */		\
+      (M) += 40;					\
+      (L) -= 40;					\
+    } 
+
+#define SKIP_UDP_HEADER(M,L) {			\
+    (M) += 8;					\
+    (L) -= 8;					\
+  }
+
 void
 handle_packet(const u_char *packet, int length) {
   static int n = 0;
@@ -191,7 +237,7 @@ handle_packet(const u_char *packet, int length) {
     0x16, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
   };
   uint8 *data; 
-  size_t data_length;
+  size_t data_length, rlen;
   int i, res;
 #if DTLS_VERSION == 0xfeff
 #ifndef SHA1_DIGEST_LENGTH
@@ -205,22 +251,27 @@ handle_packet(const u_char *packet, int length) {
   int is_client;
   n++;
 
-  /* skip frame, IP, UDP header */
-  if (length < TRANSPORT_HEADER_SIZE) 
-    return;
+  SKIP_ETH_HEADER(packet, length);
+  SKIP_IP_HEADER(packet, length);
 
-  is_client = 
-    (dtls_uint16_to_int(packet + 14 + 20) != 20220);
+  /* determine from port if this is a client */
+  is_client = dtls_uint16_to_int(packet) != 20220;
 
-  packet += TRANSPORT_HEADER_SIZE;
-  length -= TRANSPORT_HEADER_SIZE;
+  SKIP_UDP_HEADER(packet, length);
 
   while (length) {
+    rlen = dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t);
+
+    if (!rlen) {
+      fprintf(stderr, "invalid length!\n");
+      return;
+    }
+
     /* skip packet if it is from a different epoch */
-    if (dtls_uint16_to_int(packet + 3) != epoch)
+    if (dtls_uint16_to_int(packet + 3) != epoch[is_client])
       goto next;
 
-    res = decrypt_verify(is_client, packet, length,
+    res = decrypt_verify(is_client, packet, rlen,
 			 &data, &data_length);
 
     if (res <= 0)
@@ -235,9 +286,10 @@ handle_packet(const u_char *packet, int length) {
     if (packet[0] == 22 && data[0] == 1) { /* ClientHello */
       if (memcmp(packet, initial_hello, sizeof(initial_hello)) == 0)
 	goto next;
-      
+	
       memcpy(OTHER_CONFIG->client_random, data + 14, 32);
-      clear_hash();
+
+	clear_hash();
 #if DTLS_VERSION == 0xfeff
       hs_hash[0] = dtls_new_hash(HASH_MD5);
       hs_hash[1] = dtls_new_hash(HASH_SHA1);
@@ -304,8 +356,9 @@ handle_packet(const u_char *packet, int length) {
 			 dtls_kb_iv_size(OTHER_CONFIG));
       }
 
-      SWITCH_CONFIG;
-      epoch++;
+      if (is_client)
+	SWITCH_CONFIG;
+      epoch[is_client]++;
 
       printf("key_block:\n");
       printf("  client_MAC_secret:\t");  
@@ -341,12 +394,18 @@ handle_packet(const u_char *packet, int length) {
     }
 
     if (packet[0] == 22) {
-      if (data[0] == 20) { /* Finished (from client) */
+      if (data[0] == 20) { /* Finished */
 	finalize_hash(hash_buf);
-	clear_hash();
+	/* clear_hash(); */
+
+	update_hash((unsigned char *)packet, sizeof(dtls_record_header_t),
+		    data, data_length);
 
 	dtls_prf(master_secret, master_secret_len,
-		 (unsigned char *)"client finished", 15,
+		 is_client 
+		 ? (unsigned char *)"client finished" 
+		 : (unsigned char *)"server finished" 
+		 , 15,
 		 hash_buf, sizeof(hash_buf),
 		 NULL, 0,
 		 data + sizeof(dtls_handshake_header_t),
@@ -356,15 +415,13 @@ handle_packet(const u_char *packet, int length) {
 	printf("\n");
       } else {
 	update_hash((unsigned char *)packet, sizeof(dtls_record_header_t),
-		    data,
-		    sizeof(dtls_handshake_header_t) +
-		    dtls_uint24_to_int(((dtls_handshake_header_t *)data)->length));
+		    data, data_length);
       }
     }
 
   next:
-    length -= dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t);
-    packet += dtls_uint16_to_int(packet + 11) + sizeof(dtls_record_header_t);
+    length -= rlen;
+    packet += rlen;
   }
 }
 

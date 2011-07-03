@@ -32,13 +32,6 @@
 #include <errno.h>
 #include <assert.h>
 
-#ifdef WITH_OPENSSL
-#include <openssl/ssl.h>
-#include <openssl/bio.h>
-#include <openssl/err.h>
-#include <openssl/rand.h>
-#endif
-
 #ifndef DSRV_NO_DTLS
 #include "dtls.h"
 #endif
@@ -112,67 +105,6 @@ dsrv_get_context() {
 
   return the_context;
 }
-
-#ifdef WITH_OPENSSL
-peer_t *
-peer_find_from_ssl(const SSL *ssl) {
-  peer_t *peer, *tmp;
- 
-  HASH_ITER(hh, dsrv_get_context()->peers, peer, tmp) {
-    if (peer->ssl == ssl)
-      return peer;
-  }
-
-  return NULL;
-}
-
-/* Handle state traversal. */
-void
-info_callback(const SSL *ssl, int where, int ret) {
-  peer_t *peer;
-
-  debug("STATE: 0x%x\n", SSL_state(ssl));
-  if (where & SSL_CB_LOOP)  /* do not care for intermediary states */
-    return;
-
-  peer = peer_find_from_ssl(ssl);
-#ifndef NDEBUG
-  if (peer) {
-    debug("info_callback: found peer %s\n",
-	  debug_format_addr(&peer->session.raddr.sa, peer->session.rlen));
-  }
-#endif
-
-  if (where & SSL_CB_ALERT) {	/* examine alert type */
-    switch (*SSL_alert_type_string(ret)) {
-    case 'F':
-      /* move SSL object from pending to close */
-      peer_set_state(peer, PEER_ST_CLOSED);
-      break;
-    case 'W': 
-      if ((ret & 0xff) == SSL_AD_CLOSE_NOTIFY) {
-	if (where == SSL_CB_WRITE_ALERT) 
-	  debug("sent CLOSE_NOTIFY\n");
-	else /* received CN */
-	  debug("received CLOSE_NOTIFY\n");
-      }
-      break;
-    default: 			/* handle unknown alert types */
-#ifndef NDEBUG
-      debug("not handled!\n");
-#endif
-      ;
-    }
-  }
-
-  if (where & SSL_CB_HANDSHAKE_DONE) {
-    debug("HANDSHAKE_DONE\n");
-
-    /* move SSL object from pending to established */
-    peer_set_state(peer, PEER_ST_ESTABLISHED);
-  }
-}
-#endif
 
 #ifndef DSRV_NO_DTLS
 /* Callback function registered with dtls context to send datagrams. */
@@ -261,25 +193,10 @@ dsrv_new_context(struct sockaddr *laddr, socklen_t laddrlen,
 
   }
 
-#ifdef WITH_OPENSSL
-  SSL_load_error_strings();
-  SSL_library_init();
-  OpenSSL_add_all_digests();
-  c->sslctx = SSL_CTX_new(DTLSv1_server_method());
-
-  if (!c->sslctx) 
-    goto error;
-
-  SSL_CTX_set_verify(c->sslctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, NULL);
-  SSL_CTX_set_read_ahead(c->sslctx, 1); /* enable read-ahead */
-
-  SSL_CTX_set_info_callback(c->sslctx, info_callback);
-#endif
-
 #ifndef DSRV_NO_DTLS
   c->dtlsctx = dtls_new_context(c);
-  if (c->dtlsctx) 
-    dtls_set_cb(c->dtlsctx, dsrv_dtls_write, write);
+  /* if (c->dtlsctx)  */
+  /*   dtls_set_cb(c->dtlsctx, dsrv_dtls_write, write); */
 #endif
 
   if (the_context)
@@ -303,9 +220,6 @@ dsrv_free_context(dsrv_context_t *ctx) {
 #ifndef DSRV_NO_DTLS
     dtls_free_context(ctx->dtlsctx);
 #endif
-#ifdef WITH_OPENSSL
-    SSL_CTX_free(ctx->sslctx);
-#endif
     dsrv_close(ctx);
     free(ctx); 
   }
@@ -323,24 +237,6 @@ dsrv_popq(struct netq_t *q) {
 
 void
 peer_check_write(dsrv_context_t *ctx, peer_t *peer) {
-#ifdef WITH_OPENSSL
-  static char buf[1000];
-  int len;
-
-  if (BIO_pending(peer->nbio)) {
-    len = BIO_read(peer->nbio, buf, sizeof(buf));
-    
-    if (len < 0) {
-      warn("cannot get pending data from BIO (%d)\n", len);
-    } else {
-      if (!dsrv_sendto(ctx, &peer->session.raddr.sa,
-		       peer->session.rlen,
-		       peer->session.ifindex,
-		       buf, len))
-	dsrv_log(LOG_CRIT, "cannot send data\n");
-    }
-  }
-#endif
 }
 
 int
@@ -432,7 +328,7 @@ make_hashkey(session_t *s) {
   memset(&s2, 0, sizeof(session_t));
   s2.rlen = s->rlen;
 
-  switch (s->raddr.ss.ss_family) {
+  switch (s->raddr.sa.sa_family) {
   case AF_INET:
     s2.raddr.sin.sin_family = s->raddr.sin.sin_family;
     s2.raddr.sin.sin_port = s->raddr.sin.sin_port;
@@ -597,47 +493,6 @@ handle_read(struct dsrv_context_t *ctx) {
     }
   }
 
-#ifndef DSRV_NO_DTLS
-#if WITH_OPENSSL
-#ifndef DSRV_NO_PROTOCOL_DEMUX
-  if (peer->protocol == DTLS) {
-#endif /* DSRV_NO_PROTOCOL_DEMUX */
-    /* Handle data only if nothing is pending. */      
-    if (BIO_flush(peer->nbio) != 1) {
-      warn("flush failed, dropping data (%d)\n", BIO_should_retry(peer->nbio));
-      return;
-    }
-    
-    wlen = BIO_write(peer->nbio, buf, len);
-    if (wlen < 0) {
-      err = SSL_get_error(peer->ssl,wlen);	
-      dsrv_log(LOG_CRIT, "BIO_write: %d: %s\n", err,
-	       ERR_error_string(err, NULL));
-      return;
-    } 
-    
-    /* res = SSL_read(peer->ssl, dbuf, sizeof(dbuf)); */
-    res = SSL_read(peer->ssl, buf, sizeof(buf));
-    if (res < 0) {
-      err = SSL_get_error(peer->ssl,res);    
-      
-      if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
-	dsrv_log(LOG_CRIT,"E: SSL_read: %d %s\n", 
-		 err, ERR_error_string(err, NULL));
-      
-      return;
-    } else if (res == 0) {	/* connection might have been closed */
-      if (SSL_get_shutdown(peer->ssl)) 
-	peer_set_state(peer, PEER_ST_CLOSED);
-    } 
-    
-    len = res;
-#ifndef DSRV_NO_PROTOCOL_DEMUX
-  }
-#endif /* DSRV_NO_PROTOCOL_DEMUX */
-#endif /* WITH_OPENSSL */
-#endif /* DSRV_NO_DTLS */
-
   /* invoke user callback if set */
   if (ctx->cb_read)
     ctx->cb_read(ctx,peer, buf, len);	
@@ -689,19 +544,6 @@ handle_timeout(struct dsrv_context_t *ctx) {
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     if (peer->protocol == DTLS) {
 #endif /* DSRV_NO_PROTOCOL_DEMUX */
-#ifdef WITH_OPENSSL
-      result = DTLSv1_handle_timeout(peer->ssl);
-      if (result < 0) {
-	err = SSL_get_error(peer->ssl,result);
-	info("dtls1_handle_timeout (%d): %s\n",
-	     err, ERR_error_string(err, NULL));
-      }
-      
-      if (peer_get_state(peer) == PEER_ST_CLOSED) {
-	dsrv_delete_peer(ctx, peer);
-	peer_free(peer);
-      }
-#endif /* WITH_OPENSSL */
 #ifndef DSRV_NO_PROTOCOL_DEMUX
     }
 #endif /* DSRV_NO_PROTOCOL_DEMUX */

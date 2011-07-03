@@ -36,11 +36,6 @@
 
 #include <arpa/inet.h>
 
-#ifdef WITH_OPENSSL
-#include <openssl/ssl.h>
-#endif
-
-
 #include "uthash.h"
 
 #ifndef DSRV_NO_PROTOCOL_DEMUX
@@ -54,23 +49,24 @@ typedef enum {
   PEER_ST_ESTABLISHED, PEER_ST_PENDING, PEER_ST_CLOSED 
  } peer_state_t;
 
+#ifndef session_t
 typedef struct {
   socklen_t rlen;		/**< actual length of raddr */
   union {
     struct sockaddr sa;		/**< the generic API structure */
+#if 0
     struct sockaddr_storage ss;	/**< internal representation */
+#endif
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
   } raddr;			/**< remote address */
   int ifindex;			/**< local interface */
-} session_t;
+} __session_t;
+#define session_t __session_t
+#endif
 
 typedef struct {
   peer_state_t state;
-#ifdef WITH_OPENSSL
-  SSL *ssl;
-  BIO *nbio;
-#endif
   session_t session;
 #ifndef DSRV_NO_PROTOCOL_DEMUX
   protocol_t protocol;		/**< what protocol do we talk? */
@@ -98,11 +94,6 @@ void peer_set_state(peer_t *peer, peer_state_t state);
  * \param protocol Whether or not the peer talks DTLS (not available with
  *                 \c DSRV_NO_PROTOCOL_DEMUX).
  * \return The new peer object or \c NULL if creation failed.
- *
- * \bug The SSL object is not initialized correctly because the very
- * first record (the Hello Verify request) was sent manually. This
- * causes retransmissions and potentially additional security flaws. I
- * am not sure how to fix this without breaking OpenSSL security.
  */
 peer_t *peer_new(struct sockaddr *raddr, int raddrlen, int ifindex
 #ifndef DSRV_NO_PROTOCOL_DEMUX
