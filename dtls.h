@@ -230,3 +230,99 @@ int dtls_handle_message(dtls_context_t *ctx, session_t *session,
 			uint8 *msg, int msglen);
 
 #endif /* _DTLS_H_ */
+
+/**
+ * @addtogroup dtls_usage DTLS Usage
+ *
+ * @section dtls_server_example DTLS Server Example
+ *
+ * This section shows how to use the DTLS library functions to setup a 
+ * simple secure UDP echo server. The application is responsible for the
+ * entire network communication and thus will look like a usual UDP
+ * server with socket creation and binding and a typical select-loop as
+ * shown below. The minimum configuration required for DTLS is the 
+ * creation of the dtls_context_t using dtls_new_context(), and a callback
+ * for sending data. Received packets are read by the application and
+ * passed to dtls_handle_message() as shown in @ref dtls_read_cb. 
+ * For any useful communication to happen, a read call back should be 
+ * registered as well. A shared secret is set by dtls_set_psk().
+ * 
+ * @code 
+ dtls_context_t *the_context = NULL;
+ int fd, result;
+
+ fd = socket(...);
+ if (fd < 0 || bind(fd, ...) < 0)
+   exit(-1);
+
+ the_context = dtls_new_context(&fd);
+ dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9);
+
+ dtls_set_cb(the_context, read_from_peer, read);
+ dtls_set_cb(the_context, send_to_peer, write);
+
+ while (1) {
+   ...initialize fd_set rfds and timeout ...
+   result = select(fd+1, &rfds, NULL, 0, NULL);
+    
+   if (FD_ISSET(fd, &rfds))
+     dtls_handle_read(the_context);
+ }
+
+ dtls_free_context(the_context);
+ * @endcode
+ * 
+ * @subsection dtls_read_cb The Read Callback
+ *
+ * The DTLS library expects received raw data to be passed to
+ * dtls_handle_message(). The application is responsible for
+ * filling a session_t structure with the address data of the
+ * remote peer as illustrated by the following example:
+ * 
+ * @code
+int dtls_handle_read(struct dtls_context_t *ctx) {
+  int *fd;
+  session_t session;
+  static uint8 buf[DTLS_MAX_BUF];
+  int len;
+
+  fd = dtls_get_app_data(ctx);
+
+  assert(fd);
+
+  session.rlen = sizeof(session.raddr);
+  len = recvfrom(*fd, buf, sizeof(buf), 0, &session.raddr.sa, &session.rlen);
+  
+  return len < 0 ? len : dtls_handle_message(ctx, &session, buf, len);
+}    
+ * @endcode 
+ * 
+ * Once a new DTLS session was established and DTLS ApplicationData has been
+ * received, the DTLS server invokes the read callback with the MAC-verified 
+ * cleartext data as its argument. A read callback for a simple echo server
+ * could look like this:
+ * @code
+void read_from_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, size_t len) {
+  dtls_write(ctx, session, data, len);
+}
+ * @endcode 
+ * 
+ * @subsection dtls_send_cb The Send Callback
+ * 
+ * The callback function send_to_peer() is called whenever data must be
+ * send over the network. Here, the sendto() system call is used to
+ * transmit data within the given session. The socket descriptor required
+ * by sendto() has been registered as application data when the DTLS context
+ * was created with dtls_new_context().
+ * Note that it is on the application to buffer the data when it cannot be
+ * sent at the time this callback is invoked. The following example thus
+ * is incomplete as it would have to deal with EAGAIN somehow.
+ * @code
+int send_to_peer(struct dtls_context_t *ctx, session_t *dst, uint8 *data, size_t len) {
+
+  int fd = *(int *)dtls_get_app_data(ctx);
+  return sendto(fd, data, len, MSG_DONTWAIT, &dst->raddr.sa, dst->rlen);
+}
+ * @endcode
+ */
+

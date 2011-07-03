@@ -30,7 +30,6 @@ try_send(struct dtls_context_t *ctx, session_t *dst) {
   int res;
   res = dtls_write(ctx, dst, (uint8 *)buf, len);
   if (res >= 0) {
-    fprintf(stderr, "res: %d (len: %d)\n", res, len);
     memmove(buf, buf + res, len - res);
     len -= res;
   }

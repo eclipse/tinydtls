@@ -1,6 +1,7 @@
 
 #ifndef DSRV_NO_DTLS
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -11,8 +12,9 @@
 #include <netdb.h>
 #include <signal.h>
 
-#include "debug.h" 
 #include "config.h" 
+#include "global.h" 
+#include "debug.h" 
 #include "dsrv.h" 
 
 #if 0
@@ -56,19 +58,17 @@ send_to_peer(struct dtls_context_t *ctx,
 
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
-  int fd;
+  int *fd;
   session_t session;
-#define MAX_READ_BUF 2000
-  static uint8 buf[MAX_READ_BUF];
+  static uint8 buf[DTLS_MAX_BUF];
   int len;
 
-  fd = *(int *)dtls_get_app_data(ctx);
-  
-  if (!fd)
-    return -1;
+  fd = dtls_get_app_data(ctx);
+
+  assert(fd);
 
   session.rlen = sizeof(session.raddr);
-  len = recvfrom(fd, buf, MAX_READ_BUF, 0, 
+  len = recvfrom(*fd, buf, sizeof(buf), 0, 
 		 &session.raddr.sa, &session.rlen);
   
   if (len < 0) {
