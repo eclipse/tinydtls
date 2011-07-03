@@ -48,7 +48,7 @@ typedef struct {
 #endif
 
 /** Maximum size of DTLS message */
-#define DTLS_MAX_BUF 128
+#define DTLS_MAX_BUF 256
 
 /** 
  * Known cipher suites. Note that the NULL suite is always available.
