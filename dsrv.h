@@ -90,12 +90,17 @@
  * \section Configuration
  * 
  * Use \c configure to set up everything for a successful build. In addition
- * to the well-known GNU configure options, there are two specific switches
+ * to the well-known GNU configure options, there are some specific switches
  * that affect what is included in the build:
  * 
  * \li \c --with-protocol-demux Add code for demuxing protocols, usually for
  *                      serving DTLS-crypted and clear-text requests over
  *                      the same UDP socket. (Enabled by default.)
+ * \li \c --without-debug Switch off debug outputs used for development.
+ * \li \c --with-dtls12 Build for DTLS 1.2. Note that this switches off support for DTLS 1.1. 
+ * \li \c --without-md5 Disables use of MD5 (MD5 is required for DTLS 1.1).
+ * \li \c --without-sha1 Disables use of SHA1 (SHA1 is required for DTLS 1.1).
+ * \li \c --without-sha256 Disables use of SHA256 (SHA256 is required for DTLS 1.2).
  * 
  * \section Building
  * 
@@ -112,36 +117,12 @@
  * 
  * \section Usage
  * 
- * An example how to use this library is contained in \c
- * tests/dtls-test.c. It starts a simple server that accepts
+ * An example how to use the bare DTLS code is contained in
+ * @c tests/dtls-server.c. It starts a simple server that accepts
  * "connections" from remote peers and echos any data that it
- * receives. Basically, you have to create a new server context using
- * dsrv_new_context(). Then, register a callback function for received
- * data with drsv_set_cb(). 
- * To run the server, just call dsrv_run(). Cleanup is done with
- * dsrv_free_context().
- * \code
-void peer_handle_read(dsrv_context_t *ctx, peer_t *peer, char *buf, int len);
-void peer_timeout(struct dsrv_context_t *ctx);
-
-int main(int argc, char **argv) {
-  struct sockaddr_in6 listen_addr = { AF_INET6, htons(40000), 0, IN6ADDR_ANY_INIT, 0 };
-  static dsrv_context_t *ctx;
-
-  ctx = dsrv_new_context((struct sockaddr *)&listen_addr, sizeof(listen_addr), 2000,2000);
-
-  if (ctx) {
-    dsrv_set_cb(ctx, peer_timeout, timeout);
-    dsrv_set_cb(ctx, peer_handle_read, read);
-
-    dsrv_run(ctx);
-
-    dsrv_free_context(ctx);
-  }
-
-  exit(0);
-}
- * \endcode
+ * receives, A simple client is also included in 
+ * @c tests/dtls-client.c to show the client part.
+ * Please refer to @ref dtls_susage for more information.
  *
  * \subsection testing Use OpenSSL for Testing
  * 
@@ -150,36 +131,6 @@ int main(int argc, char **argv) {
  * openssl s_client -dtls1 -servername $HOST -port $PORT  -cipher $CIPHER -psk $PSK
  * \endcode
  * 
- * \subsection demux Protocol Demultiplexing
- * 
- * Sometimes it may be necessary to detect if a received packet is a
- * DTLS record or not, e.g. when the listen port is used for STUN
- * (other examples include the multiplexing of secure and non-secure
- * RADIUS or COAP messages on a single port). The server therefore can
- * ask the application via call-back to classify the initial packet
- * received from a new peer. The called function must return a valid
- * protocol_t value to indicate if the subsequent traffic must be
- * crypted (\c DTLS) or is sent in clear (\c RAW). When the function
- * returns \c DISCARD, the packet is dropped.
- * 
- * Example usage is:
- * \code
-protocol_t demux_protocol(struct sockaddr *raddr, socklen_t rlen, int ifindex, char *buf, int len) {
-  return (buf[0] & 0xfc) == 0x14 ? DTLS : RAW;
-}
- * \endcode
- * and in the main function, set the callback:
- * \code
-dsrv_set_cb(ctx, demux_protocol, demux);
- * \endcode
- *
- * In this example, a valid PDU of the application protocol never
- * begins with a value from \c 0x14 to \c 0x17, the possible set of
- * initial bytes of DTLSv1.1 or DTLSv1.2. This is valid for any
- * test-based protocol and a few binary protocols such as COAP
- * (c.f. <a
- * href="http://tools.ietf.org/html/draft-ietf-core-coap-06#section-7.3">draft-ietf-core-coap-06</a>).
- *
  * \section join Get Involved
  *
  * To join this project, please contact the project administrators of this project, 
