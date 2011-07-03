@@ -1,8 +1,8 @@
 CONTENTS 
 
 This library contains functions and structures that can help
-constructing a single-threaded UDP server in C99. The following
-components are available:
+constructing a single-threaded UDP server with DTLS support in
+C99. The following components are available:
 
 * netq: 
   Simple network packet queue.
@@ -15,7 +15,10 @@ components are available:
   The subdirectory tests contains test programs that show how each
   component is used. 
 
+* dtls
+  Basic support for DTLS with pre-shared key mode.
+
 BUILDING
 
-Just type make and wait until compilation is complete.
+First configure and then make and wait until compilation is complete.
  
