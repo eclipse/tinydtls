@@ -65,8 +65,8 @@ distclean:	clean
 	@rm -f *~ $(DISTDIR).tar.gz
 
 dist:	$(FILES)
-	test -d $(DISTDIR)/sha1 || mkdir $(DISTDIR)/sha1
-	cp -p $(FILES) $(DISTDIR)/sha1
+	test -d $(DISTDIR)/md5 || mkdir $(DISTDIR)/md5
+	cp -p $(FILES) $(DISTDIR)/md5
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
