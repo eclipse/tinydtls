@@ -662,15 +662,6 @@ dtls_new_peer(dtls_context_t *ctx,
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
-    /* Initialize sequence number for first "real" message. (Need this
-     * because dtls_peer_t objects are created only after successful
-     * ClientHello verification, i.e. a HelloVerify request with
-     * sequence number 0 preceeded the first message sent within the
-     * new security context. Whenever a ChangeCipherSpec is handled,
-     * the sequence number is reset to zero.)
-     */
-    peer->rseq[5] = 1;
-
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = -1;
 
@@ -1085,15 +1076,16 @@ dtls_send_css(dtls_context_t *ctx, dtls_peer_t *peer) {
 int 
 dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer, int is_client) {
   uint8 *p = ctx->sendbuf;
-  size_t size;
+  size_t size = ctx->psk_id_length + sizeof(uint16);
   int ht = is_client 
     ? DTLS_HT_CLIENT_KEY_EXCHANGE 
     : DTLS_HT_SERVER_KEY_EXCHANGE;
 
-  /* @todo fill psk_identity */
-  size = 0;
-
   p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
+
+  dtls_int_to_uint16(p, ctx->psk_id_length);
+  memcpy(p + sizeof(uint16), ctx->psk_id, ctx->psk_id_length);
+  p += size;
 
   update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
   return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
@@ -1796,6 +1788,11 @@ dtls_handle_message(dtls_context_t *ctx,
       return -1;
     }
 
+    /* Initialize record sequence number to 1 for new peers. The first
+     * record with sequence number 0 is a stateless Hello Verify Request.
+     */
+    peer->rseq[5] = 1;
+
     /* First negotiation step: check for PSK
      *
      * Note that we already have checked that msg is a Handshake
@@ -1927,19 +1924,39 @@ dtls_new_context(void *app_data) {
 }
 
 int
-dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length) {
+dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length,
+	     unsigned char *psk_identity, size_t id_length) {
   if (ctx->psk)
     free(ctx->psk);
 
   ctx->psk = (unsigned char *)malloc(length);
-  if (!ctx->psk) {
-    ctx->psk_length = 0;
-    return 0;
-  }
+  if (!ctx->psk) 
+    goto error;
 
   ctx->psk_length = length;
   memcpy(ctx->psk, psk, ctx->psk_length);
+
+  if (ctx->psk_id)
+    free(ctx->psk_id);
+
+  ctx->psk_id = (unsigned char *)malloc(length);
+  if (!ctx->psk_id)
+    goto error;
+  
+  ctx->psk_id_length = id_length;
+  memcpy(ctx->psk_id, psk_identity, ctx->psk_id_length);
   return 1;
+
+error:				/* clean up in case of error */
+  free(ctx->psk);
+  ctx->psk = NULL;
+  ctx->psk_length = 0;
+
+  free(ctx->psk_id);
+  ctx->psk_id = NULL;
+  ctx->psk_id_length = 0;
+  
+  return 0;
 }
 
 void dtls_free_context(dtls_context_t *ctx) {
@@ -1973,7 +1990,6 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
   }
 
   peer = dtls_new_peer(ctx, dst);
-  peer->rseq[5] = 0;
 
   /* set peer role to server: */
   OTHER_CONFIG(peer)->role = 1;
@@ -1991,7 +2007,9 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
    */
   size = DTLS_CH_LENGTH + 8;
 
-  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, peer, 
+  /* force sending 0 as handshake message sequence number by setting
+   * peer to NULL */
+  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, NULL, 
 				size, 0, size, p);
 
   dtls_int_to_uint16(p, DTLS_VERSION);

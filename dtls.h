@@ -103,6 +103,9 @@ typedef struct dtls_context_t {
   unsigned char *psk; /**< pre-shared key (set with dtls_set_psk()) */
   size_t psk_length;  /**< length of psk  */
 
+  unsigned char *psk_id; /**< psk identity (set with dtls_set_psk()) */
+  size_t psk_id_length;  /**< length of psk identity  */
+
   unsigned char readbuf[DTLS_MAX_BUF];
   unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
@@ -207,9 +210,18 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
 #endif
 
 /**
- * Sets the pre-shared key for context \p ctx. 
+ * Sets the pre-shared key for context @p ctx. This function returns @c 1
+ * when the @p psk and @p psk_id have been stored in @p ctx. In case of
+ * error (most likely due to insufficient memory), @c 0 as returned.
+ * 
+ * @param psk     The pre-shared key to be used.
+ * @param length  Length of @p psk.
+ * @param psk_id  The identity to use with @p psk.
+ * @param id_length Length of @p psk_id.
+ * @return @c 1 if psk and psk_id have been set, @c 0 otherwise.
  */
-int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length);
+int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length,
+		 unsigned char *psk_id, size_t id_length);
 
 /** 
  * Retrieves a pointer to the cookie contained in a Client Hello message.

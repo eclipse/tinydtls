@@ -122,7 +122,8 @@ main(int argc, char **argv) {
   }
 
   the_context = dtls_new_context(&fd);
-  dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9);
+  dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9,
+	       (unsigned char *)"Client_identity", 15);
 
   dtls_set_cb(the_context, read_from_peer, read);
   dtls_set_cb(the_context, send_to_peer, write);
