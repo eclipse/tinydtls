@@ -34,7 +34,6 @@
 #include <stdint.h>
 
 #include "uthash.h"
-#include "peer.h"
 #include "crypto.h"
 
 #ifndef DTLSv12
@@ -90,7 +89,7 @@ typedef struct {
 /** Holds global information of the DTLS engine. */
 typedef struct dtls_context_t {
   unsigned char cookie_secret[DTLS_COOKIE_SECRET_LENGTH];
-  time_t cookie_secret_age;	/**< the time the secret has been generated */
+  clock_time_t cookie_secret_age; /**< the time the secret has been generated */
 
   dtls_peer_t *peers;		/**< hash table to manage peer status */
 

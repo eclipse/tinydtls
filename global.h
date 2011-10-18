@@ -32,6 +32,15 @@
 
 #include <sys/types.h>
 
+#include "uip.h"
+typedef struct {
+  int rlen;
+  uip_ipaddr_t raddr;
+  unsigned short rport;
+  int ifindex;
+} __uip_session_t;
+#define session_t __uip_session_t
+
 /* Define our own types as at least uint32_t does not work on my amd64. */
 
 typedef unsigned char uint8;

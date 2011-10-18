@@ -34,7 +34,9 @@
 #ifndef _PEER_H_
 #define _PEER_H_
 
+#ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
+#endif
 
 #include "uthash.h"
 

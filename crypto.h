@@ -309,8 +309,14 @@ void dtls_init_cipher(dtls_cipher_context_t *ctx,
  */
 static inline int
 prng_impl(unsigned char *buf, size_t len) {
-  while (len--)
-    *buf++ = rand() & 0xFF;
+  unsigned short v = random_rand();
+  while (len > sizeof(v)) {
+    memcpy(buf, &v, sizeof(v));
+    len -= sizeof(v);
+    buf += sizeof(v);
+  }
+
+  memcpy(buf, &v, len);
   return 1;
 }
 
@@ -330,7 +336,7 @@ prng_impl(unsigned char *buf, size_t len) {
  *
  * \hideinitializer
  */
-#define prng_init(Value) srand((unsigned long)(Value))
+#define prng_init(Value) random_init((unsigned short)(Value))
 #endif
 
 #endif /* _CRYPTO_H_ */

@@ -44,10 +44,12 @@ extern void dump(unsigned char *, size_t);
  */
 const dtls_cipher_t ciphers[] = {
 #ifdef TLS_PSK_WITH_AES_128_CBC_SHA
+#ifdef WITH_SHA1
   { TLS_PSK_WITH_AES_128_CBC_SHA, AES_BLKLEN, 16, HASH_SHA1, 20, 20, 16 },
 #else
 #error "TLS_PSK_WITH_AES_128_CBC_SHA not defined!"
-#endif
+#endif /* WITH_SHA1 */
+#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
 
   /* \todo: add TLS_PSK_WITH_AES_128_CCM_8 */
 

@@ -25,7 +25,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <assert.h>
 
 #include "debug.h"
@@ -667,6 +666,7 @@ dtls_new_peer(dtls_context_t *ctx,
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
 #if DTLS_VERSION == 0xfeff
+    debug("DTLSv11: initialize HASH_MD5 (%d) and HASH_SHA1 (%d)\n", HASH_MD5, HASH_SHA1);
     /* TLS 1.0: PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
                                            P_SHA-1(S2, label + seed); */
     peer->hs_hash[0] = dtls_new_hash(HASH_MD5);
@@ -675,11 +675,14 @@ dtls_new_peer(dtls_context_t *ctx,
     peer->hs_hash[0]->init(peer->hs_hash[0]->data);
     peer->hs_hash[1]->init(peer->hs_hash[1]->data);
 #elif DTLS_VERSION == 0xfefd
+    debug("DTLSv12: initialize HASH_SHA256 (%d)\n", HASH_SHA256);
     /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
     /* FIXME: we use the default SHA256 here, might need to support other 
               hash functions as well */
     peer->hs_hash[0] = dtls_new_hash(HASH_SHA256);
     peer->hs_hash[0]->init(peer->hs_hash[0]->data);
+#else
+#error "unknown DTLS_VERSION"
 #endif
   }
   
@@ -865,6 +868,8 @@ dtls_prepare_record(dtls_peer_t *peer,
 
       dtls_int_to_uint16(sendbuf + 11, data_length);
 
+      debug("prepare_record(): use mac algorithm %d\n", 
+	    dtls_kb_mac_algorithm(CURRENT_CONFIG(peer)));
       dtls_hmac_init(&hmac_ctx, 
 		     dtls_kb_local_mac_secret(CURRENT_CONFIG(peer)),
 		     dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)),
@@ -1475,7 +1480,9 @@ decrypt_verify(dtls_peer_t *peer,
 
       unsigned char mac[DTLS_HMAC_MAX];
       dtls_hmac_context_t hmac_ctx;
-
+      
+      debug("decrypt_verify(): use mac algorithm %d\n", 
+	    dtls_kb_mac_algorithm(CURRENT_CONFIG(peer)));
       dtls_hmac_init(&hmac_ctx, 
 		     dtls_kb_remote_mac_secret(CURRENT_CONFIG(peer)),
 		     dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)),
@@ -1900,7 +1907,7 @@ dtls_context_t *
 dtls_new_context(void *app_data) {
   dtls_context_t *c;
 
-  prng_init(app_data);
+  prng_init(clock_time()); /* FIXME: need something better to init PRNG here */
 
   c = (dtls_context_t *)malloc(sizeof(dtls_context_t));
   if (!c)
@@ -1910,7 +1917,7 @@ dtls_new_context(void *app_data) {
   c->app = app_data;
   
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
-    time(&c->cookie_secret_age);
+    c->cookie_secret_age = clock_time();
   else 
     goto error;
   
@@ -2016,7 +2023,7 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
   p += sizeof(uint16);
   prng(OTHER_CONFIG(peer)->client_random, 
        sizeof(OTHER_CONFIG(peer)->client_random));
-  dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, time(NULL));
+  dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
   memcpy(p, OTHER_CONFIG(peer)->client_random, 
 	 sizeof(OTHER_CONFIG(peer)->client_random));
   p += 32;
