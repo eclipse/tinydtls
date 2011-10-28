@@ -1946,7 +1946,7 @@ dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length,
   if (ctx->psk_id)
     free(ctx->psk_id);
 
-  ctx->psk_id = (unsigned char *)malloc(length);
+  ctx->psk_id = (unsigned char *)malloc(id_length);
   if (!ctx->psk_id)
     goto error;
   
