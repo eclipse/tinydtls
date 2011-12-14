@@ -31,6 +31,12 @@
 #include "numeric.h"
 #include "dtls.h"
 
+#if DTLS_VERSION == 0xfeff && (!defined(WITH_MD5) || !defined(WITH_SHA1))
+# error DTLS version 1.1 requires WITH_MD5 and WITH_SHA1
+#elif DTLS_VERSION == 0xfefd && !defined(WITH_SHA256)
+# error DTLS version 1.2 requires WITH_SHA256
+#endif
+
 #ifdef WITH_MD5
 #  include "md5/md5.h"
 #endif
