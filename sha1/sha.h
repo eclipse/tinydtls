@@ -32,8 +32,10 @@ extern "C" {
 #endif
 
 #ifndef WORDS_BIGENDIAN
-/* Define this if your machine is LITTLE_ENDIAN, otherwise #undef it: */
+# ifndef LITTLE_ENDIAN
+  /* Define this if your machine is LITTLE_ENDIAN, otherwise #undef it: */
 #  define LITTLE_ENDIAN
+# endif /* LITTLE_ENDIAN */
 #endif
 
 /* Make sure you define these types for your architecture: */
