@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,211 +28,155 @@
 #include <string.h>
 #include <assert.h>
 
-#define DTLS_HMAC_BLOCKSIZE 64
-#define DTLS_HMAC_MAX       64
-
-/** L. Peter Deutsch's MD5 implementation, 
- *  see http://libmd5-rfc.sourceforge.net/ */
-#ifdef WITH_MD5
-#  include "md5/md5.h"
-#endif
-
-/** Aaron D. Gifford's implementation of SHA1 and SHA256
- *  see http://www.aarongifford.com/ */
-#ifdef WITH_SHA1
-#  include "sha1/sha.h"
-#endif
-
-#if defined(WITH_SHA256) || defined(WITH_SHA384) || defined(WITH_SHA512)
-#  include "sha2/sha2.h"
-#endif
-
 #include "debug.h"
-
 #include "hmac.h"
 
-#ifdef WITH_MD5
-void 
-h_md5_init(void *ctx) {
-  md5_init((md5_state_t *)ctx);
-}
-
-void 
-h_md5_update(void *ctx, const unsigned char *input, size_t len) {
-  md5_append((md5_state_t *)ctx, input, len);
-}
-
-size_t
-h_md5_finalize(unsigned char *buf, void *ctx) {
-  md5_finish((md5_state_t *)ctx, buf);
-  return 16;			/* length of MD5 digest */
-}
-#endif
-
-#ifdef WITH_SHA1
-void 
-h_sha_init(void *ctx) {
-  SHA1_Init((SHA_CTX *)ctx);
-}
-
-void 
-h_sha_update(void *ctx, const unsigned char *input, size_t len) {
-  SHA1_Update((SHA_CTX *)ctx, (sha1_byte *)input, len);
-}
-
-size_t
-h_sha_finalize(unsigned char *buf, void *ctx) {
-  SHA1_Final(buf, (SHA_CTX *)ctx);
-  return SHA1_DIGEST_LENGTH;
-}
-#endif
-
+/** Aaron D. Gifford's implementation of SHA256
+ *  see http://www.aarongifford.com/ */
 #ifdef WITH_SHA256
-void 
-h_sha256_init(void *ctx) {
+#  include "sha2/sha2.h"
+
+#define DTLS_HASH_CTX_SIZE sizeof(SHA256_CTX)
+
+static inline void
+dtls_hash_init(void *ctx) {
   SHA256_Init((SHA256_CTX *)ctx);
 }
 
-void 
-h_sha256_update(void *ctx, const unsigned char *input, size_t len) {
+static inline void 
+dtls_hash_update(void *ctx, const unsigned char *input, size_t len) {
   SHA256_Update((SHA256_CTX *)ctx, input, len);
 }
 
-size_t
-h_sha256_finalize(unsigned char *buf, void *ctx) {
+static inline size_t
+dtls_hash_finalize(unsigned char *buf, void *ctx) {
   SHA256_Final(buf, (SHA256_CTX *)ctx);
   return SHA256_DIGEST_LENGTH;
 }
-#endif /* WITH_SHA1 */
+#endif /* WITH_SHA256 */
+
+/* use malloc()/free() on platforms other than Contiki */
+#ifndef WITH_CONTIKI
+static inline dtls_hmac_context_t *
+dtls_hmac_context_new() {
+  return (dtls_hmac_context_t *)malloc(DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
+}
+
+static inline void
+dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
+  free(ctx);
+}
+
+#else /* WITH_CONTIKI */
+#include "memb.h"
+
+typedef unsigned char _hmac_context_buffer_t[DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE];
+MEMB(hmac_context_storage, _hmac_context_buffer_t, DTLS_HASH_MAX);
+
+void
+dtls_hmac_storage_init() {
+  memb_init(&hmac_context_storage);
+}
+
+static inline dtls_hmac_context_t *
+dtls_hmac_context_new() {
+  return (dtls_hmac_context_t *)memb_alloc(&hmac_context_storage);
+}
+
+static inline void
+dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
+  memb_free(&hmac_context_storage, ctx);
+}
+#endif /* WITH_CONTIKI */
+
 
 void
 dtls_hmac_update(dtls_hmac_context_t *ctx,
 		 const unsigned char *input, size_t ilen) {
   assert(ctx);
-  assert(ctx->H);
-
-  ctx->H->update(ctx->H->data, input, ilen);
+  dtls_hash_update(ctx->data, input, ilen);
 }
 
-dtls_hash_t *
-dtls_new_hash(dtls_hashfunc_t h) {
-  dtls_hash_t *H = NULL;
-  
-  switch(h) {
-#ifdef WITH_MD5
-  case HASH_MD5:
-    H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(md5_state_t));
-    if (H) {
-      H->data = ((char *)H) + sizeof(dtls_hash_t);
-      H->init = h_md5_init;
-      H->update = h_md5_update;
-      H->finalize = h_md5_finalize;
-    } 
-    break;
-#endif
-#ifdef WITH_SHA1
-  case HASH_SHA1:
-    H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA_CTX));
-    if (H) {
-      H->data = ((char *)H) + sizeof(dtls_hash_t);
-      H->init = h_sha_init;
-      H->update = h_sha_update;
-      H->finalize = h_sha_finalize;
-    } 
-    break;
-#endif
-#ifdef WITH_SHA256
-  case HASH_SHA256:
-    H = (dtls_hash_t *)malloc(sizeof(dtls_hash_t) + sizeof(SHA256_CTX));
-    if (H) {
-      H->data = ((char *)H) + sizeof(dtls_hash_t);
-      H->init = h_sha256_init;
-      H->update = h_sha256_update;
-      H->finalize = h_sha256_finalize;
-    } 
-    break;
-#endif
-  default:
-    dsrv_log(LOG_CRIT, "unknown hash function %d\n", h);
-  }
-  
-  if (!H)
-    dsrv_log(LOG_CRIT, "cannot create hash function %d\n", h);
-
-  return H;
-}
-
-int
-dtls_hmac_init(dtls_hmac_context_t *ctx,
-	       unsigned char *key, size_t klen,
-	       dtls_hashfunc_t h) {
+dtls_hmac_context_t *
+dtls_hmac_new(unsigned char *key, size_t klen) {
   int i;
-  assert(ctx);
+  dtls_hmac_context_t *ctx;
 
-  ctx->H = dtls_new_hash(h);
-  if (!ctx->H)
-    return -1;
+  ctx = dtls_hmac_context_new();
+  if (!ctx)
+    return NULL;
 
-  memset(ctx->ipad, 0, DTLS_HMAC_BLOCKSIZE);
+  memset(ctx, 0, DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
 
   if (klen > DTLS_HMAC_BLOCKSIZE) {
-    ctx->H->init(ctx->H->data);
-    ctx->H->update(ctx->H->data, key, klen);
-    ctx->H->finalize(ctx->ipad, ctx->H->data);
+    dtls_hash_init(ctx->data);
+    dtls_hash_update(ctx->data, key, klen);
+    dtls_hash_finalize(ctx->pad, ctx->data);
   } else
-    memcpy(ctx->ipad, key, klen);
+    memcpy(ctx->pad, key, klen);
 
-  memcpy(ctx->opad, ctx->ipad, DTLS_HMAC_BLOCKSIZE);
+  /* create ipad: */
+  for (i=0; i < DTLS_HMAC_BLOCKSIZE; ++i)
+    ctx->pad[i] ^= 0x36;
 
-  for (i=0; i < DTLS_HMAC_BLOCKSIZE; ++i) {
-    ctx->ipad[i] ^= 0x36;
-    ctx->opad[i] ^= 0x5C;
-  }
+  dtls_hash_init(ctx->data);
+  dtls_hmac_update(ctx, ctx->pad, DTLS_HMAC_BLOCKSIZE);
 
-  ctx->H->init(ctx->H->data);
-  dtls_hmac_update(ctx, ctx->ipad, DTLS_HMAC_BLOCKSIZE);
-  return 1;
+  /* create opad by xor-ing pad[i] with 0x36 ^ 0x5C: */
+  for (i=0; i < DTLS_HMAC_BLOCKSIZE; ++i)
+    ctx->pad[i] ^= 0x6A;
+
+  return ctx;
+}
+
+void
+dtls_hmac_free(dtls_hmac_context_t *ctx) {
+  ctx = dtls_hmac_context_free(ctx);
 }
 
 int
 dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
-  unsigned char buf[DTLS_HMAC_MAX];
+  unsigned char buf[DTLS_HMAC_DIGEST_SIZE];
   size_t len; 
 
   assert(ctx);
   assert(result);
   
-  len = ctx->H->finalize(buf, ctx->H->data);
+  len = dtls_hash_finalize(buf, ctx->data);
 
-  ctx->H->init(ctx->H->data);
-  ctx->H->update(ctx->H->data, ctx->opad, DTLS_HMAC_BLOCKSIZE);
-  ctx->H->update(ctx->H->data, buf, len);
+  dtls_hash_init(ctx->data);
+  dtls_hash_update(ctx->data, ctx->pad, DTLS_HMAC_BLOCKSIZE);
+  dtls_hash_update(ctx->data, buf, len);
 
-  len = ctx->H->finalize(result, ctx->H->data);
+  len = dtls_hash_finalize(result, ctx->data);
 
-  free(ctx->H);
   return len;
 }
 
 #ifdef HMAC_TEST
-int main(int argc, char **argv) {
-  static unsigned char key[] = { 0x0b, 0x0b, 0x0b, 0x0b, 
-				 0x0b, 0x0b, 0x0b, 0x0b, 
-				 0x0b, 0x0b, 0x0b, 0x0b, 
-				 0x0b, 0x0b, 0x0b, 0x0b };
-  static unsigned char text[] = { 'H', 'i', ' ', 'T', 'h', 'e', 'r', 'e' };
-  static unsigned char buf[DTLS_HMAC_MAX];
-  size_t len, i;
-  dtls_hmac_context_t hmac_ctx;
+#include <stdio.h>
 
-  dtls_hmac_init(&hmac_ctx, key, sizeof(key), HASH_MD5);
-  dtls_hmac_update(&hmac_ctx, text, sizeof(text));
+int main(int argc, char **argv) {
+  static unsigned char buf[DTLS_HMAC_DIGEST_SIZE];
+  size_t len, i;
+  dtls_hmac_context_t *ctx;
+
+  if (argc < 3) {
+    fprintf(stderr, "usage: %s key text", argv[0]);
+    return -1;
+  }
+
+  ctx = dtls_hmac_new(argv[1], strlen(argv[1]));
+  assert(ctx);
+  dtls_hmac_update(ctx, argv[2], strlen(argv[2]));
   
-  len = dtls_hmac_finalize(&hmac_ctx, buf);
+  len = dtls_hmac_finalize(ctx, buf);
 
   for(i = 0; i < len; i++) 
     printf("%02x", buf[i]);
   printf("\n");
+
+  dtls_hmac_free(ctx);
 
   return 0;
 }

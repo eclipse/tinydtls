@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -30,8 +30,16 @@
 
 #include "global.h"
 
-#define DTLS_HMAC_BLOCKSIZE 64	/**< size of hmac blocks */
-#define DTLS_HMAC_MAX       64	/**< max number of bytes in digest */
+/**
+ * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
+ * NIST Standard FIPS 198 describes the Keyed-Hash Message Authentication 
+ * Code (HMAC) which is used as hash function for the DTLS PRF.
+ * @{
+ */
+
+#define DTLS_HMAC_BLOCKSIZE   64	/**< size of hmac blocks */
+#define DTLS_HMAC_DIGEST_SIZE 32	/**< digest size (for SHA-256) */
+#define DTLS_HMAC_MAX         64	/**< max number of bytes in digest */
 
 /**
  * List of known hash functions for use in dtls_hmac_init(). The
@@ -45,23 +53,6 @@ typedef enum {
 } dtls_hashfunc_t;
 
 /**
- * Description of hash function. The context object is carried in \c
- * data, \c init, \c update, and \c finalize reflect the typical
- * multi-stage API of hash operations, see e.g. RFC 1321. */
-typedef struct {
-  void *data;
-  void (*init)(void *);
-  void (*update)(void *, const unsigned char *, size_t);
-  size_t (*finalize)(unsigned char *, void *);
-} dtls_hash_t;
-
-/** 
- * Creates a new hash object for hash function \p h. The storage that
- * is allocated for this object must be freed manually.
- */
-dtls_hash_t *dtls_new_hash(dtls_hashfunc_t h);
-
-/**
  * Context for HMAC generation. This object is initialized with
  * dtls_hmac_init() and must be passed to dtls_hmac_update() and
  * dtls_hmac_finalize(). Once, finalized, the component \c H is
@@ -69,28 +60,29 @@ dtls_hash_t *dtls_new_hash(dtls_hashfunc_t h);
  * the structure can be used again. 
  */
 typedef struct {
-  unsigned char ipad[DTLS_HMAC_BLOCKSIZE];
-  unsigned char opad[DTLS_HMAC_BLOCKSIZE];
-
-  dtls_hash_t *H;
+  unsigned char pad[DTLS_HMAC_BLOCKSIZE]; /**< ipad and opad storage */
+  unsigned char data[];	                  /**< context for hash function */
 } dtls_hmac_context_t;
 
 /**
- * Initializes the HMAC context \p ctx with the given secret key and
- * the specified hash function. This function returns \c 1 if \c ctx
- * has been set correctly, or \c 0 or \c -1 otherwise. Note that this
- * function allocates new storage for the hash context which is
- * released by dtls_hmac_finalize().
+ * Allocates a new HMAC context \p ctx with the given secret key.
+ * This function returns \c 1 if \c ctx has been set correctly, or \c
+ * 0 or \c -1 otherwise. Note that this function allocates new storage
+ * that must be released by dtls_hmac_free().
  *
- * \param ctx    The HMAC context to initialize.
  * \param key    The secret key.
  * \param klen   The length of \p key.
- * \param h      The actual hash function to use.
- * \return 1 on success, <= 0 otherwise.
+ * \return A new dtls_hmac_context_t object or @c NULL on error
  */
-int dtls_hmac_init(dtls_hmac_context_t *ctx,
-		   unsigned char *key, size_t klen,
-		   dtls_hashfunc_t h);
+dtls_hmac_context_t *dtls_hmac_new(unsigned char *key, size_t klen);
+
+/**
+ * Releases the storage for @p ctx that has been allocated by
+ * dtls_hmac_new().
+ *
+ * @param ctx The dtls_hmac_context_t to free. 
+ */
+void dtls_hmac_free(dtls_hmac_context_t *ctx);
 
 /**
  * Updates the HMAC context with data from \p input. 
@@ -107,15 +99,14 @@ void dtls_hmac_update(dtls_hmac_context_t *ctx,
  * output parameter \c result. The buffer must be large enough to hold
  * the message digest created by the actual hash function. If in
  * doubt, use \c DTLS_HMAC_MAX. The function returns the number of
- * bytes written to \c result. As this function releases internal
- * storage that was allocated for the hash function, it must be called
- * exactly once whenever dtls_hmac_init() has been called.
- *
+ * bytes written to \c result. 
  *
  * \param ctx    The HMAC context.
  * \param result Output parameter where the MAC is written to.
  * \return Length of the MAC written to \p result.
  */
 int dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result);
+
+/**@}*/
 
 #endif /* _HMAC_H_ */
