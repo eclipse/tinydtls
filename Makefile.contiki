@@ -27,6 +27,8 @@ LDFLAGS += -Wl,--gc-sections,--undefined=_reset_vector__,--undefined=InterruptVe
 
 CFLAGS += -DUIP_CONF_TCP=0
 
-APPS += dtls/aes dtls/sha2 dtls/sha1 dtls/md5 dtls
+APPS += tinydtls/aes tinydtls/sha2 tinydtls
+
+ccm-test: tests/ccm-test
 
 include $(CONTIKI)/Makefile.include
