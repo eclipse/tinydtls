@@ -65,6 +65,15 @@ typedef struct {
 } dtls_hmac_context_t;
 
 /**
+ * Initializes an existing HMAC context. 
+ *
+ * @param ctx The HMAC context to initialize.
+ * @param key    The secret key.
+ * @param klen   The length of @p key.
+ */
+void dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen);
+
+/**
  * Allocates a new HMAC context \p ctx with the given secret key.
  * This function returns \c 1 if \c ctx has been set correctly, or \c
  * 0 or \c -1 otherwise. Note that this function allocates new storage
@@ -74,7 +83,16 @@ typedef struct {
  * \param klen   The length of \p key.
  * \return A new dtls_hmac_context_t object or @c NULL on error
  */
-dtls_hmac_context_t *dtls_hmac_new(unsigned char *key, size_t klen);
+static inline dtls_hmac_context_t *
+dtls_hmac_new(unsigned char *key, size_t klen) {
+  dtls_hmac_context_t *ctx;
+
+  ctx = dtls_hmac_context_new();
+  if (ctx)
+    dtls_hmac_init(ctx, key, klen);
+
+  return ctx;
+};
 
 /**
  * Releases the storage for @p ctx that has been allocated by

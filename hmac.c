@@ -57,6 +57,8 @@ dtls_hash_finalize(unsigned char *buf, void *ctx) {
 
 /* use malloc()/free() on platforms other than Contiki */
 #ifndef WITH_CONTIKI
+#define dtls_hmac_storage_init
+
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
   return (dtls_hmac_context_t *)malloc(DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
@@ -97,14 +99,11 @@ dtls_hmac_update(dtls_hmac_context_t *ctx,
   dtls_hash_update(ctx->data, input, ilen);
 }
 
-dtls_hmac_context_t *
-dtls_hmac_new(unsigned char *key, size_t klen) {
+void
+dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {
   int i;
-  dtls_hmac_context_t *ctx;
 
-  ctx = dtls_hmac_context_new();
-  if (!ctx)
-    return NULL;
+  assert(ctx);
 
   memset(ctx, 0, DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
 
@@ -125,8 +124,6 @@ dtls_hmac_new(unsigned char *key, size_t klen) {
   /* create opad by xor-ing pad[i] with 0x36 ^ 0x5C: */
   for (i=0; i < DTLS_HMAC_BLOCKSIZE; ++i)
     ctx->pad[i] ^= 0x6A;
-
-  return ctx;
 }
 
 void
@@ -166,6 +163,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  dtls_hmac_storage_init();
   ctx = dtls_hmac_new(argv[1], strlen(argv[1]));
   assert(ctx);
   dtls_hmac_update(ctx, argv[2], strlen(argv[2]));
