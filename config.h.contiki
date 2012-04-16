@@ -26,22 +26,40 @@
 #  define DTLS_PEER_MAX 4
 #endif
 
+/** The maximum buffer size to hold DTLS messagesg */
+#define DTLS_MAX_BUF 80
+
 #include "contiki-conf.h"
 
 #if defined(PLATFORM) && PLATFORM == PLATFORM_MC1322X
 /* Redbee econotags get a special treatment here: endianness is set
- * explicitly, and assert() is defined as emtpy directive unless
- * HAVE_ASSERT_H is given.
+ * explicitly, and 
  */ 
-#define HAVE_ASSERT_H
 
-/* #define BYTE_ORDER UIP_LITTLE_ENDIAN */
+#define BYTE_ORDER UIP_LITTLE_ENDIAN
 
-#ifndef HAVE_ASSERT_H
-# define assert(x)
-#endif
-
+#undef HAVE_ASSERT_H
+#define HAVE_UNISTD_H
 #endif /* defined(PLATFORM) && PLATFORM == PLATFORM_MC1322X */
+
+#ifdef CONTIKI_TARGET_MBXXX
+/* ST Microelectronics */ 
+
+#define BYTE_ORDER 1234
+#endif /* CONTIKI_TARGET_MBXXX */
+
+#ifdef CONTIKI_TARGET_MINIMAL_NET
+#define HAVE_ASSERT_H
+#endif /* CONTIKI_TARGET_MBXXX */
+
+#if defined(TMOTE_SKY)
+/* Need to set the byte order for TMote Sky explicitely */
+
+#define BYTE_ORDER UIP_LITTLE_ENDIAN
+
+typedef int ssize_t;
+#undef HAVE_ASSERT_H
+#endif /* defined(TMOTE_SKY) */
 
 #ifndef BYTE_ORDER
 # ifdef UIP_CONF_BYTE_ORDER
