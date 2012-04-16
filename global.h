@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -26,20 +26,80 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
+
+#ifdef HAVE_ASSERT_H
+#include <assert.h>
+#else
+#ifndef assert
+#warning "assertions are disabled"
+#  define assert(x)
+#endif
 #endif
 
+#include <string.h>
 #include <sys/types.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
 
+#ifdef WITH_CONTIKI
 #include "uip.h"
 typedef struct {
-  int rlen;
-  uip_ipaddr_t raddr;
-  unsigned short rport;
+  unsigned char size;
+  uip_ipaddr_t addr;
+  unsigned short port;
   int ifindex;
 } __uip_session_t;
 #define session_t __uip_session_t
+
+#define _dtls_address_equals_impl(A,B)				\
+  ((A)->size == (B)->size					\
+   && (A)->port == (B)->port					\
+   && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
+   && (A)->ifindex == (B)->ifindex)
+
+#endif /* WITH_CONTIKI */
+
+/** multi-purpose address abstraction */
+#ifndef session_t
+typedef struct __session_t {
+  socklen_t size;		/**< size of addr */
+  union {
+    struct sockaddr     sa;
+    struct sockaddr_storage st;
+    struct sockaddr_in  sin;
+    struct sockaddr_in6 sin6;
+  } addr;
+  int ifindex;
+} __session_t;
+
+#define session_t __session_t
+
+static inline int 
+_dtls_address_equals_impl(const session_t *a,
+			  const session_t *b) {
+  if (a->ifindex != b->ifindex ||
+      a->size != b->size || a->addr.sa.sa_family != b->addr.sa.sa_family)
+    return 0;
+  
+  /* need to compare only relevant parts of sockaddr_in6 */
+ switch (a->addr.sa.sa_family) {
+ case AF_INET:
+   return 
+     a->addr.sin.sin_port == b->addr.sin.sin_port && 
+     memcmp(&a->addr.sin.sin_addr, &b->addr.sin.sin_addr, 
+	    sizeof(struct in_addr)) == 0;
+ case AF_INET6:
+   return a->addr.sin6.sin6_port == b->addr.sin6.sin6_port && 
+     memcmp(&a->addr.sin6.sin6_addr, &b->addr.sin6.sin6_addr, 
+	    sizeof(struct in6_addr)) == 0;
+ default: /* fall through and signal error */
+   ;
+ }
+ return 0;
+}
+#endif /* session_t */
 
 /* Define our own types as at least uint32_t does not work on my amd64. */
 
@@ -56,18 +116,16 @@ typedef struct {
 } str;
 #endif
 
-/** Maximum size of DTLS message */
+#ifndef DTLS_MAX_BUF
+/** Maximum size of DTLS message. */
 #define DTLS_MAX_BUF 256
+#endif
 
-/** 
- * Known cipher suites. Note that the NULL suite is always available.
- * Other cipher suites are included only if defined here.
- *
- * \hideinitializer
- */
-#define TLS_PSK_WITH_AES_128_CBC_SHA { 0x00, 0x8c }
-#define TLS_NULL_WITH_NULL_NULL      { 0x00, 0x00 }
-/* #define TLS_PSK_WITH_AES_128_CCM_8 */
+/** Known cipher suites.*/
+typedef enum { 
+  TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
+  TLS_PSK_WITH_AES_128_CCM_8 = 0x00fd /**< TBD, see draft-mcgrew-tls-aes-ccm  */
+} dtls_cipher_t;
 
 /** 
  * XORs \p n bytes byte-by-byte starting at \p y to the memory area
@@ -80,4 +138,35 @@ memxor(unsigned char *x, const unsigned char *y, size_t n) {
   }
 }
 
+#ifdef HAVE_FLS
+#define dtls_fls(i) fls(i)
+#else
+static inline int 
+dtls_fls(unsigned int i) {
+  int n;
+  for (n = 0; i; n++)
+    i >>= 1;
+  return n;
+}
+#endif /* HAVE_FLS */
+
+/** 
+ * Resets the given session_t object @p sess to its default
+ * values.  In particular, the member rlen must be initialized to the
+ * available size for storing addresses.
+ * 
+ * @param sess The session_t object to initialize.
+ */
+static inline void
+dtls_session_init(session_t *sess) {
+  assert(sess);
+  memset(sess, 0, sizeof(session_t));
+  sess->size = sizeof(sess->addr);
+}
+
+static inline int
+dtls_session_equals(const session_t *a, const session_t *b) {
+  assert(a); assert(b);
+  return _dtls_address_equals_impl(a, b);
+}
 #endif /* _GLOBAL_H_ */

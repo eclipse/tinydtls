@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -24,8 +24,8 @@
  */
 
 /**
- * \file dtls.h
- * \brief High level DTLS API and visible structures. 
+ * @file dtls.h
+ * @brief High level DTLS API and visible structures. 
  */
 
 #ifndef _DTLS_H_
@@ -33,9 +33,11 @@
 
 #include <stdint.h>
 
-#include "uthash.h"
+#include "list.h"
 #include "crypto.h"
+#include "hmac.h"
 
+#include "config.h"
 #ifndef DTLSv12
 #define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
 #else
@@ -61,9 +63,10 @@ typedef enum {
 /** 
  * Holds security parameters, local state and the transport address
  * for each peer. */
-typedef struct {
+typedef struct dtls_peer_t {
+  struct dtls_peer_t *next;
+
   session_t session;	     /**< peer address and local interface */
-  UT_hash_handle hh;	     /**< the hash handle (used internally) */
 
   dtls_state_t state;        /**< DTLS engine state */
   uint16 epoch;		     /**< counter for cipher state changes*/
@@ -73,15 +76,30 @@ typedef struct {
 
   /** actual and potential security parameters */
   dtls_security_parameters_t security_params[2]; 
-  int config;	             /**< denotes which security params are in effect */
+  int config;	             /**< denotes which security params are in effect 
+			      FIXME: check if we can use epoch for this */
 
   /* temporary storage for the final handshake hash */
-#if DTLS_VERSION == 0xfeff
-  dtls_hash_t *hs_hash[2];
-#elif DTLS_VERSION == 0xfefd
-  dtls_hash_t *hs_hash[1];
-#endif
+  dtls_hash_t hs_hash;
 } dtls_peer_t;
+
+typedef enum {
+  DTLS_KEY_INVALID=0, DTLS_KEY_PSK=1, DTLS_KEY_RPK=2
+} dtls_key_type_t;
+
+typedef struct dtls_key_t {
+  struct dtls_key_t *next;
+
+  dtls_key_type_t type;
+  union {
+    struct dtls_psk_t {
+      unsigned char *id;     /**< psk identity (set with dtls_set_psk()) */
+      size_t id_length;      /**< length of psk identity  */
+      unsigned char *data;   /**< key data */
+      unsigned char *length; /**< length of data */
+    } psk;
+  } key;
+} dtls_key_t;
 
 /** Length of the secret that is used for generating Hello Verify cookies. */
 #define DTLS_COOKIE_SECRET_LENGTH 12
@@ -91,7 +109,7 @@ typedef struct dtls_context_t {
   unsigned char cookie_secret[DTLS_COOKIE_SECRET_LENGTH];
   clock_time_t cookie_secret_age; /**< the time the secret has been generated */
 
-  dtls_peer_t *peers;		/**< hash table to manage peer status */
+  LIST_STRUCT(peers);
 
   void *app;			/**< application-specific data */
   int (*cb_write)(struct dtls_context_t *ctx, 
@@ -99,6 +117,7 @@ typedef struct dtls_context_t {
   void (*cb_read)(struct dtls_context_t *ctx, 
 		  session_t *session, uint8 *buf, size_t len);
 
+  /* FIXME: use LIST_STRUCT(key_store) with dtls_key_t */
   unsigned char *psk; /**< pre-shared key (set with dtls_set_psk()) */
   size_t psk_length;  /**< length of psk  */
 
@@ -108,6 +127,12 @@ typedef struct dtls_context_t {
   unsigned char readbuf[DTLS_MAX_BUF];
   unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
+
+/** 
+ * This function initializes the tinyDTLS memory management and must
+ * be called first.
+ */
+void dtls_init();
 
 /** 
  * Creates a new context object. The storage allocated for the new
@@ -211,7 +236,10 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
 /**
  * Sets the pre-shared key for context @p ctx. This function returns @c 1
  * when the @p psk and @p psk_id have been stored in @p ctx. In case of
- * error (most likely due to insufficient memory), @c 0 as returned.
+ * error (most likely due to insufficient memory), @c 0 as returned. The
+ * storage used by @p psk and @psk_id must remain valid until the PSK is
+ * invalidated explicitly by dtls_remove_psk() or until @p ctx becomes
+ * invalid.
  * 
  * @param psk     The pre-shared key to be used.
  * @param length  Length of @p psk.
@@ -221,6 +249,11 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
  */
 int dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length,
 		 unsigned char *psk_id, size_t id_length);
+
+/** 
+ * Removes the PSK associated with @p psk_id from internal storage.
+ */
+void dtls_remove_psk(dtls_context_t *ctx, unsigned char *psk_id, size_t id_length);
 
 /** 
  * Retrieves a pointer to the cookie contained in a Client Hello message.
