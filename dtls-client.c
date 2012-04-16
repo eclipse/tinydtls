@@ -35,10 +35,12 @@
 
 #include <string.h>
 
+#include "config.h"
+
 #ifndef DEBUG
 #define DEBUG DEBUG_PRINT
-#include "net/uip-debug.h"
 #endif
+#include "net/uip-debug.h"
 
 #include "debug.h"
 #include "dtls.h"
@@ -77,8 +79,8 @@ send_to_peer(struct dtls_context_t *ctx,
 
   struct uip_udp_conn *conn = (struct uip_udp_conn *)dtls_get_app_data(ctx);
 
-  uip_ipaddr_copy(&conn->ripaddr, &session->raddr);
-  conn->rport = session->rport;
+  uip_ipaddr_copy(&conn->ripaddr, &session->addr);
+  conn->rport = session->port;
 
   PRINTF("send to ");
   PRINT6ADDR(&conn->ripaddr);
@@ -103,14 +105,14 @@ dtls_handle_read(dtls_context_t *ctx) {
   static session_t session;
 
   if(uip_newdata()) {
-    uip_ipaddr_copy(&session.raddr, &UIP_IP_BUF->srcipaddr);
-    session.rport = UIP_UDP_BUF->srcport;
-    session.rlen = sizeof(session.raddr) + sizeof(session.rport);
+    uip_ipaddr_copy(&session.addr, &UIP_IP_BUF->srcipaddr);
+    session.port = UIP_UDP_BUF->srcport;
+    session.size = sizeof(session.addr) + sizeof(session.port);
 
     ((char *)uip_appdata)[uip_datalen()] = 0;
     PRINTF("Client received message from ");
-    PRINT6ADDR(&session.raddr);
-    PRINTF(":%d\n", uip_ntohs(session.rport));
+    PRINT6ADDR(&session.addr);
+    PRINTF(":%d\n", uip_ntohs(session.port));
 
     dtls_handle_message(ctx, &session, uip_appdata, uip_datalen());
   }
@@ -155,16 +157,16 @@ init_dtls(session_t *dst) {
 
   print_local_addresses();
 
-  dst->rlen = sizeof(dst->raddr) + sizeof(dst->rport);
-  dst->rport = UIP_HTONS(20220);
+  dst->size = sizeof(dst->addr) + sizeof(dst->port);
+  dst->port = UIP_HTONS(20220);
 
-  set_connection_address(&dst->raddr);
-  client_conn = udp_new(&dst->raddr, 0, NULL);
-  udp_bind(client_conn, dst->rport);
+  set_connection_address(&dst->addr);
+  client_conn = udp_new(&dst->addr, 0, NULL);
+  udp_bind(client_conn, dst->port);
 
   PRINTF("set connection address to ");
-  PRINT6ADDR(&dst->raddr);
-  PRINTF(":%d\n", uip_ntohs(dst->rport));
+  PRINT6ADDR(&dst->addr);
+  PRINTF(":%d\n", uip_ntohs(dst->port));
 
   set_log_level(LOG_DEBUG);
 
@@ -187,6 +189,8 @@ PROCESS_THREAD(udp_server_process, ev, data)
   static session_t dst;
 
   PROCESS_BEGIN();
+
+  dtls_init();
 
   init_dtls(&dst);
   serial_line_init();

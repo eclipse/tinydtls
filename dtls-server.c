@@ -33,10 +33,12 @@
 
 #include <string.h>
 
+#include "config.h"
+
 #ifndef DEBUG
 #define DEBUG DEBUG_PRINT
-#include "net/uip-debug.h"
 #endif
+#include "net/uip-debug.h"
 
 #include "debug.h"
 #include "dtls.h"
@@ -67,8 +69,8 @@ send_to_peer(struct dtls_context_t *ctx,
 
   struct uip_udp_conn *conn = (struct uip_udp_conn *)dtls_get_app_data(ctx);
 
-  uip_ipaddr_copy(&conn->ripaddr, &session->raddr);
-  conn->rport = session->rport;
+  uip_ipaddr_copy(&conn->ripaddr, &session->addr);
+  conn->rport = session->port;
 
   uip_udp_packet_send(conn, data, len);
 
@@ -88,14 +90,14 @@ dtls_handle_read(dtls_context_t *ctx) {
   static session_t session;
 
   if(uip_newdata()) {
-    uip_ipaddr_copy(&session.raddr, &UIP_IP_BUF->srcipaddr);
-    session.rport = UIP_UDP_BUF->srcport;
-    session.rlen = sizeof(session.raddr) + sizeof(session.rport);
+    uip_ipaddr_copy(&session.addr, &UIP_IP_BUF->srcipaddr);
+    session.port = UIP_UDP_BUF->srcport;
+    session.size = sizeof(session.addr) + sizeof(session.port);
 
     ((char *)uip_appdata)[uip_datalen()] = 0;
     PRINTF("Server received message from ");
-    PRINT6ADDR(&session.raddr);
-    PRINTF(":%d\n", uip_ntohs(session.rport));
+    PRINT6ADDR(&session.addr);
+    PRINTF(":%d\n", uip_ntohs(session.port));
 
     dtls_handle_message(ctx, &session, uip_appdata, uip_datalen());
   }
@@ -161,6 +163,8 @@ init_dtls() {
 PROCESS_THREAD(udp_server_process, ev, data)
 {
   PROCESS_BEGIN();
+
+  dtls_init();
 
   init_dtls();
   if (!dtls_context) {

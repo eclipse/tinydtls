@@ -2,7 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "debug.h"
+#ifdef WITH_CONTIKI
+#include "contiki.h"
+#include "contiki-lib.h"
+#include "contiki-net.h"
+#endif /* WITH_CONTIKI */
+
+//#include "debug.h"
 #include "numeric.h"
 #include "ccm.h"
 
@@ -30,18 +36,30 @@ dump(unsigned char *buf, size_t len) {
   printf("\n");
 }
 
+#ifdef WITH_CONTIKI
+PROCESS(ccm_test_process, "CCM test process");
+AUTOSTART_PROCESSES(&ccm_test_process);
+PROCESS_THREAD(ccm_test_process, ev, d)
+{
+#else  /* WITH_CONTIKI */
 int main(int argc, char **argv) {
+#endif /* WITH_CONTIKI */
   long int len;
   size_t L;			/* max(2,(fls(lm) >> 3) + 1) */
   int n;
 
   rijndael_ctx ctx;
 
+#ifdef WITH_CONTIKI
+  PROCESS_BEGIN();
+#endif /* WITH_CONTIKI */
+
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
 
     if (rijndael_set_key_enc_only(&ctx, data[n].key, 8*sizeof(data[n].key)) < 0) {
       fprintf(stderr, "cannot set key\n");
-      exit(-1);
+      // irgendwie beisst sich eine ifdef WITH_CONTIKI Verwendung hier ?
+      return -1;
     }
 
     L = max(2,(fls(data[n].lm) >> 3) + 1);
@@ -58,6 +76,7 @@ int main(int argc, char **argv) {
     printf("result is (total length = %d):\n\t", (int)len);
     dump(data[n].msg, len);
 
+    /*
     len = dtls_ccm_decrypt_message(&ctx, data[n].M, L, data[n].nonce, 
 				   data[n].msg, len, data[n].la);
     
@@ -65,7 +84,12 @@ int main(int argc, char **argv) {
       dsrv_log(LOG_ALERT, "Packet Vector #%d: cannot decrypt message\n", n+1);
     else
       printf("\t*** MAC verified (total length = %d) ***\n", (int)len);
+      */
   }
 
+#ifdef WITH_CONTIKI
+  PROCESS_END();
+#else /* WITH_CONTIKI */
   return 0;
+#endif /* WITH_CONTIKI */
 }

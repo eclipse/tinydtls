@@ -31,9 +31,9 @@ struct test_vector {
   size_t la;			/* number of bytes additional data */
   unsigned char key[DTLS_CCM_BLOCKSIZE];
   unsigned char nonce[DTLS_CCM_BLOCKSIZE];
-  unsigned char msg[2000];
+  unsigned char msg[200];
   size_t r_lm;			/* overall result length */
-  unsigned char result[2000];	/* result */
+  unsigned char result[200];	/* result */
 };
 
 struct test_vector data[] = {
