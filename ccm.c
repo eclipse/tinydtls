@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -41,7 +41,7 @@
       (A)[i] |= (C) & 0xFF;						\
   }
 
-void 
+static inline void 
 block0(size_t M,       /* number of auth bytes */
        size_t L,       /* number of bytes to encode message length */
        size_t la,      /* l(a) octets additional authenticated data */
@@ -85,11 +85,14 @@ add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
 
   memset(B, 0, DTLS_CCM_BLOCKSIZE);
 
-  if (la) {
+  if (!la)
+    return;
+
+#ifndef WITH_CONTIKI
     if (la < 0xFF00) {		/* 2^16 - 2^8 */
       j = 2;
       dtls_int_to_uint16(B, la);
-    } else if (la < 0x100000000L) {
+  } else if (la <= UINT32_MAX) {
       j = 6;
       dtls_int_to_uint16(B, 0xFFFE);
       dtls_int_to_uint32(B+2, la);
@@ -98,6 +101,18 @@ add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
       dtls_int_to_uint16(B, 0xFFFF);
       dtls_ulong_to_uint64(B+2, la);
     }
+#else /* WITH_CONTIKI */
+  /* With Contiki, we are building for small devices and thus
+   * anticipate that the number of additional authentication bytes
+   * will not exceed 65280 bytes (0xFF00) and we can skip the
+   * workarounds required for j=6 and j=10 on devices with a word size
+   * of 32 bits or 64 bits, respectively.
+   */
+
+  assert(la < 0xFF00);
+  j = 2;
+  dtls_int_to_uint16(B, la);
+#endif /* WITH_CONTIKI */
 
     i = min(DTLS_CCM_BLOCKSIZE - j, la);
     memcpy(B + j, msg, i);
@@ -105,7 +120,6 @@ add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
     msg += i;
     
     memxor(B, X, DTLS_CCM_BLOCKSIZE);
-  } 
   
   rijndael_encrypt(ctx, B, X);
   
@@ -126,7 +140,7 @@ add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
   } 
 }
 
-void
+static inline void
 encrypt(rijndael_ctx *ctx, size_t L, unsigned long counter,
 	unsigned char *msg, size_t len,
 	unsigned char A[DTLS_CCM_BLOCKSIZE],
@@ -139,7 +153,7 @@ encrypt(rijndael_ctx *ctx, size_t L, unsigned long counter,
   memxor(msg, S, len);
 }
 
-void
+static inline void
 mac(rijndael_ctx *ctx, 
     unsigned char *msg, size_t len,
     unsigned char B[DTLS_CCM_BLOCKSIZE],
@@ -157,7 +171,7 @@ long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
 			 unsigned char *msg, size_t lm, size_t la) {
-  size_t i, j, len;
+  size_t i, len;
   unsigned long C;
   unsigned long counter = 1; /* \bug does not work correctly on ia32 when
 			             lm >= 2^16 */
@@ -179,7 +193,7 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
   
   msg += la;
-  while (lm > DTLS_CCM_BLOCKSIZE) {
+  while (lm >= DTLS_CCM_BLOCKSIZE) {
     /* calculate MAC */
     mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X);
 
@@ -193,12 +207,15 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   }
 
   if (lm) {
-    /* calculate MAC */
-    memset(B, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(B, msg, lm);
-    mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X); 
+    /* Calculate MAC. The remainder of B must be padded with zeroes, so
+     * B is constructed to contain X ^ msg for the first lm bytes (done in
+     * mac() and X ^ 0 for the remaining DTLS_CCM_BLOCKSIZE - lm bytes
+     * (i.e., we can use memcpy() here).
+     */
+    memcpy(B + lm, X + lm, DTLS_CCM_BLOCKSIZE - lm);
+    mac(ctx, msg, lm, B, X);
 
-    /* decrypt */
+    /* encrypt */
     encrypt(ctx, L, counter, msg, lm, A, S);
 
     /* update local pointers */
@@ -246,7 +263,7 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
   
   msg += la;
-  while (lm > DTLS_CCM_BLOCKSIZE) {
+  while (lm >= DTLS_CCM_BLOCKSIZE) {
     /* decrypt */
     encrypt(ctx, L, counter, msg, DTLS_CCM_BLOCKSIZE, A, S);
     
@@ -263,8 +280,12 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
     /* decrypt */
     encrypt(ctx, L, counter, msg, lm, A, S);
 
-    /* calculate MAC */
-    memcpy(B+lm, X+lm, DTLS_CCM_BLOCKSIZE - lm);
+    /* Calculate MAC. Note that msg ends in the MAC so we must
+     * construct B to contain X ^ msg for the first lm bytes (done in
+     * mac() and X ^ 0 for the remaining DTLS_CCM_BLOCKSIZE - lm bytes
+     * (i.e., we can use memcpy() here).
+     */
+    memcpy(B + lm, X + lm, DTLS_CCM_BLOCKSIZE - lm);
     mac(ctx, msg, lm, B, X); 
 
     /* update local pointers */

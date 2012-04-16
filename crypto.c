@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -33,37 +33,59 @@
 #include "numeric.h"
 #include "dtls.h"
 #include "crypto.h"
+#include "ccm.h"
+
+/** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
+typedef struct {
+  rijndael_ctx ctx;		       /**< AES-128 encryption context */
+  unsigned char N[DTLS_CCM_BLOCKSIZE]; /**< nonce */
+} aes128_ccm_t;
+
+#ifndef WITH_CONTIKI
+
+static inline dtls_cipher_context_t *
+dtls_cipher_context_new() {
+  return (dtls_cipher_context_t *)malloc(sizeof(dtls_cipher_context_t) + sizeof(aes128_ccm_t));
+}
+
+static inline void
+dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
+  free(ctx);
+}
+#else /* WITH_CONTIKI */
+
+typedef unsigned char _cipher_context_buffer_t[sizeof(dtls_cipher_context_t) + sizeof(aes128_ccm_t)];
+MEMB(cipher_storage, _cipher_context_buffer_t, DTLS_CIPHER_CONTEXT_MAX);
+
+static inline dtls_cipher_context_t *
+dtls_cipher_context_new() {
+  return (dtls_cipher_context_t *)memb_alloc(&cipher_storage);
+}
+
+static inline void
+dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
+  if (ctx)
+    memb_free(&cipher_storage, ctx);
+}
+#endif /* WITH_CONTIKI */
+
+extern void dtls_hmac_storage_init();
+
+void crypto_init() {
+  dtls_hmac_storage_init();
+
+#ifdef WITH_CONTIKI
+  memb_init(&cipher_storage);
+#endif /* WITH_CONTIKI */
+}
 
 #ifndef NDEBUG
 extern void dump(unsigned char *, size_t);
 #endif
 
-/** 
- * The list of acceptable cipher suites. Do not include the NULL
- * cipher here as it would enable a bid-down attack.
- */
-const dtls_cipher_t ciphers[] = {
-#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
-#ifdef WITH_SHA1
-  { TLS_PSK_WITH_AES_128_CBC_SHA, AES_BLKLEN, 16, HASH_SHA1, 20, 20, 16 },
-#else
-#error "TLS_PSK_WITH_AES_128_CBC_SHA not defined!"
-#endif /* WITH_SHA1 */
-#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
-
-  /* \todo: add TLS_PSK_WITH_AES_128_CCM_8 */
-
-  { { 0, 0 }, 0, 0, HASH_NONE, 0, 0, 0 } /* end marker */
-};
-
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 
-/** 
- * \bug dtls_hmac_finalize() releases the hash function's 
- *      memory. Maybe we are better off with another 
- *      hmac function API.
- */
 size_t
 dtls_p_hash(dtls_hashfunc_t h,
 	    unsigned char *key, size_t keylen,
@@ -71,49 +93,60 @@ dtls_p_hash(dtls_hashfunc_t h,
 	    unsigned char *random1, size_t random1len,
 	    unsigned char *random2, size_t random2len,
 	    unsigned char *buf, size_t buflen) {
-  dtls_hmac_context_t hmac_a, hmac_p;
+  dtls_hmac_context_t *hmac_a, *hmac_p;
 
-  static unsigned char A[DTLS_HMAC_MAX];
-  static unsigned char tmp[DTLS_HMAC_MAX];
+  unsigned char A[DTLS_HMAC_DIGEST_SIZE];
+  unsigned char tmp[DTLS_HMAC_DIGEST_SIZE];
   size_t dlen;			/* digest length */
   size_t len = 0;			/* result length */
 
-  dtls_hmac_init(&hmac_a, key, keylen, h);
+  hmac_a = dtls_hmac_new(key, keylen);
+  if (!hmac_a)
+    return 0;
 
   /* calculate A(1) from A(0) == seed */
-  HMAC_UPDATE_SEED(&hmac_a, label, labellen);
-  HMAC_UPDATE_SEED(&hmac_a, random1, random1len);
-  HMAC_UPDATE_SEED(&hmac_a, random2, random2len);
+  HMAC_UPDATE_SEED(hmac_a, label, labellen);
+  HMAC_UPDATE_SEED(hmac_a, random1, random1len);
+  HMAC_UPDATE_SEED(hmac_a, random2, random2len);
 
-  dlen = dtls_hmac_finalize(&hmac_a, A);
+  dlen = dtls_hmac_finalize(hmac_a, A);
+
+  hmac_p = dtls_hmac_new(key, keylen);
+  if (!hmac_p)
+      goto error;
 
   while (len + dlen < buflen) {
-    dtls_hmac_init(&hmac_p, key, keylen, h);
-    dtls_hmac_update(&hmac_p, A, dlen);
+    /* FIXME: rewrite loop to avoid superflous call to dtls_hmac_init() */
+    dtls_hmac_init(hmac_p, key, keylen);
+    dtls_hmac_update(hmac_p, A, dlen);
 
-    HMAC_UPDATE_SEED(&hmac_p, label, labellen);
-    HMAC_UPDATE_SEED(&hmac_p, random1, random1len);
-    HMAC_UPDATE_SEED(&hmac_p, random2, random2len);
+    HMAC_UPDATE_SEED(hmac_p, label, labellen);
+    HMAC_UPDATE_SEED(hmac_p, random1, random1len);
+    HMAC_UPDATE_SEED(hmac_p, random2, random2len);
 
-    len += dtls_hmac_finalize(&hmac_p, tmp);
+    len += dtls_hmac_finalize(hmac_p, tmp);
     memxor(buf, tmp, dlen);
     buf += dlen;
 
     /* calculate A(i+1) */
-    dtls_hmac_init(&hmac_a, key, keylen, h);
-    dtls_hmac_update(&hmac_a, A, dlen);
-    dtls_hmac_finalize(&hmac_a, A);
+    dtls_hmac_init(hmac_a, key, keylen);
+    dtls_hmac_update(hmac_a, A, dlen);
+    dtls_hmac_finalize(hmac_a, A);
   }
 
-  dtls_hmac_init(&hmac_p, key, keylen, h);
-  dtls_hmac_update(&hmac_p, A, dlen);
+  dtls_hmac_init(hmac_p, key, keylen);
+  dtls_hmac_update(hmac_p, A, dlen);
   
-  HMAC_UPDATE_SEED(&hmac_p, label, labellen);
-  HMAC_UPDATE_SEED(&hmac_p, random1, random1len);
-  HMAC_UPDATE_SEED(&hmac_p, random2, random2len);
+  HMAC_UPDATE_SEED(hmac_p, label, labellen);
+  HMAC_UPDATE_SEED(hmac_p, random1, random1len);
+  HMAC_UPDATE_SEED(hmac_p, random2, random2len);
   
-  dtls_hmac_finalize(&hmac_p, tmp);
+  dtls_hmac_finalize(hmac_p, tmp);
   memxor(buf, tmp, buflen - len);
+
+ error:
+  dtls_hmac_free(hmac_a);
+  dtls_hmac_free(hmac_p);
 
   return buflen;
 }
@@ -172,155 +205,133 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
   dtls_hmac_finalize(hmac_ctx, buf);
 }
 
-#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
-typedef struct {
-  rijndael_ctx ctx;
-  unsigned char pad[AES_BLKLEN];
-} aes128_cbc_t;
+static inline void
+dtls_ccm_init(aes128_ccm_t *ccm_ctx, unsigned char *N, size_t length) {
+  assert(ccm_ctx);
 
-void 
-dtls_aes128_cbc_init(void *ctx, unsigned char *iv, size_t length) {
-  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
+  if (length < DTLS_CCM_BLOCKSIZE)
+    memset(ccm_ctx->N + length, 0, DTLS_CCM_BLOCKSIZE - length);
 
-  if (length < AES_BLKLEN)
-    memset(c->pad + length, 0, AES_BLKLEN - length);
-
-  memcpy(c->pad, iv, AES_BLKLEN);
+  memcpy(ccm_ctx->N, N, DTLS_CCM_BLOCKSIZE);
 }
 
 size_t
-dtls_aes128_cbc_encrypt(void *ctx, 
-			const unsigned char *src, size_t srclen,
-			unsigned char *buf) {
+dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
+		 unsigned char *buf) {
+  long int len;
 
-  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
-  unsigned char *p;
-  size_t i, j;
+  assert(ccm_ctx);
 
-  assert(c);
-  p = c->pad;
-
-  /* write IV to result buffer */
-  prng(buf, AES_BLKLEN);
-  memxor(c->pad, buf, AES_BLKLEN);
-  
-  rijndael_encrypt(&c->ctx, c->pad, buf);
-
-  for (i = AES_BLKLEN; i <= srclen; i += AES_BLKLEN) {
-    for (j = 0; j < AES_BLKLEN; ++j)
-      c->pad[j] = *src++ ^ *buf++;
-    
-    rijndael_encrypt(&c->ctx, c->pad, buf);
-  }
-
-  memcpy(c->pad, buf, AES_BLKLEN);
-  memxor(c->pad, src, srclen & (AES_BLKLEN - 1));
-
-  /* fill last block with padding bytes before encryption */
-  for (j = srclen & (AES_BLKLEN - 1); j < AES_BLKLEN; ++j)
-    c->pad[j] ^= ~srclen & (AES_BLKLEN - 1);
-
-  rijndael_encrypt(&c->ctx, c->pad, buf + AES_BLKLEN);
-  memcpy(c->pad, buf + AES_BLKLEN, AES_BLKLEN);
-
-  return i + AES_BLKLEN;
+  len = dtls_ccm_encrypt_message(&ccm_ctx->ctx, 8 /* M */, 
+				 max(2,(dtls_fls(srclen) >> 3) + 1), 
+				 ccm_ctx->N,
+				 buf, srclen, 
+				 0 /* la */);
+  return len;
 }
-
-static inline int
-check_pattern(unsigned char *buf,
-	      unsigned char pattern,
-	      size_t count) {
-  int ok = 1;
-  while (count--)    /* check all bytes to minimize timing differences */
-    ok = (*buf++ == pattern) & ok;
-
-  return ok;
-}
-
 
 size_t
-dtls_aes128_cbc_decrypt(void *ctx,
-			const unsigned char *src, size_t srclen,
-			unsigned char *buf) {
+dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
+		size_t srclen, unsigned char *buf) {
+  long int len;
 
-  aes128_cbc_t *c = (aes128_cbc_t *)ctx;
-  size_t i, j;
+  assert(ccm_ctx);
 
-  assert(c);
-
-  /* The upper layer does not need the first block of the ciphertext
-   * as it contains only the random IV. Therefore, we skip it during
-   * decryption and save some buffer space. As a result, there must be
-   * at least two entire ciphertext blocks.
-   */
-
-  if (srclen < 2 * AES_BLKLEN)
-    return 0;		 /* ought to be safe as MAC check will fail */
- 
-  for (i = 0; i <= srclen - 2 * AES_BLKLEN; i += AES_BLKLEN) {
-    rijndael_decrypt(&c->ctx, src + AES_BLKLEN, c->pad);
-    for (j = 0; j < AES_BLKLEN; ++j)
-      *buf++ = c->pad[j] ^ *src++;
-  }
-  memset(c->pad, 0, AES_BLKLEN); /* avoid data leakage */
-  
-  /* check padding */
-  --buf;
-  
-  if (*buf < i && check_pattern(buf - *buf, *buf, *buf))
-    return i - (*buf + 1);
-  else
-    return i;			/* MAC check should fail */
+  len = dtls_ccm_decrypt_message(&ccm_ctx->ctx, 8 /* M */, 
+				 max(2,(dtls_fls(srclen) >> 3) + 1),
+				 ccm_ctx->N, 
+				 buf, srclen, 
+				 0 /* la */);
+  return len;
 }
-#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
+
+size_t
+dtls_pre_master_secret(unsigned char *key, size_t keylen,
+		       unsigned char *result) {
+  unsigned char *p = result;
+
+  dtls_int_to_uint16(p, keylen);
+  p += sizeof(uint16);
+
+  memset(p, 0, keylen);
+  p += keylen;
+
+  memcpy(p, result, sizeof(uint16));
+  p += sizeof(uint16);
+  
+  memcpy(p, key, keylen);
+
+  return (sizeof(uint16) + keylen) << 1;
+}
 
 void 
-dtls_init_cipher(dtls_cipher_context_t *ctx,
-		 unsigned char *iv, size_t length) {
+dtls_cipher_set_iv(dtls_cipher_context_t *ctx,
+		   unsigned char *iv, size_t length) {
   assert(ctx);
-  ctx->init(ctx->data, iv, length);
+  dtls_ccm_init((aes128_ccm_t *)ctx->data, iv, length);
 }
 
 dtls_cipher_context_t *
-dtls_new_cipher(const dtls_cipher_t *cipher,
+dtls_cipher_new(dtls_cipher_t cipher,
 		unsigned char *key, size_t keylen) {
   dtls_cipher_context_t *cipher_context = NULL;
 
-  switch (dtls_uint16_to_int(cipher->code)) {
-
-#ifdef TLS_PSK_WITH_AES_128_CBC_SHA
-  case 0x008c: /* AES128_CBC */ 
-
-    /* Allocate memory for the dtls_cipher_context_t, the rijndael_ctx
-     * and a pad to carry the previous ciphertext block as IV for the
-     * next operation. */ 
-    cipher_context = (dtls_cipher_context_t *)
-      malloc(sizeof(dtls_cipher_context_t) + sizeof(aes128_cbc_t));
-
-    if (cipher_context) {
-      cipher_context->data = 
-	(unsigned char *)cipher_context + sizeof(dtls_cipher_context_t);
-
-      cipher_context->init = dtls_aes128_cbc_init;
-      cipher_context->encrypt = dtls_aes128_cbc_encrypt;
-      cipher_context->decrypt = dtls_aes128_cbc_decrypt;
-
-      if (rijndael_set_key(&((aes128_cbc_t *)cipher_context->data)->ctx,
-			   key, 8 * keylen) < 0) {
-	/* cleanup everything in case the key has the wrong size */
-	
-	warn("cannot set rijndael key\n");
-	free(cipher_context);
-	cipher_context = NULL;
-      }
-    } 
-    break;
-#endif /* TLS_PSK_WITH_AES_128_CBC_SHA */
-
-  default:
-    warn("unknown cipher %04x\n", cipher->code);
+  cipher_context = dtls_cipher_context_new();
+  if (!cipher_context) {
+    warn("cannot allocate cipher_context\r\n");
+    return NULL;
   }
 
+  switch (cipher) {
+  case TLS_PSK_WITH_AES_128_CCM_8: {
+    aes128_ccm_t *ccm_ctx = (aes128_ccm_t *)cipher_context->data;
+    
+    if (rijndael_set_key_enc_only(&ccm_ctx->ctx, key, 8 * keylen) < 0) {
+      /* cleanup everything in case the key has the wrong size */
+      warn("cannot set rijndael key\n");
+      goto error;
+    }
+    break;
+  }
+  default:
+    warn("unknown cipher %04x\n", cipher);
+    goto error;
+  }
+  
   return cipher_context;
+ error:
+  dtls_cipher_context_free(cipher_context);
+  return NULL;
+}
+
+void 
+dtls_cipher_free(dtls_cipher_context_t *cipher_context) {
+  dtls_cipher_context_free(cipher_context);
+}
+
+int 
+dtls_encrypt(dtls_cipher_context_t *ctx, 
+	     const unsigned char *src, size_t length,
+	     unsigned char *buf) {
+  if (ctx) {
+    if (src != buf)
+      memmove(buf, src, length);
+    return dtls_ccm_encrypt((aes128_ccm_t *)ctx->data, src, length, buf);
+  }
+
+  return -1;
+}
+
+int 
+dtls_decrypt(dtls_cipher_context_t *ctx, 
+	     const unsigned char *src, size_t length,
+	     unsigned char *buf) {
+  if (ctx) {
+    if (src != buf)
+      memmove(buf, src, length);
+    return dtls_ccm_decrypt((aes128_ccm_t *)ctx->data, src, length, buf);
+  }
+
+  return -1;
 }
 

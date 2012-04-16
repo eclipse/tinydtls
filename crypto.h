@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -28,43 +28,37 @@
 
 #include <stdlib.h>		/* for rand() and srand() */
 
+#include "prng.h"
 #include "global.h"
 #include "numeric.h"
 #include "hmac.h"
+#include "ccm.h"
+
+/* TLS_PSK_WITH_AES_128_CCM_8 */
+#define DTLS_MAC_KEY_LENGTH    0
+#define DTLS_KEY_LENGTH        16 /* AES-128 */
+#define DTLS_BLK_LENGTH        16 /* AES-128 */
+#define DTLS_MAC_LENGTH        DTLS_HMAC_DIGEST_SIZE
+#define DTLS_IV_LENGTH         4  /* length of nonce_explicit */
 
 /** Maximum size of the generated keyblock. */
-#define MAX_KEYBLOCK_LENGTH       108    /* TLS_PSK_AES128_CBC_SHA */
+
+#define MAX_KEYBLOCK_LENGTH  \
+  (2 * DTLS_MAC_KEY_LENGTH + 2 * DTLS_KEY_LENGTH + 2 * DTLS_IV_LENGTH)
 
 /** Length of DTLS master_secret */
 #define DTLS_MASTER_SECRET_LENGTH 48
 
-/* Argh! */
-#define AES_BLKLEN 16
+#define DTLS_CIPHER_CONTEXT_MAX 4
 
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
-typedef struct {
-  void *data;			/**< The crypto context */
-  
-  void (*init)(void *, unsigned char *, size_t);
-  size_t (*encrypt)(void *, const unsigned char *, size_t, unsigned char *);
-  size_t (*decrypt)(void *, const unsigned char *, size_t, unsigned char *);
+typedef struct dtls_cipher_context_t {
+  /** numeric identifier of this cipher suite in host byte order. */
+  dtls_cipher_t code;
+  unsigned char data[];			/**< The crypto context */
 } dtls_cipher_context_t;
-
-/** Definition of cipher parameters. */
-typedef struct {
-  uint16 code;
-  unsigned char blk_length;	/**< encryption block length */
-  unsigned char key_length;	/**< encryption key length */
-  unsigned char mac_algorithm;	/**< MAC algorithm */
-  unsigned char mac_length;	/**< digest length */
-  unsigned char mac_key_length; /**< length of MAC key */
-  unsigned char iv_length;	/**< length of initialization vector */
-} dtls_cipher_t;
-
-/** The list of actual supported ciphers, excluding the NULL cipher. */
-extern const dtls_cipher_t ciphers[];
 
 typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
@@ -72,10 +66,10 @@ typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
   uint8  server_random[32];	/**< server random gmt and bytes */
 
-  dtls_peer_type role;    	/**< denotes if the remote peer is DTLS_CLIENT
-				     or DTLS_SERVER */
-  int cipher;			/**< cipher type index */
-  uint8  compression;		/**< compression method */
+  dtls_peer_type role; /**< denotes if the remote peer is DTLS_CLIENT or DTLS_SERVER */
+  unsigned char compression;		/**< compression method */
+
+  dtls_cipher_t cipher;		/**< cipher type index */
 
   /** the session's master secret */
   uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
@@ -97,7 +91,7 @@ typedef struct {
 
 #define dtls_kb_client_mac_secret(Param) ((Param)->key_block)
 #define dtls_kb_server_mac_secret(Param)				\
-  (dtls_kb_client_mac_secret(Param) + ciphers[(Param)->cipher].mac_key_length)
+  (dtls_kb_client_mac_secret(Param) + DTLS_MAC_KEY_LENGTH)
 #define dtls_kb_remote_mac_secret(Param)				\
   ((Param)->role == DTLS_CLIENT						\
    ? dtls_kb_client_mac_secret(Param)					\
@@ -106,44 +100,40 @@ typedef struct {
   ((Param)->role == DTLS_SERVER						\
    ? dtls_kb_client_mac_secret(Param)					\
    : dtls_kb_server_mac_secret(Param))
-#define dtls_kb_mac_secret_size(Param) \
-  (ciphers[(Param)->cipher].mac_key_length)
+#define dtls_kb_mac_secret_size(Param) DTLS_MAC_KEY_LENGTH
 #define dtls_kb_client_write_key(Param)					\
-  (dtls_kb_server_mac_secret(Param) + ciphers[(Param)->cipher].mac_key_length)
+  (dtls_kb_server_mac_secret(Param) + DTLS_MAC_KEY_LENGTH)
 #define dtls_kb_server_write_key(Param)					\
-  (dtls_kb_client_write_key(Param) + ciphers[(Param)->cipher].key_length)
+  (dtls_kb_client_write_key(Param) + DTLS_KEY_LENGTH)
 #define dtls_kb_remote_write_key(Param)				\
   ((Param)->role == DTLS_CLIENT					\
    ? dtls_kb_client_write_key(Param)				\
-   : dtls_kb_server_write_key(Param)))
+   : dtls_kb_server_write_key(Param))
 #define dtls_kb_local_write_key(Param)				\
   ((Param)->role == DTLS_SERVER					\
    ? dtls_kb_client_write_key(Param)				\
-   : dtls_kb_server_write_key(Param)))
-#define dtls_kb_key_size(Param) (ciphers[(Param)->cipher].key_length)
+   : dtls_kb_server_write_key(Param))
+#define dtls_kb_key_size(Param) DTLS_KEY_LENGTH
 #define dtls_kb_client_iv(Param)					\
-  (dtls_kb_server_write_key(Param) + ciphers[(Param)->cipher].key_length)
+  (dtls_kb_server_write_key(Param) + DTLS_KEY_LENGTH)
 #define dtls_kb_server_iv(Param)					\
-  (dtls_kb_client_iv(Param) + ciphers[(Param)->cipher].iv_length)
+  (dtls_kb_client_iv(Param) + DTLS_IV_LENGTH)
 #define dtls_kb_remote_iv(Param)				\
   ((Param)->role == DTLS_CLIENT					\
    ? dtls_kb_client_iv(Param)					\
-   : dtls_kb_server_iv(Param)))
+   : dtls_kb_server_iv(Param))
 #define dtls_kb_local_iv(Param)					\
   ((Param)->role == DTLS_SERVER					\
    ? dtls_kb_client_iv(Param)					\
-   : dtls_kb_server_iv(Param)))
-#define dtls_kb_iv_size(Param) (ciphers[(Param)->cipher].iv_length)
+   : dtls_kb_server_iv(Param))
+#define dtls_kb_iv_size(Param) DTLS_IV_LENGTH
 
 #define dtls_kb_size(Param)					\
   (2 * (dtls_kb_mac_secret_size(Param) +			\
 	dtls_kb_key_size(Param) + dtls_kb_iv_size(Param)))
 
 /* just for consistency */
-#define dtls_kb_mac_algorithm(Param)		\
-  (ciphers[(Param)->cipher].mac_algorithm)
-#define dtls_kb_digest_size(Param)		\
-  (ciphers[(Param)->cipher].mac_length)
+#define dtls_kb_digest_size(Param) DTLS_MAC_LENGTH
 
 /** 
  * Expands the secret and key to a block of DTLS_HMAC_MAX 
@@ -218,13 +208,9 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
  */
-static inline int
-dtls_encrypt(dtls_cipher_context_t *ctx, 
-	     const unsigned char *src, size_t length,
-	     unsigned char *buf) {
-  return ctx ?  ctx->encrypt(ctx->data, src, length, buf) : -1; 
-}
-
+int dtls_encrypt(dtls_cipher_context_t *ctx, 
+		 const unsigned char *src, size_t length,
+		 unsigned char *buf);
 /** 
  * Decrypts the given buffer \p src of given \p length, writing the
  * result to \p buf. The function returns \c -1 in case of an error,
@@ -241,103 +227,51 @@ dtls_encrypt(dtls_cipher_context_t *ctx,
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
  */
-static inline int
-dtls_decrypt(dtls_cipher_context_t *ctx, 
-	     const unsigned char *src, size_t length,
-	     unsigned char *buf) {
-  return ctx ?  ctx->decrypt(ctx->data, src, length, buf) : -1; 
-}
+int dtls_decrypt(dtls_cipher_context_t *ctx, 
+		 const unsigned char *src, size_t length,
+		 unsigned char *buf);
 
 /* helper functions */
 
 /** 
- * Generates pre_master_secret from given PSK and fills the result
+ * Generates pre_master_sercet from given PSK and fills the result
  * according to the "plain PSK" case in section 2 of RFC 4279.
  * Diffie-Hellman and RSA key exchange are currently not supported.
  *
- * \param key    The shared key.
- * \param keylen Length of \p key in bytes.
- * \param result The derived pre master secret.
- * \return The actual length of \p result.
+ * @param key    The shared key.
+ * @param keylen Length of @p key in bytes.
+ * @param result The derived pre master secret.
+ * @return The actual length of @p result.
  */
-static inline size_t
-dtls_pre_master_secret(unsigned char *key, size_t keylen,
-		  unsigned char *result) {
-  unsigned char *p = result;
-
-  dtls_int_to_uint16(p, keylen);
-  p += sizeof(uint16);
-
-  memset(p, 0, keylen);
-  p += keylen;
-
-  memcpy(p, result, sizeof(uint16));
-  p += sizeof(uint16);
-  
-  memcpy(p, key, keylen);
-
-  return (sizeof(uint16) + keylen) << 1;
-}
+size_t dtls_pre_master_secret(unsigned char *key, size_t keylen,
+			      unsigned char *result);
 
 /**
- * Creates a new dtls_cipher_context_t object for given \c cipher.
- * The storage allocated for this object must be released manually
- * using free().
+ * Creates a new dtls_cipher_context_t object for given @c cipher.
+ * The storage allocated for this object must be released using 
+ * dtls_cipher_free().
  *
- * \param cipher  Static description of the requested cipher.
- * \param key     The encryption and decryption key.
- * \param keylen  Actual length of \p key.
- * \return A new dtls_cipher_context_t object or \c NULL in case
+ * @param code  Code of the requested cipher (host byte order)
+ * @param key     The encryption and decryption key.
+ * @param keylen  Actual length of @p key.
+ * @return A new dtls_cipher_context_t object or @c NULL in case
  *         something went wrong (e.g. insufficient memory or wrong
- *         key length)/
+ *         key length)
  */
-dtls_cipher_context_t *dtls_new_cipher(const dtls_cipher_t *cipher,
+dtls_cipher_context_t *dtls_cipher_new(dtls_cipher_t code,
 				       unsigned char *key, size_t keylen);
 
 /** 
- * Initializes the give cipher context \p ctx with the initialization
- * vector \p iv of length \p length. */
-void dtls_init_cipher(dtls_cipher_context_t *ctx,
-		      unsigned char *iv, size_t length);
-
-/* helper functions */
-
-/**
- * Fills \p buf with \p len random bytes. This is the default
- * implementation for prng().  You might want to change prng() to use
- * a better PRNG on your specific platform.
+ * Releases the storage allocated by dtls_cipher_new() for @p cipher_context 
  */
-static inline int
-prng_impl(unsigned char *buf, size_t len) {
-  unsigned short v = random_rand();
-  while (len > sizeof(v)) {
-    memcpy(buf, &v, sizeof(v));
-    len -= sizeof(v);
-    buf += sizeof(v);
-  }
+void dtls_cipher_free(dtls_cipher_context_t *cipher_context);
 
-  memcpy(buf, &v, len);
-  return 1;
-}
 
-#ifndef prng
 /** 
- * Fills \p Buf with \p Length bytes of random data. 
- * 
- * \hideinitializer
- */
-#define prng(Buf,Length) prng_impl((Buf), (Length))
-#endif
-
-#ifndef prng_init
-/** 
- * Called by dtls_new_context() to set the PRNG seed. You
- * may want to re-define this to allow for a better PRNG. 
- *
- * \hideinitializer
- */
-#define prng_init(Value) random_init((unsigned short)(Value))
-#endif
+ * Initializes the given cipher context @p ctx with the initialization
+ * vector @p iv of length @p length. */
+void dtls_cipher_set_iv(dtls_cipher_context_t *ctx,
+			unsigned char *iv, size_t length);
 
 #endif /* _CRYPTO_H_ */
 

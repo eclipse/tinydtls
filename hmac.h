@@ -30,6 +30,31 @@
 
 #include "global.h"
 
+#ifdef WITH_SHA256
+/** Aaron D. Gifford's implementation of SHA256
+ *  see http://www.aarongifford.com/ */
+#include "sha2/sha2.h"
+
+#define DTLS_HASH_CTX_SIZE sizeof(SHA256_CTX)
+typedef unsigned char dtls_hash_t[DTLS_HASH_CTX_SIZE];
+
+static inline void
+dtls_hash_init(dtls_hash_t ctx) {
+  SHA256_Init((SHA256_CTX *)ctx);
+}
+
+static inline void 
+dtls_hash_update(dtls_hash_t ctx, const unsigned char *input, size_t len) {
+  SHA256_Update((SHA256_CTX *)ctx, input, len);
+}
+
+static inline size_t
+dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
+  SHA256_Final(buf, (SHA256_CTX *)ctx);
+  return SHA256_DIGEST_LENGTH;
+}
+#endif /* WITH_SHA256 */
+
 /**
  * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
  * NIST Standard FIPS 198 describes the Keyed-Hash Message Authentication 
@@ -83,16 +108,7 @@ void dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen);
  * \param klen   The length of \p key.
  * \return A new dtls_hmac_context_t object or @c NULL on error
  */
-static inline dtls_hmac_context_t *
-dtls_hmac_new(unsigned char *key, size_t klen) {
-  dtls_hmac_context_t *ctx;
-
-  ctx = dtls_hmac_context_new();
-  if (ctx)
-    dtls_hmac_init(ctx, key, klen);
-
-  return ctx;
-};
+dtls_hmac_context_t *dtls_hmac_new(unsigned char *key, size_t klen);
 
 /**
  * Releases the storage for @p ctx that has been allocated by

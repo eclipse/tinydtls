@@ -31,34 +31,8 @@
 #include "debug.h"
 #include "hmac.h"
 
-/** Aaron D. Gifford's implementation of SHA256
- *  see http://www.aarongifford.com/ */
-#ifdef WITH_SHA256
-#  include "sha2/sha2.h"
-
-#define DTLS_HASH_CTX_SIZE sizeof(SHA256_CTX)
-
-static inline void
-dtls_hash_init(void *ctx) {
-  SHA256_Init((SHA256_CTX *)ctx);
-}
-
-static inline void 
-dtls_hash_update(void *ctx, const unsigned char *input, size_t len) {
-  SHA256_Update((SHA256_CTX *)ctx, input, len);
-}
-
-static inline size_t
-dtls_hash_finalize(unsigned char *buf, void *ctx) {
-  SHA256_Final(buf, (SHA256_CTX *)ctx);
-  return SHA256_DIGEST_LENGTH;
-}
-#endif /* WITH_SHA256 */
-
 /* use malloc()/free() on platforms other than Contiki */
 #ifndef WITH_CONTIKI
-#define dtls_hmac_storage_init
-
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
   return (dtls_hmac_context_t *)malloc(DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
@@ -75,11 +49,6 @@ dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
 typedef unsigned char _hmac_context_buffer_t[DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE];
 MEMB(hmac_context_storage, _hmac_context_buffer_t, DTLS_HASH_MAX);
 
-void
-dtls_hmac_storage_init() {
-  memb_init(&hmac_context_storage);
-}
-
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
   return (dtls_hmac_context_t *)memb_alloc(&hmac_context_storage);
@@ -91,6 +60,12 @@ dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
 }
 #endif /* WITH_CONTIKI */
 
+void
+dtls_hmac_storage_init() {
+#ifdef WITH_CONTIKI
+  memb_init(&hmac_context_storage);
+#endif /* WITH_CONTIKI */
+}
 
 void
 dtls_hmac_update(dtls_hmac_context_t *ctx,
@@ -98,6 +73,17 @@ dtls_hmac_update(dtls_hmac_context_t *ctx,
   assert(ctx);
   dtls_hash_update(ctx->data, input, ilen);
 }
+
+dtls_hmac_context_t *
+dtls_hmac_new(unsigned char *key, size_t klen) {
+  dtls_hmac_context_t *ctx;
+
+  ctx = dtls_hmac_context_new();
+  if (ctx)
+    dtls_hmac_init(ctx, key, klen);
+
+  return ctx;
+};
 
 void
 dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {
@@ -128,7 +114,8 @@ dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {
 
 void
 dtls_hmac_free(dtls_hmac_context_t *ctx) {
-  ctx = dtls_hmac_context_free(ctx);
+  if (ctx)
+    dtls_hmac_context_free(ctx);
 }
 
 int

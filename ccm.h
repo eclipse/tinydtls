@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -26,6 +26,7 @@
 #ifndef _CCM_H_
 #define _CCM_H_
 
+#include "config.h"
 #include "aes/rijndael.h"
 
 /* implementation of Counter Mode CBC-MAC, RFC 3610 */
