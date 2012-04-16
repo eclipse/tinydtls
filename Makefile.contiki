@@ -8,24 +8,20 @@ CONTIKI=../..
 
 WITH_UIP6=1
 UIP_CONF_IPV6=1
-
-ifneq ($(TARGET), minimal-net)
-CFLAGS += -DUIP_CONF_IPV6_RPL=1
-endif
+UIP_CONF_RPL=0
 
 ifneq ($(ROLE),client)
-	UIP_LLADDR="{0x00,0x06,0x98,0x00,0x02,0x32}"
-	CFLAGS+= -DUIP_CONF_LLADDR=$(UIP_LLADDR)
+	CFLAGS+= -DHARD_CODED_ADDRESS=\"aaaa::02:232\"
 else
-	UIP_LLADDR="{0x00,0x06,0x98,0x00,0x02,0x30}"
-	CFLAGS+= -DUDP_CONNECTION_ADDR="fe80::206:98ff:fe00:232" \
-		 -DUIP_CONF_LLADDR=$(UIP_LLADDR)
+	CFLAGS+= 
+	CFLAGS+= -DUDP_CONNECTION_ADDR="fe80::ff:fe02:232" \
+		 -DHARD_CODED_ADDRESS=\"aaaa::02:230\"
 endif
 
 CFLAGS += -ffunction-sections
 LDFLAGS += -Wl,--gc-sections,--undefined=_reset_vector__,--undefined=InterruptVectors,--undefined=_copy_data_init__,--undefined=_clear_bss_init__,--undefined=_end_of_init__
 
-CFLAGS += -DUIP_CONF_TCP=0
+CFLAGS += -DUIP_CONF_TCP=0 -DSHA2_USE_INTTYPES_H
 
 APPS += tinydtls/aes tinydtls/sha2 tinydtls
 
