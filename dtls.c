@@ -25,7 +25,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef HAVE_ASSERT_H
 #include <assert.h>
+#endif
 
 #include "debug.h"
 #include "numeric.h"
@@ -1253,7 +1255,7 @@ static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
-  unsigned char pre_master_secret[60];
+  unsigned char pre_master_secret[DTLS_MASTER_SECRET_LENGTH];
   size_t pre_master_len = 0;
 
   /* calculate master key, send CCS */

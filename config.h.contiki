@@ -31,16 +31,17 @@
 
 #include "contiki-conf.h"
 
-#if defined(PLATFORM) && PLATFORM == PLATFORM_MC1322X
+#if CONTIKI_TARGET_REDBEE_ECONOTAG
 /* Redbee econotags get a special treatment here: endianness is set
  * explicitly, and 
  */ 
 
-#define BYTE_ORDER UIP_LITTLE_ENDIAN
+/* #define BYTE_ORDER UIP_LITTLE_ENDIAN */
 
 #undef HAVE_ASSERT_H
+#define assert(x)
 #define HAVE_UNISTD_H
-#endif /* defined(PLATFORM) && PLATFORM == PLATFORM_MC1322X */
+#endif /* CONTIKI_TARGET_REDBEE_ECONOTAG */
 
 #ifdef CONTIKI_TARGET_MBXXX
 /* ST Microelectronics */ 

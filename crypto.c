@@ -24,7 +24,9 @@
  */
 
 #include <stdio.h>
+#ifdef HAVE_ASSERT_H
 #include <assert.h>
+#endif
 
 #include "aes/rijndael.h"
 
