@@ -33,17 +33,19 @@
 /* for 256-bit keys, fewer for less */
 #define AES_MAXROUNDS	14
 
+/* bergmann: to avoid conflicts with typedefs from certain Contiki platforms,
+ * the following type names have been prefixed with "aes_": */
 typedef unsigned char	u_char;
-typedef unsigned char	u8;
-typedef unsigned short	u16;
-typedef unsigned int	u32;
+typedef unsigned char	aes_u8;
+typedef unsigned short	aes_u16;
+typedef unsigned int	aes_u32;
 
 /*  The structure for key information */
 typedef struct {
 	int	enc_only;		/* context contains only encrypt schedule */
 	int	Nr;			/* key-length-dependent number of rounds */
-	u32	ek[4*(AES_MAXROUNDS + 1)];	/* encrypt key schedule */
-	u32	dk[4*(AES_MAXROUNDS + 1)];	/* decrypt key schedule */
+	aes_u32	ek[4*(AES_MAXROUNDS + 1)];	/* encrypt key schedule */
+	aes_u32	dk[4*(AES_MAXROUNDS + 1)];	/* decrypt key schedule */
 } rijndael_ctx;
 
 int	 rijndael_set_key(rijndael_ctx *, const u_char *, int);
