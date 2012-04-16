@@ -1,6 +1,6 @@
-/* dsrv -- utility functions for servers that use datagram sockets
+/* debug.h -- debug utilities
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -26,6 +26,8 @@
 #ifndef _DEBUG_H_
 #define _DEBUG_H_
 
+#include "config.h"
+
 /** Pre-defined log levels akin to what is used in \b syslog. */
 typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
        LOG_NOTICE, LOG_INFO, LOG_DEBUG
@@ -43,11 +45,15 @@ void set_log_level(log_t level);
  * set_log_level(). */
 void dsrv_log(log_t level, char *format, ...);
 
+#ifndef NDEBUG
 /* A set of convenience macros for common log levels. */
 #define info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
 #define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
 #define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
+#else
+#define info(...)
+#define warn(...)
+#define debug(...)
+#endif
 
 #endif /* _DEBUG_H_ */
-
-
