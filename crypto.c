@@ -127,7 +127,7 @@ dtls_p_hash(dtls_hashfunc_t h,
     HMAC_UPDATE_SEED(hmac_p, random2, random2len);
 
     len += dtls_hmac_finalize(hmac_p, tmp);
-    memxor(buf, tmp, dlen);
+    memcpy(buf, tmp, dlen);
     buf += dlen;
 
     /* calculate A(i+1) */
@@ -144,7 +144,7 @@ dtls_p_hash(dtls_hashfunc_t h,
   HMAC_UPDATE_SEED(hmac_p, random2, random2len);
   
   dtls_hmac_finalize(hmac_p, tmp);
-  memxor(buf, tmp, buflen - len);
+  memcpy(buf, tmp, buflen - len);
 
  error:
   dtls_hmac_free(hmac_a);
@@ -159,26 +159,7 @@ dtls_prf(unsigned char *key, size_t keylen,
 	 unsigned char *random1, size_t random1len,
 	 unsigned char *random2, size_t random2len,
 	 unsigned char *buf, size_t buflen) {
-#if DTLS_VERSION == 0xfeff
-  size_t len_2 = keylen >> 1;
 
-  /* Clear the result buffer */
-  memset(buf, 0, buflen);
-
-  dtls_p_hash(HASH_MD5,
-	      key, len_2 + (keylen & 0x01),
-	      label, labellen, 
-	      random1, random1len,
-	      random2, random2len,
-	      buf, buflen);
-
-  return dtls_p_hash(HASH_SHA1,
-		     key + len_2, len_2 + (keylen & 0x01),
-		     label, labellen, 
-		     random1, random1len,
-		     random2, random2len,
-		     buf, buflen);
-#elif DTLS_VERSION == 0xfefd
   /* Clear the result buffer */
   memset(buf, 0, buflen);
   return dtls_p_hash(HASH_SHA256, 
@@ -187,7 +168,6 @@ dtls_prf(unsigned char *key, size_t keylen,
 		     random1, random1len,
 		     random2, random2len,
 		     buf, buflen);
-#endif
 }
 
 void
