@@ -492,6 +492,39 @@ known_cipher(dtls_cipher_t code) {
   return code == TLS_PSK_WITH_AES_128_CCM_8;
 }
 
+void
+calculate_key_block(dtls_context_t *ctx, 
+		    dtls_security_parameters_t *config,
+		    unsigned char client_random[32],
+		    unsigned char server_random[32]) {
+  unsigned char *pre_master_secret;
+  size_t pre_master_len = 0;
+  pre_master_secret = config->key_block;
+
+  /* Temporarily use the key_block storage space for the pre master secret. */
+  pre_master_len = dtls_pre_master_secret(ctx->psk, ctx->psk_length, 
+					  pre_master_secret);
+
+  dtls_prf(pre_master_secret, pre_master_len,
+	   (unsigned char *)"master secret", 13,
+	   client_random, 32,
+	   server_random, 32,
+	   config->master_secret, 
+	   DTLS_MASTER_SECRET_LENGTH);
+
+  /* create key_block from master_secret
+   * key_block = PRF(master_secret,
+                    "key expansion" + server_random + client_random) */
+
+  dtls_prf(config->master_secret, 
+	   DTLS_MASTER_SECRET_LENGTH,
+	   (unsigned char *)"key expansion", 13,
+	   server_random, 32,
+	   client_random, 32,
+	   config->key_block,
+	   dtls_kb_size(config));
+}
+
 /**
  * Updates the security parameters of given \p peer.  As this must be
  * done before the new configuration is activated, it changes the
@@ -522,7 +555,9 @@ dtls_update_parameters(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH + sizeof(uint16);
   data_length -= DTLS_HS_LENGTH + sizeof(uint16);
 
-  /* store client random in config */
+  /* store client random in config 
+   * FIXME: if we send the ServerHello here, we do not need to store
+   * the client's random bytes */
   memcpy(config->client_random, data, sizeof(config->client_random));
   data += sizeof(config->client_random);
   data_length -= sizeof(config->client_random);
@@ -606,36 +641,11 @@ static int
 check_ccs(dtls_context_t *ctx, 
 	  dtls_peer_t *peer,
 	  uint8 *record, uint8 *data, size_t data_length) {
-
-  unsigned char pre_master_secret[60];
   size_t pre_master_len = 0;
 
   if (DTLS_RECORD_HEADER(record)->content_type != DTLS_CT_CHANGE_CIPHER_SPEC
       || data_length < 1 || data[0] != 1)
     return 0;
-  
-  /* FIXME: explicitly store length of psk */
-  pre_master_len = 
-    dtls_pre_master_secret(ctx->psk, ctx->psk_length, pre_master_secret);
-
-  dtls_prf(pre_master_secret, pre_master_len,
-	   (unsigned char *)"master secret", 13,
-	   OTHER_CONFIG(peer)->client_random, 32,
-	   OTHER_CONFIG(peer)->server_random, 32,
-	   OTHER_CONFIG(peer)->master_secret, 
-	   DTLS_MASTER_SECRET_LENGTH);
-
-  /* create key_block from master_secret
-   * key_block = PRF(master_secret,
-                    "key expansion" + server_random + client_random) */
-
-  dtls_prf(OTHER_CONFIG(peer)->master_secret, 
-	   DTLS_MASTER_SECRET_LENGTH,
-	   (unsigned char *)"key expansion", 13,
-	   OTHER_CONFIG(peer)->server_random, 32,
-	   OTHER_CONFIG(peer)->client_random, 32,
-	   OTHER_CONFIG(peer)->key_block,
-	   dtls_kb_size(OTHER_CONFIG(peer)));
 
   /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
   /* client */
@@ -998,19 +1008,17 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
 
-  /* Set server random: First generate 32 bytes of random data and then 
+  /* Set server random: First generate 28 bytes of random data and then 
    * overwrite the leading 4 bytes with the timestamp. */
-  prng(OTHER_CONFIG(peer)->server_random, 
-       sizeof(OTHER_CONFIG(peer)->server_random));
-  dtls_int_to_uint32(&OTHER_CONFIG(peer)->server_random, clock_time());
+  prng(p, 28);
+  dtls_int_to_uint32(p + 28, clock_time());
 
-  /* random gmt and server random bytes */
-  memcpy(p, &OTHER_CONFIG(peer)->server_random, 
-	 sizeof(OTHER_CONFIG(peer)->server_random));
+  calculate_key_block(ctx, OTHER_CONFIG(peer), 
+		      OTHER_CONFIG(peer)->client_random, p);
+
   p += 32;
 
   *p++ = 0;			/* no session id */
-
 
   if (OTHER_CONFIG(peer)->cipher != TLS_NULL_WITH_NULL_NULL) {
     /* selected cipher suite */
@@ -1168,8 +1176,12 @@ check_server_hello(dtls_context_t *ctx,
     data_length -= sizeof(uint16);
 
     /* store server random data */
-    memcpy(OTHER_CONFIG(peer)->server_random, data,
-	   sizeof(OTHER_CONFIG(peer)->server_random));
+    calculate_key_block(ctx, OTHER_CONFIG(peer), 
+			OTHER_CONFIG(peer)->client_random,
+			data);
+
+    /* memcpy(OTHER_CONFIG(peer)->server_random, data, */
+    /* 	   sizeof(OTHER_CONFIG(peer)->server_random)); */
     data += sizeof(OTHER_CONFIG(peer)->client_random);
     data_length -= sizeof(OTHER_CONFIG(peer)->client_random);
 
@@ -1263,28 +1275,6 @@ check_server_hellodone(dtls_context_t *ctx,
     return 0;
   
   update_hs_hash(peer, data, data_length);
-
-  pre_master_len = 
-    dtls_pre_master_secret(ctx->psk, ctx->psk_length, pre_master_secret);
-
-  dtls_prf(pre_master_secret, pre_master_len,
-	   (unsigned char *)"master secret", 13,
-	   OTHER_CONFIG(peer)->client_random, 32,
-	   OTHER_CONFIG(peer)->server_random, 32,
-	   OTHER_CONFIG(peer)->master_secret, 
-	   DTLS_MASTER_SECRET_LENGTH);
-
-  /* create key_block from master_secret
-   * key_block = PRF(master_secret,
-                    "key expansion" + server_random + client_random) */
-
-  dtls_prf(OTHER_CONFIG(peer)->master_secret, 
-	   DTLS_MASTER_SECRET_LENGTH,
-	   (unsigned char *)"key expansion", 13,
-	   OTHER_CONFIG(peer)->server_random, 32,
-	   OTHER_CONFIG(peer)->client_random, 32,
-	   OTHER_CONFIG(peer)->key_block, 
-	   dtls_kb_size(OTHER_CONFIG(peer)));
 
   /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
   /* client */

@@ -41,8 +41,11 @@
 #define DTLS_MAC_LENGTH        DTLS_HMAC_DIGEST_SIZE
 #define DTLS_IV_LENGTH         4  /* length of nonce_explicit */
 
-/** Maximum size of the generated keyblock. */
-
+/** 
+ * Maximum size of the generated keyblock. Note that MAX_KEYBLOCK_LENGTH must 
+ * be large enough to hold the pre_master_secret, i.e. twice the length of the 
+ * pre-shared key + 1.
+ */
 #define MAX_KEYBLOCK_LENGTH  \
   (2 * DTLS_MAC_KEY_LENGTH + 2 * DTLS_KEY_LENGTH + 2 * DTLS_IV_LENGTH)
 
@@ -64,7 +67,6 @@ typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
 typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
-  uint8  server_random[32];	/**< server random gmt and bytes */
 
   dtls_peer_type role; /**< denotes if the remote peer is DTLS_CLIENT or DTLS_SERVER */
   unsigned char compression;		/**< compression method */
