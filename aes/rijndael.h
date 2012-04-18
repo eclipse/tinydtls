@@ -42,10 +42,14 @@ typedef unsigned int	aes_u32;
 
 /*  The structure for key information */
 typedef struct {
+#ifdef WITH_AES_DECRYPT
 	int	enc_only;		/* context contains only encrypt schedule */
+#endif
 	int	Nr;			/* key-length-dependent number of rounds */
 	aes_u32	ek[4*(AES_MAXROUNDS + 1)];	/* encrypt key schedule */
+#ifdef WITH_AES_DECRYPT
 	aes_u32	dk[4*(AES_MAXROUNDS + 1)];	/* decrypt key schedule */
+#endif
 } rijndael_ctx;
 
 int	 rijndael_set_key(rijndael_ctx *, const u_char *, int);

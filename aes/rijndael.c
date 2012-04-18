@@ -803,6 +803,7 @@ rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 	return 0;
 }
 
+#ifdef WITH_AES_DECRYPT
 /**
  * Expand the cipher key into the decryption key schedule.
  *
@@ -850,6 +851,7 @@ rijndaelKeySetupDec(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 	}
 	return Nr;
 }
+#endif
 
 void
 rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
@@ -1035,6 +1037,7 @@ rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
 	PUTU32(ct + 12, s3);
 }
 
+#ifdef WITH_AES_DECRYPT
 static void
 rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16],
     aes_u8 pt[16])
@@ -1218,6 +1221,7 @@ rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16],
    		rk[3];
 	PUTU32(pt + 12, s3);
 }
+#endif
 
 /* setup key context for encryption only */
 int
@@ -1230,11 +1234,14 @@ rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
 		return -1;
 
 	ctx->Nr = rounds;
+#ifdef WITH_AES_DECRYPT
 	ctx->enc_only = 1;
+#endif
 
 	return 0;
 }
 
+#ifdef WITH_AES_DECRYPT
 /* setup key context for both encryption and decryption */
 int
 rijndael_set_key(rijndael_ctx *ctx, const u_char *key, int bits)
@@ -1258,6 +1265,7 @@ rijndael_decrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
 {
 	rijndaelDecrypt(ctx->dk, ctx->Nr, src, dst);
 }
+#endif
 
 void
 rijndael_encrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
