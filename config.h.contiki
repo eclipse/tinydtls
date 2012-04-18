@@ -11,19 +11,19 @@
 #define HAVE_STRNLEN 1
 #define HAVE_SNPRINTF 1
 
+#ifndef DTLS_PEER_MAX
+/** The maximum number DTLS peers (i.e. sessions). */
+#  define DTLS_PEER_MAX 4
+#endif
+
 #ifndef DTLS_CIPHER_CONTEXT_MAX
 /** The maximum number of cipher contexts that can be used in parallel. */
-#  define DTLS_CIPHER_CONTEXT_MAX 4
+#  define DTLS_CIPHER_CONTEXT_MAX (2 * DTLS_PEER_MAX)
 #endif
 
 #ifndef DTLS_HASH_MAX
 /** The maximum number of hash functions that can be used in parallel. */
-#  define DTLS_HASH_MAX 2
-#endif
-
-#ifndef DTLS_PEER_MAX
-/** The maximum number DTLS peers (i.e. sessions). */
-#  define DTLS_PEER_MAX 4
+#  define DTLS_HASH_MAX DTLS_PEER_MAX
 #endif
 
 /** The maximum buffer size to hold DTLS messagesg */
@@ -32,9 +32,7 @@
 #include "contiki-conf.h"
 
 #if CONTIKI_TARGET_REDBEE_ECONOTAG
-/* Redbee econotags get a special treatment here: endianness is set
- * explicitly, and 
- */ 
+/* Redbee econotags get a special treatment here: endianness is set explicitly */ 
 
 /* #define BYTE_ORDER UIP_LITTLE_ENDIAN */
 
