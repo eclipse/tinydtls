@@ -791,8 +791,10 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	     verify_data, sizeof(verify_data));
   }
 
+#ifndef NDEBUG
   printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(verify_data)); printf("\n");
   printf("v:\t"); dump(verify_data, sizeof(verify_data)); printf("\n");
+#endif
   return memcmp(data + DTLS_HS_LENGTH, verify_data, sizeof(verify_data)) == 0;
 }
 
@@ -877,20 +879,17 @@ dtls_prepare_record(dtls_peer_t *peer,
       warn("no write_cipher available!\n");
       return -1;
     }
+#ifndef NDEBUG
     printf("nonce:\t");
     dump(N, DTLS_CCM_BLOCKSIZE);
     printf("\nkey:\t");
     dump(dtls_kb_local_write_key(CURRENT_CONFIG(peer)), 
 	 dtls_kb_key_size(CURRENT_CONFIG(peer)));
     printf("\n");
+#endif
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
 
     res = dtls_encrypt(cipher_context, p + 8, data_length, p + 8);
-
-    printf("dtls_ccm_encrypt_message() for message with length %u yields %d\n", 
-	   (unsigned int)data_length, res);
-    
-    /* dtls_cipher_free(cipher_context); */
 
     if (res < 0)
       return -1;
@@ -1126,9 +1125,11 @@ dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 	   NULL, 0,
 	   p, DTLS_FIN_LENGTH);
 
+#ifndef NDEBUG
   printf("server finished MAC:\t");
   dump(p, DTLS_FIN_LENGTH);
   printf("\n");
+#endif
 
   p += DTLS_FIN_LENGTH;
 
@@ -1445,6 +1446,7 @@ decrypt_verify(dtls_peer_t *peer,
       return 0;
     }
       
+#ifndef NDEBUG
     printf("nonce:\t");
     dump(N, DTLS_CCM_BLOCKSIZE);
     printf("\nkey:\t");
@@ -1453,6 +1455,7 @@ decrypt_verify(dtls_peer_t *peer,
     printf("\nciphertext:\n");
     dump(*cleartext, *clen);
     printf("\n");
+#endif
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
 
@@ -1462,12 +1465,16 @@ decrypt_verify(dtls_peer_t *peer,
     if (!ok)
       warn("decryption failed\n");
     else {
+#ifndef NDEBUG
       printf("decrypt_verify(): found %ld bytes cleartext\n", len);
+#endif
       *clen = len;
     }
+#ifndef NDEBUG
     printf("\ncleartext:\n");
     dump(*cleartext, *clen);
     printf("\n");
+#endif
   }
 
   return ok;
