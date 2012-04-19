@@ -23,6 +23,8 @@
  * SOFTWARE.
  */
 
+#include "config.h"
+
 #if defined(HAVE_ASSERT_H) && !defined(assert)
 #include <assert.h>
 #endif
@@ -92,12 +94,13 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
 void 
 dsrv_log(log_t level, char *format, ...) {
   static char timebuf[32];
-  struct tm *tmp;
-  time_t now;
   va_list ap;
+  FILE *log_fd;
 
   if (maxlog < level)
     return;
+
+  log_fd = level <= LOG_CRIT ? stderr : stdout;
 
   if (print_timestamp(timebuf,sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);

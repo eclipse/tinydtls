@@ -23,25 +23,27 @@
  * SOFTWARE.
  */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_ASSERT_H
 #include <assert.h>
 #endif
+#ifdef HAVE_TIME_H
+#include <time.h>
+#define clock_time() (time(NULL))
+#endif
+#ifndef WITH_CONTIKI
+#include <stdlib.h>
+#include "uthash.h"
+#endif /* WITH_CONTIKI */
 
 #include "debug.h"
 #include "numeric.h"
 #include "dtls.h"
 
-#ifdef WITH_MD5
-#  include "md5/md5.h"
-#endif
-
-#ifdef WITH_SHA1
-#  include "sha1/sha.h"
-#endif
-
-#if defined(WITH_SHA256) || defined(WITH_SHA384) || defined(WITH_SHA512)
+#ifdef WITH_SHA256
 #  include "sha2/sha2.h"
 #endif
 
@@ -54,6 +56,15 @@
 #define dtls_get_epoch(H) dtls_uint16_to_int(&(H)->epoch)
 #define dtls_get_sequence_number(H) dtls_uint48_to_ulong(&(H)->sequence_number)
 #define dtls_get_fragment_length(H) dtls_uint24_to_int(&(H)->fragment_length)
+
+#ifndef WITH_CONTIKI
+#define HASH_FIND_PEER(head,sess,out)		\
+  HASH_FIND(hh,head,sess,sizeof(session_t),out)
+#define HASH_ADD_PEER(head,sess,add)		\
+  HASH_ADD(hh,head,sess,sizeof(session_t),add)
+#define HASH_DEL_PEER(head,delptr)		\
+  HASH_DELETE(hh,head,delptr)
+#endif /* WITH_CONTIKI */
 
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
@@ -113,12 +124,37 @@ extern void crypto_init();
 
 dtls_context_t the_dtls_context;
 
+#ifndef WITH_CONTIKI
+static inline dtls_peer_t *
+dtls_malloc_peer() {
+  return (dtls_peer_t *)malloc(sizeof(dtls_peer_t));
+}
+
+static inline void
+dtls_free_peer(dtls_peer_t *peer) {
+  free(peer);
+}
+#else /* WITH_CONTIKI */
+#include "memb.h"
 MEMB(peer_storage, dtls_peer_t, DTLS_PEER_MAX);
+
+static inline dtls_peer_t *
+dtls_malloc_peer() {
+  return memb_alloc(&peer_storage);
+}
+static inline void
+dtls_free_peer(dtls_peer_t *peer) {
+  memb_free(&peer_storage, peer);
+}
+#endif /* WITH_CONTIKI */
 
 void
 dtls_init() {
-  memb_init(&peer_storage);
   crypto_init();
+
+#ifdef WITH_CONTIKI
+  memb_init(&peer_storage);
+#endif /* WITH_CONTIKI */
 }
 
 /* Calls cb_write() with given arguments if defined, otherwise an
@@ -149,13 +185,17 @@ int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 
 dtls_peer_t *
 dtls_get_peer(struct dtls_context_t *ctx, session_t *session) {
-  dtls_peer_t *p;
+  dtls_peer_t *p = NULL;
 
+#ifndef WITH_CONTIKI
+  HASH_FIND_PEER(ctx->peers, session, p);
+#else /* WITH_CONTIKI */
   for (p = list_head(ctx->peers); p; p = list_item_next(p))
     if (dtls_session_equals(&p->session, session))
       return p;
+#endif /* WITH_CONTIKI */
   
-  return NULL;
+  return p;
 }
 
 int
@@ -641,7 +681,6 @@ static int
 check_ccs(dtls_context_t *ctx, 
 	  dtls_peer_t *peer,
 	  uint8 *record, uint8 *data, size_t data_length) {
-  size_t pre_master_len = 0;
 
   if (DTLS_RECORD_HEADER(record)->content_type != DTLS_CT_CHANGE_CIPHER_SPEC
       || data_length < 1 || data[0] != 1)
@@ -686,14 +725,12 @@ check_ccs(dtls_context_t *ctx,
   return 1;
 }
 
-
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
 	      session_t *session) {
   dtls_peer_t *peer;
 
-  /* FIXME: use malloc on native Linux/Unix */
-  peer = memb_alloc(&peer_storage);
+  peer = dtls_malloc_peer();
   if (peer) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
@@ -731,11 +768,6 @@ static inline void
 clear_hs_hash(dtls_peer_t *peer) {
   assert(peer);
   dtls_hash_init(peer->hs_hash);
-}
-
-/** Releases the storage occupied by peer. */
-void
-dtls_free_peer(dtls_peer_t *peer) {
 }
 
 /** 
@@ -1267,8 +1299,6 @@ static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
-  unsigned char pre_master_secret[DTLS_MASTER_SECRET_LENGTH];
-  size_t pre_master_len = 0;
 
   /* calculate master key, send CCS */
   if (!IS_SERVERHELLODONE(data, data_length))
@@ -1710,11 +1740,15 @@ dtls_handle_message(dtls_context_t *ctx,
   size_t data_length;		/* length of decrypted payload 
 				   (without MAC and padding) */
 
-  /* check if we have DTLS state for raddr/ifindex */
+  /* check if we have DTLS state for addr/port/ifindex */
+#ifndef WITH_CONTIKI
+  HASH_FIND_PEER(ctx->peers, session, peer);
+#else /* WITH_CONTIKI */
   for (peer = list_head(ctx->peers); 
        peer && !dtls_session_equals(&peer->session, session);
        peer = list_item_next(peer))
     ;
+#endif /* WITH_CONTIKI */
 
   if (!peer) {			
 
@@ -1782,7 +1816,11 @@ dtls_handle_message(dtls_context_t *ctx,
       return -1;
     }
 
+#ifndef WITH_CONTIKI
+    HASH_ADD_PEER(ctx->peers, session, peer);
+#else /* WITH_CONTIKI */
     list_add(ctx->peers, peer);
+#endif /* WITH_CONTIKI */
     
     /* update finish MAC */
     update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
@@ -1841,7 +1879,11 @@ dtls_handle_message(dtls_context_t *ctx,
       if (handle_alert(ctx, peer, msg, data, data_length)) {
 
 	/* invalidate peer */
+#ifndef WITH_CONTIKI
+	HASH_DEL_PEER(ctx->peers, peer);
+#else /* WITH_CONTIKI */
 	list_remove(ctx->peers, peer);
+#endif /* WITH_CONTIKI */
 
 	dtls_free_peer(peer);
 
@@ -1882,9 +1924,11 @@ dtls_new_context(void *app_data) {
   memset(c, 0, sizeof(dtls_context_t));
   c->app = app_data;
   
+#ifdef WITH_CONTIKI
   LIST_STRUCT_INIT(c, peers);
   /* LIST_STRUCT_INIT(c, key_store); */
-  
+#endif /* WITH_CONTIKI */
+
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
     c->cookie_secret_age = clock_time();
   else 
@@ -1927,13 +1971,24 @@ dtls_remove_psk(dtls_context_t *ctx,
 
 void dtls_free_context(dtls_context_t *ctx) {
   dtls_peer_t *p;
-  int i;
   
+#ifndef WITH_CONTIKI
+  dtls_peer_t *tmp;
+
+  if (ctx->peers) {
+    HASH_ITER(hh, ctx->peers, p, tmp) {
+      dtls_free_peer(p);
+    }
+  }
+#else /* WITH_CONTIKI */
+  int i;
+
   p = (dtls_peer_t *)peer_storage.mem;
   for (i = 0; i < peer_storage.num; ++i, ++p) {
     if (peer_storage.count[i])
       dtls_free_peer(p);
   }
+#endif /* WITH_CONTIKI */
 
   dtls_remove_psk(ctx, ctx->psk_id, ctx->psk_id_length);
 }
@@ -1945,9 +2000,16 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
   size_t size;
   int res;
 
-  /* check if we have DTLS state for raddr/ifindex */
+  /* check if we have DTLS state for addr/port/ifindex */
+#ifndef WITH_CONTIKI
+  HASH_FIND_PEER(ctx->peers, dst, peer);
+#else /* WITH_CONTIKI */
   for (peer = list_head(ctx->peers); peer; peer = list_item_next(peer))
-    if (dtls_session_equals(&peer->session, dst)) {
+    if (dtls_session_equals(&peer->session, dst))
+      break;
+#endif /* WITH_CONTIKI */
+  
+  if (peer) {
     debug("found peer, try to re-connect\n");
     /* FIXME: send HelloRequest if we are server, 
        ClientHello with good cookie if client */
@@ -1960,7 +2022,11 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
   OTHER_CONFIG(peer)->role = DTLS_SERVER;
   CURRENT_CONFIG(peer)->role = DTLS_SERVER;
 
+#ifndef WITH_CONTIKI
+  HASH_ADD_PEER(ctx->peers, session, peer);
+#else /* WITH_CONTIKI */
   list_add(ctx->peers, peer);
+#endif /* WITH_CONTIKI */
 
   /* send ClientHello with some Cookie */
 

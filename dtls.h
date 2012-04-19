@@ -33,11 +33,17 @@
 
 #include <stdint.h>
 
+#ifndef WITH_CONTIKI
+#include "uthash.h"
+#else /* WITH_CONTIKI */
 #include "list.h"
+#endif /* WITH_CONTIKI */
+
 #include "crypto.h"
 #include "hmac.h"
 
 #include "config.h"
+#include "global.h"
 #ifndef DTLSv12
 #define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
 #else
@@ -64,7 +70,11 @@ typedef enum {
  * Holds security parameters, local state and the transport address
  * for each peer. */
 typedef struct dtls_peer_t {
+#ifndef WITH_CONTIKI
+  UT_hash_handle hh;
+#else /* WITH_CONTIKI */
   struct dtls_peer_t *next;
+#endif /* WITH_CONTIKI */
 
   session_t session;	     /**< peer address and local interface */
 
@@ -109,7 +119,11 @@ typedef struct dtls_context_t {
   unsigned char cookie_secret[DTLS_COOKIE_SECRET_LENGTH];
   clock_time_t cookie_secret_age; /**< the time the secret has been generated */
 
+#ifndef WITH_CONTIKI
+  dtls_peer_t *peers;		/**< peer hash map */
+#else /* WITH_CONTIKI */
   LIST_STRUCT(peers);
+#endif /* WITH_CONTIKI */
 
   void *app;			/**< application-specific data */
   int (*cb_write)(struct dtls_context_t *ctx, 

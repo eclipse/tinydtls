@@ -35,6 +35,8 @@
 
 /* use malloc()/free() on platforms other than Contiki */
 #ifndef WITH_CONTIKI
+#include <stdlib.h>
+
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
   return (dtls_hmac_context_t *)malloc(DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
@@ -85,7 +87,7 @@ dtls_hmac_new(unsigned char *key, size_t klen) {
     dtls_hmac_init(ctx, key, klen);
 
   return ctx;
-};
+}
 
 void
 dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {

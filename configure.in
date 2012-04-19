@@ -56,15 +56,13 @@ AC_ARG_WITH(debug,
   [CPPFLAGS="${CPPFLAGS} -DNDEBUG"], 
   [])
 
-AC_ARG_WITH(sha256,
-  [AS_HELP_STRING([--without-sha256],[disable use of SHA256])],
-  [], 
-  [CPPFLAGS="${CPPFLAGS} -DWITH_SHA256" OPT_OBJS="${OPT_OBJS} sha2/sha2.o"])
+CPPFLAGS="${CPPFLAGS} -DDTLSv12 -DWITH_SHA256"
+OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
 AC_SUBST(OPT_OBJS)
 
 # Checks for header files.
-AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h time.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE

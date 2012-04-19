@@ -43,7 +43,9 @@
 #include <arpa/inet.h>
 #endif
 
-#ifdef WITH_CONTIKI
+#ifndef WITH_CONTIKI
+typedef unsigned int clock_time_t;
+#else /* WITH_CONTIKI */
 #include "uip.h"
 typedef struct {
   unsigned char size;
