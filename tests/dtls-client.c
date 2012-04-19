@@ -57,6 +57,8 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
+extern void dump(unsigned char *buf, size_t len);
+
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
@@ -81,6 +83,8 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   } else {
     dsrv_log(LOG_DEBUG, "got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
+    dump(buf, len);
+    PRINTF("\n");
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
@@ -273,10 +277,9 @@ main(int argc, char **argv) {
       else if (FD_ISSET(fileno(stdin), &rfds))
 	handle_stdin();
     }
-#if 0
+
     if (len)
       try_send(dtls_context, &dst);
-#endif
   }
   
   dtls_free_context(dtls_context);
