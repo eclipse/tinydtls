@@ -76,13 +76,16 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   session.size = sizeof(session.addr);
   len = recvfrom(fd, buf, MAX_READ_BUF, 0, 
 		 &session.addr.sa, &session.size);
-
+  
   if (len < 0) {
     perror("recvfrom");
     return -1;
   } else {
-    dsrv_log(LOG_DEBUG, "got %d bytes from port %d\n", len, 
-	     ntohs(session.addr.sin6.sin6_port));
+    unsigned char addrbuf[72];
+    dsrv_print_addr(&session, addrbuf, sizeof(addrbuf));
+    dsrv_log(LOG_DEBUG, "got %d bytes from %s\n", len, (char *)addrbuf);
+    dump((unsigned char *)&session, sizeof(session_t));
+    PRINTF("\n");
     dump(buf, len);
     PRINTF("\n");
   }
@@ -203,6 +206,7 @@ main(int argc, char **argv) {
     exit(1);
   }
   
+  memset(&dst, 0, sizeof(session_t));
   /* resolve destination address where server should be sent */
   res = resolve_address(argv[optind++], &dst.addr.sa);
   if (res < 0) {

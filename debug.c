@@ -33,10 +33,15 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+
 #ifdef HAVE_TIME_H
 #include <time.h>
 #endif
 
+#include "global.h"
 #include "debug.h"
 
 #ifdef WITH_CONTIKI
@@ -89,6 +94,116 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
 }
 
 #endif /* HAVE_TIME_H */
+
+#ifndef HAVE_STRNLEN
+/** 
+ * A length-safe strlen() fake. 
+ * 
+ * @param s      The string to count characters != 0.
+ * @param maxlen The maximum length of @p s.
+ * 
+ * @return The length of @p s.
+ */
+static inline size_t
+strnlen(const char *s, size_t maxlen) {
+  size_t n = 0;
+  while(*s++ && n < maxlen)
+    ++n;
+  return n;
+}
+#endif /* HAVE_STRNLEN */
+
+#ifndef min
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
+size_t
+dsrv_print_addr(const session_t *addr, unsigned char *buf, size_t len) {
+#ifdef HAVE_ARPA_INET_H
+  const void *addrptr = NULL;
+  in_port_t port;
+  unsigned char *p = buf;
+
+  switch (addr->addr.sa.sa_family) {
+  case AF_INET: 
+    addrptr = &addr->addr.sin.sin_addr;
+    port = ntohs(addr->addr.sin.sin_port);
+    break;
+  case AF_INET6:
+    if (len < 7) /* do not proceed if buffer is even too short for [::]:0 */
+      return 0;
+
+    *p++ = '[';
+
+    addrptr = &addr->addr.sin6.sin6_addr;
+    port = ntohs(addr->addr.sin6.sin6_port);
+
+    break;
+  default:
+    memcpy(buf, "(unknown address type)", min(22, len));
+    return min(22, len);
+  }
+
+  if (inet_ntop(addr->addr.sa.sa_family, addrptr, (char *)p, len) == 0) {
+    perror("dsrv_print_addr");
+    return 0;
+  }
+
+  p += strnlen((char *)p, len);
+
+  if (addr->addr.sa.sa_family == AF_INET6) {
+    if (p < buf + len) {
+      *p++ = ']';
+    } else 
+      return 0;
+  }
+
+  p += snprintf((char *)p, buf + len - p + 1, ":%d", port);
+
+  return buf + len - p;
+#else /* HAVE_ARPA_INET_H */
+# if WITH_CONTIKI
+  unsigned char *p = buf;
+  uint8_t i;
+#  if WITH_UIP6
+  const unsigned char hex[] = "0123456789ABCDEF";
+
+  if (len < 41)
+    return 0;
+
+  *p++ = '[';
+
+  for (i=0; i < 8; i += 4) {
+    *p++ = hex[(addr->addr.u16[i] & 0xf000) >> 24];
+    *p++ = hex[(addr->addr.u16[i] & 0x0f00) >> 16];
+    *p++ = hex[(addr->addr.u16[i] & 0x00f0) >> 8];
+    *p++ = hex[(addr->addr.u16[i] & 0x000f)];
+    *p++ = ':';
+  }
+  *(p-1) = ']';
+#  else /* WITH_UIP6 */
+#   warning "IPv4 network addresses will not be included in debug output"
+
+  if (len < 21)
+    return 0;
+#  endif /* WITH_UIP6 */
+  if (buf + len - p < 6)
+    return 0;
+
+#ifdef HAVE_SNPRINTF
+  p += snprintf((char *)p, buf + len - p + 1, ":%d", uip_htons(addr->port));
+#else /* HAVE_SNPRINTF */
+  /* @todo manual conversion of port number */
+#endif /* HAVE_SNPRINTF */
+
+  return buf + len - p;
+# else /* WITH_CONTIKI */
+  /* TODO: output addresses manually */
+#   warning "inet_ntop() not available, network addresses will not be included in debug output"
+# endif /* WITH_CONTIKI */
+  return 0;
+#endif
+}
 
 #ifndef WITH_CONTIKI
 void 

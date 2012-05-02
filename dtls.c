@@ -735,6 +735,14 @@ dtls_new_peer(dtls_context_t *ctx,
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
+    {
+      unsigned char addrbuf[72];
+      dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
+      printf("dtls_new_peer: %s\n", addrbuf);
+      dump((unsigned char *)session, sizeof(session_t));
+      printf("\n");
+    }
+
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
 
@@ -1743,6 +1751,21 @@ dtls_handle_message(dtls_context_t *ctx,
   /* check if we have DTLS state for addr/port/ifindex */
 #ifndef WITH_CONTIKI
   HASH_FIND_PEER(ctx->peers, session, peer);
+  {
+    dtls_peer_t *p = NULL;
+    HASH_FIND_PEER(ctx->peers, session, p);
+    if (!p) {
+      printf("dtls_handle_message: PEER NOT FOUND\n");
+      {
+	unsigned char addrbuf[72];
+	dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
+	printf("  %s\n", addrbuf);
+	dump((unsigned char *)session, sizeof(session_t));
+	printf("\n");
+      }
+    } else 
+      printf("dtls_handle_message: FOUND PEER\n");
+  }
 #else /* WITH_CONTIKI */
   for (peer = list_head(ctx->peers); 
        peer && !dtls_session_equals(&peer->session, session);
@@ -2024,6 +2047,17 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
 
 #ifndef WITH_CONTIKI
   HASH_ADD_PEER(ctx->peers, session, peer);
+  {
+    dtls_peer_t *p = NULL;
+    HASH_FIND_PEER(ctx->peers, dst, p);
+    if (!p) {
+      printf("dtls_connect: PEER NOT FOUND\n");
+    } else {
+      printf("dtls_connect: FOUND PEER\n");
+      dump((unsigned char *)&peer->session, sizeof(session_t));
+      printf("\n");
+    }
+  }
 #else /* WITH_CONTIKI */
   list_add(ctx->peers, peer);
 #endif /* WITH_CONTIKI */
