@@ -13,7 +13,7 @@
 
 #ifndef DTLS_PEER_MAX
 /** The maximum number DTLS peers (i.e. sessions). */
-#  define DTLS_PEER_MAX 4
+#  define DTLS_PEER_MAX 1
 #endif
 
 #ifndef DTLS_CIPHER_CONTEXT_MAX
@@ -26,7 +26,7 @@
 #  define DTLS_HASH_MAX DTLS_PEER_MAX
 #endif
 
-/** The maximum buffer size to hold DTLS messagesg */
+/** The maximum buffer size to hold DTLS messages */
 #define DTLS_MAX_BUF 100
 
 #include "contiki-conf.h"
