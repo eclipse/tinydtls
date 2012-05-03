@@ -2010,13 +2010,10 @@ dtls_new_context(void *app_data) {
 #ifdef WITH_CONTIKI
   LIST_STRUCT_INIT(c, peers);
   /* LIST_STRUCT_INIT(c, key_store); */
-<<<<<<< HEAD
   
   LIST_STRUCT_INIT(c, sendqueue);
   LIST_STRUCT_INIT(c, recvqueue);
-=======
 #endif /* WITH_CONTIKI */
->>>>>>> deb5111709a8eeedb75141dc66f5146a2069c71e
 
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
     c->cookie_secret_age = clock_time();
