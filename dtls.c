@@ -31,6 +31,7 @@
 
 #include "debug.h"
 #include "numeric.h"
+#include "netq.h"
 #include "dtls.h"
 
 #ifdef WITH_MD5
@@ -117,6 +118,7 @@ MEMB(peer_storage, dtls_peer_t, DTLS_PEER_MAX);
 
 void
 dtls_init() {
+  netq_init();
   memb_init(&peer_storage);
   crypto_init();
 }
@@ -170,16 +172,22 @@ dtls_write(struct dtls_context_t *ctx,
     return peer ? 0 : -1;
 }
 
-int 
+int
 dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
+  int result;
   /* To access the cookie, we have to determine the session id's
    * length and skip the whole thing. */
   if (msglen < DTLS_HS_LENGTH + DTLS_CH_LENGTH + sizeof(uint8)
       || dtls_uint16_to_int(msg + DTLS_HS_LENGTH) != DTLS_VERSION)
     return -1;
 
+  dump(msg, msglen);
+  printf("\n");
   msglen -= DTLS_HS_LENGTH + DTLS_CH_LENGTH;
   msg += DTLS_HS_LENGTH + DTLS_CH_LENGTH;
+  printf("ohne Header (len: %d): ", msglen);
+  dump(msg, msglen);
+  printf("\n");
 
   SKIP_VAR_FIELD(msg, msglen, uint8); /* skip session id */
 
@@ -187,8 +195,12 @@ dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
     return -1;
   
   *cookie = msg + sizeof(uint8);
+  result = dtls_uint8_to_int(msg);
+  printf("found cookie field with len %d:", result); 
+  dump(msg, 32);
+  printf("\n");
   debug("found cookie field (len: %d)\n", *msg & 0xff);
-  return *msg & 0xff;
+  return result;
 
  error:
   return -1;
@@ -349,10 +361,10 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
 
   if (peer) {
     /* increment handshake message sequence counter by 1 */
-    inc_uint(uint16, peer->mseq);
+    inc_uint(uint16, peer->hs_state.mseq);
   
     /* and copy the result to buf */
-    memcpy(buf, &peer->mseq, sizeof(uint16));
+    memcpy(buf, &peer->hs_state.mseq, sizeof(uint16));
   } else {
     memset(buf, 0, sizeof(uint16));    
   }
@@ -413,6 +425,12 @@ dtls_verify_peer(dtls_context_t *ctx,
     /* Perform cookie check. */
     len = dtls_get_cookie(data, data_length, &cookie);
 
+#ifndef NDEBUG
+    debug("compare with cookie: ");
+    dump(cookie, len);
+    printf("\n");
+#endif
+
     /* check if cookies match */
     if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
     debug("found matching cookie\n");
@@ -423,6 +441,8 @@ dtls_verify_peer(dtls_context_t *ctx,
       debug("invalid cookie:");
       dump(cookie, len);
       printf("\n");
+    } else {
+      debug("cookie len is 0!");
     }
 #endif
     /* ClientHello did not contain any valid cookie, hence we send a
@@ -641,7 +661,6 @@ static int
 check_ccs(dtls_context_t *ctx, 
 	  dtls_peer_t *peer,
 	  uint8 *record, uint8 *data, size_t data_length) {
-  size_t pre_master_len = 0;
 
   if (DTLS_RECORD_HEADER(record)->content_type != DTLS_CT_CHANGE_CIPHER_SPEC
       || data_length < 1 || data[0] != 1)
@@ -706,7 +725,7 @@ dtls_new_peer(dtls_context_t *ctx,
     /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
     /* FIXME: we use the default SHA256 here, might need to support other 
               hash functions as well */
-    dtls_hash_init(peer->hs_hash);
+    dtls_hash_init(peer->hs_state.hs_hash);
   }
   
   return peer;
@@ -719,18 +738,18 @@ update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
   dump(data, length);
   printf("\n");
 #endif
-  dtls_hash_update(peer->hs_hash, data, length);
+  dtls_hash_update(peer->hs_state.hs_hash, data, length);
 }
 
 static inline size_t
 finalize_hs_hash(dtls_peer_t *peer, uint8 *buf) {
-  return dtls_hash_finalize(buf, peer->hs_hash);
+  return dtls_hash_finalize(buf, peer->hs_state.hs_hash);
 }
 
 static inline void
 clear_hs_hash(dtls_peer_t *peer) {
   assert(peer);
-  dtls_hash_init(peer->hs_hash);
+  dtls_hash_init(peer->hs_state.hs_hash);
 }
 
 /** Releases the storage occupied by peer. */
@@ -766,13 +785,13 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   /* temporarily store hash status for roll-back after finalize */
-  memcpy(statebuf, peer->hs_hash, DTLS_HASH_CTX_SIZE);
+  memcpy(statebuf, peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
 
   digest_length = finalize_hs_hash(peer, buf);
   /* clear_hash(); */
 
   /* restore hash status */
-  memcpy(peer->hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
+  memcpy(peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
 
   {
     unsigned char finishedmsg[15] = { 
@@ -975,6 +994,8 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   printf("\n");
 #endif
 
+  /* FIXME: copy to peer's sendqueue (after fragmentation if
+   * necessary) and initialize retransmit timer */
   res = CB_WRITE(ctx, &peer->session, sendbuf, len);
 
   /* Guess number of bytes application data actually sent:
@@ -1268,8 +1289,6 @@ static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
-  unsigned char pre_master_secret[DTLS_MASTER_SECRET_LENGTH];
-  size_t pre_master_len = 0;
 
   /* calculate master key, send CCS */
   if (!IS_SERVERHELLODONE(data, data_length))
@@ -1384,12 +1403,12 @@ check_server_hellodone(dtls_context_t *ctx,
 				  0, DTLS_FIN_LENGTH, p);
   
     /* temporarily store hash status for roll-back after finalize */
-    memcpy(statebuf, peer->hs_hash, DTLS_HASH_CTX_SIZE);
+    memcpy(statebuf, peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
 
     length = finalize_hs_hash(peer, buf);
 
     /* restore hash status */
-    memcpy(peer->hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
+    memcpy(peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
 
     dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	     DTLS_MASTER_SECRET_LENGTH,
@@ -1704,6 +1723,37 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   return 1;
 }
 
+int
+dtls_read(dtls_context_t *ctx, session_t *session, uint8 *msg, size_t msglen) {
+  netq_t *node;
+
+  node = netq_node_new();
+  if (!node)
+    return -1;
+
+  memcpy(&node->remote, session, sizeof(session_t));
+  /* incoming packet may be truncated when internal storage is too small */
+  node->length = min(msglen, sizeof(netq_packet_t));
+  memcpy(node->data, msg, node->length);
+
+  netq_insert_node((netq_t **)ctx->recvqueue, node);
+
+  return node->length;
+}
+
+void
+dtls_dispatch(dtls_context_t *ctx) {
+  netq_t *node;
+
+  while ((node = list_pop(ctx->recvqueue))) {
+    printf("dispatch packet\n");
+    hexdump(node->data, node->length);
+    printf("\n");
+    dtls_handle_message(ctx, &node->remote, node->data, node->length);
+    netq_node_free(node);
+  }
+}
+
 /** 
  * Handles incoming data as DTLS message from given peer.
  */
@@ -1892,6 +1942,9 @@ dtls_new_context(void *app_data) {
   LIST_STRUCT_INIT(c, peers);
   /* LIST_STRUCT_INIT(c, key_store); */
   
+  LIST_STRUCT_INIT(c, sendqueue);
+  LIST_STRUCT_INIT(c, recvqueue);
+
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
     c->cookie_secret_age = clock_time();
   else 

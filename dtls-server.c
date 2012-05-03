@@ -60,7 +60,7 @@ read_from_peer(struct dtls_context_t *ctx,
     PRINTF("%c", data[i]);
 
   /* echo incoming application data */
-  dtls_write(ctx, session, data, len);
+  /* dtls_write(ctx, session, data, len); */
 }
 
 int
@@ -87,19 +87,15 @@ AUTOSTART_PROCESSES(&udp_server_process);
 /*---------------------------------------------------------------------------*/
 static void
 dtls_handle_read(dtls_context_t *ctx) {
-  static session_t session;
+  session_t session;
 
   if(uip_newdata()) {
     uip_ipaddr_copy(&session.addr, &UIP_IP_BUF->srcipaddr);
     session.port = UIP_UDP_BUF->srcport;
     session.size = sizeof(session.addr) + sizeof(session.port);
-
-    ((char *)uip_appdata)[uip_datalen()] = 0;
-    PRINTF("Server received message from ");
-    PRINT6ADDR(&session.addr);
-    PRINTF(":%d\n", uip_ntohs(session.port));
-
-    dtls_handle_message(ctx, &session, uip_appdata, uip_datalen());
+    
+    /* call read function to fill peer's receive queue */
+    dtls_read(ctx, &session, uip_appdata, uip_datalen());
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -165,18 +161,26 @@ PROCESS_THREAD(udp_server_process, ev, data)
   PROCESS_BEGIN();
 
   dtls_init();
-
   init_dtls();
+
   if (!dtls_context) {
     dsrv_log(LOG_EMERG, "cannot create context\n");
     PROCESS_EXIT();
   }
 
   while(1) {
-    PROCESS_YIELD();
+    PROCESS_WAIT_EVENT();
     if(ev == tcpip_event) {
       dtls_handle_read(dtls_context);
+      dtls_dispatch(dtls_context);
     }
+#if 0
+    if (bytes_read > 0) {
+      /* dtls_handle_message(dtls_context, &the_session, readbuf, bytes_read); */
+      read_from_peer(dtls_context, &the_session, readbuf, bytes_read);
+    }
+    dtls_handle_message(ctx, &session, uip_appdata, bytes_read);
+#endif
   }
 
   PROCESS_END();

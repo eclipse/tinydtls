@@ -60,6 +60,16 @@ typedef enum {
   DTLS_STATE_CONNECTED
 } dtls_state_t;
 
+typedef struct {
+  uint24 mseq;		     /**< handshake message sequence number counter */
+
+  /** pending config that is updated during handshake */
+  /* FIXME: dtls_security_parameters_t pending_config; */
+
+  /* temporary storage for the final handshake hash */
+  dtls_hash_t hs_hash;
+} dtls_hs_state_t;
+
 /** 
  * Holds security parameters, local state and the transport address
  * for each peer. */
@@ -72,15 +82,11 @@ typedef struct dtls_peer_t {
   uint16 epoch;		     /**< counter for cipher state changes*/
   uint48 rseq;		     /**< sequence number of last record sent */
 
-  uint24 mseq;		     /**< handshake message sequence number counter */
+  dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
-  /** actual and potential security parameters */
   dtls_security_parameters_t security_params[2]; 
   int config;	             /**< denotes which security params are in effect 
 			      FIXME: check if we can use epoch for this */
-
-  /* temporary storage for the final handshake hash */
-  dtls_hash_t hs_hash;
 } dtls_peer_t;
 
 typedef enum {
@@ -112,6 +118,9 @@ typedef struct dtls_context_t {
   LIST_STRUCT(peers);
 
   void *app;			/**< application-specific data */
+  LIST_STRUCT(sendqueue);	/**< the packets to send */
+  LIST_STRUCT(recvqueue);	/**< received packets */
+
   int (*cb_write)(struct dtls_context_t *ctx, 
 		  session_t *session, uint8 *buf, size_t len);
   void (*cb_read)(struct dtls_context_t *ctx, 
@@ -272,6 +281,23 @@ int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
  */
 int dtls_handle_message(dtls_context_t *ctx, session_t *session,
 			uint8 *msg, int msglen);
+
+/**
+ * This function is called to add the received @p msg of size @p len to
+ * the internal receive queue.
+ *
+ * @param ctx     The dtls context to use.
+ * @param remote  Sender of the data.
+ * @param msg     The received data
+ * @param len     The actual length of @p msg.
+ * @return A value less than zero on error, greater zero on success.
+ */
+int dtls_read(dtls_context_t *ctx, session_t *remote, uint8 *msg, size_t len);
+
+/**
+ * Dispatches messages from the receive queue.
+ */
+void dtls_dispatch(dtls_context_t *ctx);
 
 #endif /* _DTLS_H_ */
 
