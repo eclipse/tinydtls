@@ -126,7 +126,7 @@ dsrv_log(log_t level, char *format, ...) {
     PRINTF("%s ", loglevels[level]);
 
   va_start(ap, format);
-  vprintf(format, ap);
+  PRINTF(format, ap);
   va_end(ap);
 }
 #endif /* WITH_CONTIKI */
