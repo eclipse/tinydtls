@@ -1,5 +1,4 @@
-
-#ifndef DSRV_NO_DTLS
+#include "config.h" 
 
 #include <stdio.h>
 #include <string.h>
@@ -15,15 +14,15 @@
 #include <signal.h>
 
 #include "debug.h" 
-#include "config.h" 
-#include "dsrv.h" 
+#include "dtls.h" 
+
+#define DEFAULT_PORT 20220
+#define PRINTF(...) printf(__VA_ARGS__)
 
 static char buf[200];
 static size_t len = 0;
 
-void 
-peer_timeout(struct dsrv_context_t *ctx) {
-}
+static str output_file = { 0, NULL }; /* output file name */
 
 void
 try_send(struct dtls_context_t *ctx, session_t *dst) {
@@ -55,8 +54,10 @@ send_to_peer(struct dtls_context_t *ctx,
 
   int fd = *(int *)dtls_get_app_data(ctx);
   return sendto(fd, data, len, MSG_DONTWAIT,
-		&session->raddr.sa, session->rlen);
+		&session->addr.sa, session->size);
 }
+
+extern void dump(unsigned char *buf, size_t len);
 
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
@@ -72,16 +73,21 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     return -1;
 
   memset(&session, 0, sizeof(session_t));
-  session.rlen = sizeof(session.raddr);
+  session.size = sizeof(session.addr);
   len = recvfrom(fd, buf, MAX_READ_BUF, 0, 
-		 &session.raddr.sa, &session.rlen);
-
+		 &session.addr.sa, &session.size);
+  
   if (len < 0) {
     perror("recvfrom");
     return -1;
   } else {
-    dsrv_log(LOG_DEBUG, "got %d bytes from port %d\n", len, 
-	     ntohs(session.raddr.sin6.sin6_port));
+    unsigned char addrbuf[72];
+    dsrv_print_addr(&session, addrbuf, sizeof(addrbuf));
+    dsrv_log(LOG_DEBUG, "got %d bytes from %s\n", len, (char *)addrbuf);
+    dump((unsigned char *)&session, sizeof(session_t));
+    PRINTF("\n");
+    dump(buf, len);
+    PRINTF("\n");
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
@@ -130,21 +136,92 @@ resolve_address(const char *server, struct sockaddr *dst) {
   return -1;
 }
 
+/*---------------------------------------------------------------------------*/
 extern int dtls_connect(dtls_context_t *ctx, session_t *dst);
+
+void
+usage( const char *program, const char *version) {
+  const char *p;
+
+  p = strrchr( program, '/' );
+  if ( p )
+    program = ++p;
+
+  fprintf(stderr, "%s v%s -- DTLS client implementation\n"
+	  "(c) 2011-2012 Olaf Bergmann <bergmann@tzi.org>\n\n"
+	  "usage: %s [-o file][-p port] [-v num] addr [port]\n"
+	  "\t-o file\t\toutput received data to this file (use '-' for STDOUT)\n"
+	  "\t-p port\t\tlisten on specified port (default is %d)\n"
+	  "\t-v num\t\tverbosity level (default: 3)\n",
+	   program, version, program, DEFAULT_PORT);
+}
 
 int 
 main(int argc, char **argv) {
-  dtls_context_t *the_context = NULL;
+  dtls_context_t *dtls_context = NULL;
   fd_set rfds, wfds;
   struct timeval timeout;
+  unsigned short port = DEFAULT_PORT;
+  char port_str[NI_MAXSERV] = "0";
+  log_t log_level = LOG_WARN;
   int fd, result;
   int on = 1;
+  int opt, res;
   session_t dst;
 
-  set_log_level(LOG_DEBUG);
+  dtls_init();
+  snprintf(port_str, sizeof(port_str), "%d", port);
 
+  while ((opt = getopt(argc, argv, "p:o:v:")) != -1) {
+    switch (opt) {
+    case 'p' :
+      strncpy(port_str, optarg, NI_MAXSERV-1);
+      port_str[NI_MAXSERV - 1] = '\0';
+      break;
+    case 'o' :
+      output_file.length = strlen(optarg);
+      output_file.s = (unsigned char *)malloc(output_file.length + 1);
+      
+      if (!output_file.s) {
+	dsrv_log(LOG_CRIT, "cannot set output file: insufficient memory\n");
+	exit(-1);
+      } else {
+	/* copy filename including trailing zero */
+	memcpy(output_file.s, optarg, output_file.length + 1);
+      }
+      break;
+    case 'v' :
+      log_level = strtol(optarg, NULL, 10);
+      break;
+    default:
+      usage(argv[0], PACKAGE_VERSION);
+      exit(1);
+    }
+  }
+
+  set_log_level(log_level);
+  
+  if (argc <= optind) {
+    usage(argv[0], PACKAGE_VERSION);
+    exit(1);
+  }
+  
+  memset(&dst, 0, sizeof(session_t));
+  /* resolve destination address where server should be sent */
+  res = resolve_address(argv[optind++], &dst.addr.sa);
+  if (res < 0) {
+    dsrv_log(LOG_EMERG, "failed to resolve address\n");
+    exit(-1);
+  }
+  dst.size = res;
+
+  /* use port number from command line when specified or the listen
+     port, otherwise */
+  dst.addr.sin.sin_port = htons(atoi(optind < argc ? argv[optind++] : port_str));
+
+  
   /* init socket and set it to non-blocking */
-  fd = socket(AF_INET, SOCK_DGRAM, 0);
+  fd = socket(dst.addr.sa.sa_family, SOCK_DGRAM, 0);
 
   if (fd < 0) {
     dsrv_log(LOG_ALERT, "socket: %s\n", strerror(errno));
@@ -166,29 +243,19 @@ main(int argc, char **argv) {
     dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
   }
 
-  the_context = dtls_new_context(&fd);
-  dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9,
-	       (unsigned char *)"Client_identity", 15);
-
-  dtls_set_cb(the_context, read_from_peer, read);
-  dtls_set_cb(the_context, send_to_peer, write);
-
-
-  /* FIXME: set dst */
-  /* resolve destination address where server should be sent */
-  memset(&dst, 0, sizeof(session_t));
-  result = resolve_address("127.0.0.1", &dst.raddr.sa);
-  
-  if (result < 0) {
-    fprintf(stderr, "failed to resolve address\n");
+  dtls_context = dtls_new_context(&fd);
+  if (!dtls_context) {
+    dsrv_log(LOG_EMERG, "cannot create context\n");
     exit(-1);
   }
 
-  dst.rlen = result;
-  dst.raddr.sin.sin_port = htons(20220);
+  dtls_set_psk(dtls_context, (unsigned char *)"secretPSK", 9,
+	       (unsigned char *)"Client_identity", 15);
+  dtls_set_cb(dtls_context, read_from_peer, read);
+  dtls_set_cb(dtls_context, send_to_peer, write);
 
-  dtls_connect(the_context, &dst);
-  
+  dtls_connect(dtls_context, &dst);
+
   while (1) {
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
@@ -210,16 +277,16 @@ main(int argc, char **argv) {
       if (FD_ISSET(fd, &wfds))
 	/* FIXME */;
       else if (FD_ISSET(fd, &rfds))
-	dtls_handle_read(the_context);
+	dtls_handle_read(dtls_context);
       else if (FD_ISSET(fileno(stdin), &rfds))
 	handle_stdin();
     }
+
     if (len)
-      try_send(the_context, &dst);
+      try_send(dtls_context, &dst);
   }
   
-  dtls_free_context(the_context);
+  dtls_free_context(dtls_context);
   exit(0);
 }
 
-#endif /* DSRV_NO_DTLS */

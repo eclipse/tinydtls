@@ -15,7 +15,6 @@
 #include "config.h" 
 #include "global.h" 
 #include "debug.h" 
-#include "dsrv.h" 
 
 #if 0
 /* SIGINT handler: set quit to 1 for graceful termination */

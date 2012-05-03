@@ -44,6 +44,7 @@ typedef struct {
 } aes128_ccm_t;
 
 #ifndef WITH_CONTIKI
+#include <stdlib.h>
 
 static inline dtls_cipher_context_t *
 dtls_cipher_context_new() {
