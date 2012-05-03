@@ -52,7 +52,9 @@
 /** Length of DTLS master_secret */
 #define DTLS_MASTER_SECRET_LENGTH 48
 
+#ifndef DTLS_CIPHER_CONTEXT_MAX
 #define DTLS_CIPHER_CONTEXT_MAX 4
+#endif
 
 typedef enum { AES128=0 
 } dtls_crypto_alg;
@@ -71,7 +73,7 @@ typedef struct {
   dtls_peer_type role; /**< denotes if the remote peer is DTLS_CLIENT or DTLS_SERVER */
   unsigned char compression;		/**< compression method */
 
-  dtls_cipher_t cipher;		/**< cipher type index */
+  dtls_cipher_t cipher;		/**< cipher type */
 
   /** the session's master secret */
   uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
