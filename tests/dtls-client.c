@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <signal.h>
 
+#include "global.h" 
 #include "debug.h" 
 #include "dtls.h" 
 
