@@ -18,7 +18,11 @@
 #endif
 #endif
 
+#include "t_list.h"
+
 #ifndef WITH_CONTIKI
+#include <stdlib.h>
+
 static inline netq_t *
 netq_malloc_node() {
   return (netq_t *)malloc(sizeof(netq_t));
@@ -32,7 +36,6 @@ netq_free_node(netq_t *node) {
 /* FIXME: implement Contiki's list functions using utlist.h */
 
 #else /* WITH_CONTIKI */
-#include "list.h"
 #include "memb.h"
 
 MEMB(netq_storage, netq_t, NETQ_MAXCNT);
@@ -101,7 +104,7 @@ void
 netq_delete_all(netq_t *queue) {
   netq_t *p;
   if (queue) {
-    while((p = list_pop(queue)))
+    while((p = list_pop((list_t)&queue)))
       netq_free_node(p); 
   }
 }
