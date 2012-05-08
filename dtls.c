@@ -121,6 +121,17 @@ void hexdump(const unsigned char *packet, int length);
 void dump(unsigned char *buf, size_t len);
 #endif
 
+/* some constants for the PRF */
+#define PRF_LABEL(Label) prf_label_##Label
+#define PRF_LABEL_SIZE(Label) (sizeof(PRF_LABEL(Label)) - 1)
+
+static const unsigned char prf_label_master[] = "master secret";
+static const unsigned char prf_label_key[] = "key expansion";
+static const unsigned char prf_label_client[] = "client";
+static const unsigned char prf_label_server[] = "server";
+static const unsigned char prf_label_finished[] = " finished";
+
+extern void netq_init();
 extern void crypto_init();
 
 dtls_context_t the_dtls_context;
@@ -214,20 +225,13 @@ dtls_write(struct dtls_context_t *ctx,
 
 int
 dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
-  int result;
   /* To access the cookie, we have to determine the session id's
    * length and skip the whole thing. */
   if (msglen < DTLS_HS_LENGTH + DTLS_CH_LENGTH + sizeof(uint8)
       || dtls_uint16_to_int(msg + DTLS_HS_LENGTH) != DTLS_VERSION)
     return -1;
-
-  dump(msg, msglen);
-  printf("\n");
   msglen -= DTLS_HS_LENGTH + DTLS_CH_LENGTH;
   msg += DTLS_HS_LENGTH + DTLS_CH_LENGTH;
-  printf("ohne Header (len: %d): ", msglen);
-  dump(msg, msglen);
-  printf("\n");
 
   SKIP_VAR_FIELD(msg, msglen, uint8); /* skip session id */
 
@@ -235,12 +239,7 @@ dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
     return -1;
   
   *cookie = msg + sizeof(uint8);
-  result = dtls_uint8_to_int(msg);
-  printf("found cookie field with len %d:", result); 
-  dump(msg, 32);
-  printf("\n");
-  debug("found cookie field (len: %d)\n", *msg & 0xff);
-  return result;
+  return dtls_uint8_to_int(msg);
 
  error:
   return -1;
@@ -264,28 +263,16 @@ dtls_create_cookie(dtls_context_t *ctx,
    * - compression method
    */
 
-#if 1
   /* We use our own buffer as hmac_context instead of a dynamic buffer
    * created by dtls_hmac_new() to separate storage space for cookie
    * creation from storage that is used in real sessions. Note that
    * the buffer size must fit with the default hash algorithm (see
    * implementation of dtls_hmac_context_new()). */
 
-  unsigned char _hmac_context_buffer[DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE];
-  dtls_hmac_context_t *hmac_context = (dtls_hmac_context_t *)_hmac_context_buffer;
+  dtls_hmac_context_t hmac_context;
+  dtls_hmac_init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
 
-  dtls_hmac_init(hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
-#else
-  dtls_hmac_context_t *hmac_context;
-
-  hmac_context = dtls_hmac_new(ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
-  if (!hmac_context) {
-    warn("cannot create HMAC context to generate cookie\n");
-    return 0;
-  }
-#endif
-
-  dtls_hmac_update(hmac_context, 
+  dtls_hmac_update(&hmac_context, 
 		   (unsigned char *)&session->addr, session->size);
 
   /* feed in the beginning of the Client Hello up to and including the
@@ -293,17 +280,17 @@ dtls_create_cookie(dtls_context_t *ctx,
   e = sizeof(dtls_client_hello_t);
   e += (*(msg + DTLS_HS_LENGTH + e) & 0xff) + sizeof(uint8);
 
-  dtls_hmac_update(hmac_context, msg + DTLS_HS_LENGTH, e);
+  dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
   
   /* skip cookie bytes and length byte */
   e += *(uint8 *)(msg + DTLS_HS_LENGTH + e) & 0xff;
   e += sizeof(uint8);
 
-  dtls_hmac_update(hmac_context, 
+  dtls_hmac_update(&hmac_context, 
 		   msg + DTLS_HS_LENGTH + e,
 		   dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg)) - e);
 
-  len = dtls_hmac_finalize(hmac_context, buf);
+  len = dtls_hmac_finalize(&hmac_context, buf);
 
   if (len < *clen) {
     memset(cookie + len, 0, *clen - len);
@@ -482,7 +469,7 @@ dtls_verify_peer(dtls_context_t *ctx,
       dump(cookie, len);
       printf("\n");
     } else {
-      debug("cookie len is 0!");
+      debug("cookie len is 0!\n");
     }
 #endif
     /* ClientHello did not contain any valid cookie, hence we send a
@@ -564,13 +551,39 @@ calculate_key_block(dtls_context_t *ctx,
   /* Temporarily use the key_block storage space for the pre master secret. */
   pre_master_len = dtls_pre_master_secret(ctx->psk, ctx->psk_length, 
 					  pre_master_secret);
+  {
+    int i;
+
+    printf("client_random:");
+    for (i = 0; i < 32; ++i)
+      printf(" %02x", client_random[i]);
+    printf("\n");
+
+    printf("server_random:");
+    for (i = 0; i < 32; ++i)
+      printf(" %02x", server_random[i]);
+    printf("\n");
+
+    printf("pre_master_secret: (%d bytes):", pre_master_len);
+    for (i = 0; i < pre_master_len; ++i)
+      printf(" %02x", pre_master_secret[i]);
+    printf("\n");
+  }
 
   dtls_prf(pre_master_secret, pre_master_len,
-	   (unsigned char *)"master secret", 13,
+	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
 	   client_random, 32,
 	   server_random, 32,
 	   config->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH);
+
+  {
+    int i;
+    printf("master_secret (%d bytes):", DTLS_MASTER_SECRET_LENGTH);
+    for (i = 0; i < DTLS_MASTER_SECRET_LENGTH; ++i)
+      printf(" %02x", config->master_secret[i]);
+    printf("\n");
+  }
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
@@ -578,11 +591,48 @@ calculate_key_block(dtls_context_t *ctx,
 
   dtls_prf(config->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
-	   (unsigned char *)"key expansion", 13,
+	   PRF_LABEL(key), PRF_LABEL_SIZE(key),
 	   server_random, 32,
 	   client_random, 32,
 	   config->key_block,
 	   dtls_kb_size(config));
+
+#ifndef NDEBUG
+  {
+      printf("key_block (%d bytes):\n", dtls_kb_size(config));
+      printf("  client_MAC_secret:\t");  
+      dump(dtls_kb_client_mac_secret(config), 
+	   dtls_kb_mac_secret_size(config));
+      printf("\n");
+
+      printf("  server_MAC_secret:\t");  
+      dump(dtls_kb_server_mac_secret(config), 
+	   dtls_kb_mac_secret_size(config));
+      printf("\n");
+
+      printf("  client_write_key:\t");  
+      dump(dtls_kb_client_write_key(config), 
+	   dtls_kb_key_size(config));
+      printf("\n");
+
+      printf("  server_write_key:\t");  
+      dump(dtls_kb_server_write_key(config), 
+	   dtls_kb_key_size(config));
+      printf("\n");
+
+      printf("  client_IV:\t\t");  
+      dump(dtls_kb_client_iv(config), 
+	   dtls_kb_iv_size(config));
+      printf("\n");
+      
+      printf("  server_IV:\t\t");  
+      dump(dtls_kb_server_iv(config), 
+	   dtls_kb_iv_size(config));
+      printf("\n");
+      
+
+  }
+#endif
 }
 
 /**
@@ -609,7 +659,8 @@ dtls_update_parameters(dtls_context_t *ctx,
   assert(config);
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
 
-  debug("dtls_update_parameters: msglen is %d\n", data_length);
+  /* debug("dtls_update_parameters: msglen is %d\n", data_length); */
+  printf("dtls_update_parameters: msglen is %d\n", data_length);
 
   /* skip the handshake header and client version information */
   data += DTLS_HS_LENGTH + sizeof(uint16);
@@ -745,6 +796,10 @@ check_ccs(dtls_context_t *ctx,
   return 1;
 }
 
+#ifndef NDEBUG
+extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
+#endif
+
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
 	      session_t *session) {
@@ -755,6 +810,7 @@ dtls_new_peer(dtls_context_t *ctx,
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
+#ifndef NDEBUG
     {
       unsigned char addrbuf[72];
       dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
@@ -762,7 +818,7 @@ dtls_new_peer(dtls_context_t *ctx,
       dump((unsigned char *)session, sizeof(session_t));
       printf("\n");
     }
-
+#endif
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
 
@@ -771,7 +827,7 @@ dtls_new_peer(dtls_context_t *ctx,
     /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
     /* FIXME: we use the default SHA256 here, might need to support other 
               hash functions as well */
-    dtls_hash_init(peer->hs_state.hs_hash);
+    dtls_hash_init(&peer->hs_state.hs_hash);
   }
   
   return peer;
@@ -784,18 +840,18 @@ update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
   dump(data, length);
   printf("\n");
 #endif
-  dtls_hash_update(peer->hs_state.hs_hash, data, length);
+  dtls_hash_update(&peer->hs_state.hs_hash, data, length);
 }
 
 static inline size_t
 finalize_hs_hash(dtls_peer_t *peer, uint8 *buf) {
-  return dtls_hash_finalize(buf, peer->hs_state.hs_hash);
+  return dtls_hash_finalize(buf, &peer->hs_state.hs_hash);
 }
 
 static inline void
 clear_hs_hash(dtls_peer_t *peer) {
   assert(peer);
-  dtls_hash_init(peer->hs_state.hs_hash);
+  dtls_hash_init(&peer->hs_state.hs_hash);
 }
 
 /** 
@@ -813,11 +869,18 @@ clear_hs_hash(dtls_peer_t *peer) {
 static int
 check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	       uint8 *record, uint8 *data, size_t data_length) {
-  size_t digest_length;
-  unsigned char verify_data[DTLS_FIN_LENGTH];
+  size_t digest_length, label_size;
+  const unsigned char *label;
   unsigned char buf[DTLS_HMAC_MAX];
 
-  unsigned char statebuf[DTLS_HASH_CTX_SIZE];
+  /* Use a union here to ensure that sufficient stack space is
+   * reserved. As statebuf and verify_data are not used at the same
+   * time, we can re-use the storage safely.
+   */
+  union {
+    unsigned char statebuf[DTLS_HASH_CTX_SIZE];
+    unsigned char verify_data[DTLS_FIN_LENGTH];
+  } b;
 
   debug("check Finish message\n");
   if (record[0] != DTLS_CT_HANDSHAKE || !IS_FINISHED(data, data_length)) {
@@ -826,36 +889,35 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   /* temporarily store hash status for roll-back after finalize */
-  memcpy(statebuf, peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
+  memcpy(b.statebuf, &peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
 
   digest_length = finalize_hs_hash(peer, buf);
   /* clear_hash(); */
 
   /* restore hash status */
-  memcpy(peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
+  memcpy(&peer->hs_state.hs_hash, b.statebuf, DTLS_HASH_CTX_SIZE);
 
-  {
-    unsigned char finishedmsg[15] = { 
-      'c','l','i','e','n','t',' ','f','i','n','i','s','h','e','d' 
-    };
-
-    if (CURRENT_CONFIG(peer)->role == DTLS_SERVER)
-      memcpy(finishedmsg, "server", 6);
-
-    dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
-	     DTLS_MASTER_SECRET_LENGTH,
-	     finishedmsg,
-	     sizeof(finishedmsg),
-	     buf, digest_length,
-	     NULL, 0,
-	     verify_data, sizeof(verify_data));
+  if (CURRENT_CONFIG(peer)->role == DTLS_SERVER) {
+    label = PRF_LABEL(server);
+    label_size = PRF_LABEL_SIZE(server);
+  } else { /* client */
+    label = PRF_LABEL(client);
+    label_size = PRF_LABEL_SIZE(client);
   }
 
+  dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
+	   DTLS_MASTER_SECRET_LENGTH,
+	   label, label_size,
+	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
+	   buf, digest_length,
+	   b.verify_data, sizeof(b.verify_data));
+  
 #ifndef NDEBUG
-  printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(verify_data)); printf("\n");
-  printf("v:\t"); dump(verify_data, sizeof(verify_data)); printf("\n");
+  printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(b.verify_data)); printf("\n");
+  printf("v:\t"); dump(b.verify_data, sizeof(b.verify_data)); printf("\n");
 #endif
-  return memcmp(data + DTLS_HS_LENGTH, verify_data, sizeof(verify_data)) == 0;
+  return 
+    memcmp(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data)) == 0;
 }
 
 /**
@@ -1048,7 +1110,7 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 int
 dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 
-  uint8 buf[DTLS_MAX_BUF];
+  static uint8 buf[DTLS_MAX_BUF];
   uint8 *p = buf, *q = ctx->sendbuf;
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
@@ -1065,6 +1127,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 				DTLS_SH_LENGTH, 
 				0, DTLS_SH_LENGTH,
 				buf);
+
   /* ServerHello */
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
@@ -1108,6 +1171,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   q += qlen;
   qlen = sizeof(ctx->sendbuf) - qlen;
 
+  printf("dtls_send_server_hello(): create ServerHelloDone\n");
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
@@ -1182,9 +1246,9 @@ dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
-	   (unsigned char *)"server finished", 15,
+	   PRF_LABEL(server), PRF_LABEL_SIZE(server), 
+	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished), 
 	   buf, length,
-	   NULL, 0,
 	   p, DTLS_FIN_LENGTH);
 
 #ifndef NDEBUG
@@ -1444,18 +1508,18 @@ check_server_hellodone(dtls_context_t *ctx,
 				  0, DTLS_FIN_LENGTH, p);
   
     /* temporarily store hash status for roll-back after finalize */
-    memcpy(statebuf, peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
+    memcpy(statebuf, &peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
 
     length = finalize_hs_hash(peer, buf);
 
     /* restore hash status */
-    memcpy(peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
+    memcpy(&peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
 
     dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	     DTLS_MASTER_SECRET_LENGTH,
-	     (unsigned char *)"client finished", 15,
+	     PRF_LABEL(client), PRF_LABEL_SIZE(client),
+	     PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
 	     buf, length,
-	     NULL, 0,
 	     p, DTLS_FIN_LENGTH);
   
     p += DTLS_FIN_LENGTH;
@@ -1623,6 +1687,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     } else {
       /* send alert */
     }
+    printf("done\n");
     break;
       
   case DTLS_STATE_CONNECTED:
@@ -1768,6 +1833,9 @@ int
 dtls_read(dtls_context_t *ctx, session_t *session, uint8 *msg, size_t msglen) {
   netq_t *node;
 
+  printf("dtls_read()\n");
+  hexdump(msg, msglen);
+  printf("\n");
   node = netq_node_new();
   if (!node)
     return -1;
@@ -1786,10 +1854,8 @@ void
 dtls_dispatch(dtls_context_t *ctx) {
   netq_t *node;
 
+  /* dispatch all packets from queue */
   while ((node = list_pop(ctx->recvqueue))) {
-    printf("dispatch packet\n");
-    hexdump(node->data, node->length);
-    printf("\n");
     dtls_handle_message(ctx, &node->remote, node->data, node->length);
     netq_node_free(node);
   }
@@ -2110,17 +2176,6 @@ dtls_connect(dtls_context_t *ctx, session_t *dst) {
 
 #ifndef WITH_CONTIKI
   HASH_ADD_PEER(ctx->peers, session, peer);
-  {
-    dtls_peer_t *p = NULL;
-    HASH_FIND_PEER(ctx->peers, dst, p);
-    if (!p) {
-      printf("dtls_connect: PEER NOT FOUND\n");
-    } else {
-      printf("dtls_connect: FOUND PEER\n");
-      dump((unsigned char *)&peer->session, sizeof(session_t));
-      printf("\n");
-    }
-  }
 #else /* WITH_CONTIKI */
   list_add(ctx->peers, peer);
 #endif /* WITH_CONTIKI */

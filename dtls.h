@@ -33,10 +33,10 @@
 
 #include <stdint.h>
 
+#include "t_list.h"
+
 #ifndef WITH_CONTIKI
 #include "uthash.h"
-#else /* WITH_CONTIKI */
-#include "list.h"
 #endif /* WITH_CONTIKI */
 
 #include "crypto.h"
@@ -73,7 +73,7 @@ typedef struct {
   /* FIXME: dtls_security_parameters_t pending_config; */
 
   /* temporary storage for the final handshake hash */
-  dtls_hash_t hs_hash;
+  dtls_hash_ctx hs_hash;
 } dtls_hs_state_t;
 
 /** 
@@ -131,9 +131,10 @@ typedef struct dtls_context_t {
   LIST_STRUCT(peers);
 #endif /* WITH_CONTIKI */
 
-  void *app;			/**< application-specific data */
   LIST_STRUCT(sendqueue);	/**< the packets to send */
   LIST_STRUCT(recvqueue);	/**< received packets */
+
+  void *app;			/**< application-specific data */
 
   int (*cb_write)(struct dtls_context_t *ctx, 
 		  session_t *session, uint8 *buf, size_t len);
