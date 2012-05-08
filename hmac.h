@@ -35,8 +35,9 @@
  *  see http://www.aarongifford.com/ */
 #include "sha2/sha2.h"
 
+typedef SHA256_CTX dtls_hash_ctx;
+typedef dtls_hash_ctx *dtls_hash_t;
 #define DTLS_HASH_CTX_SIZE sizeof(SHA256_CTX)
-typedef unsigned char dtls_hash_t[DTLS_HASH_CTX_SIZE];
 
 static inline void
 dtls_hash_init(dtls_hash_t ctx) {
@@ -86,7 +87,7 @@ typedef enum {
  */
 typedef struct {
   unsigned char pad[DTLS_HMAC_BLOCKSIZE]; /**< ipad and opad storage */
-  unsigned char data[];	                  /**< context for hash function */
+  dtls_hash_ctx data;		          /**< context for hash function */
 } dtls_hmac_context_t;
 
 /**
@@ -96,7 +97,7 @@ typedef struct {
  * @param key    The secret key.
  * @param klen   The length of @p key.
  */
-void dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen);
+void dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen);
 
 /**
  * Allocates a new HMAC context \p ctx with the given secret key.
@@ -108,7 +109,7 @@ void dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen);
  * \param klen   The length of \p key.
  * \return A new dtls_hmac_context_t object or @c NULL on error
  */
-dtls_hmac_context_t *dtls_hmac_new(unsigned char *key, size_t klen);
+dtls_hmac_context_t *dtls_hmac_new(const unsigned char *key, size_t klen);
 
 /**
  * Releases the storage for @p ctx that has been allocated by

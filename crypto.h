@@ -26,7 +26,11 @@
 #ifndef _CRYPTO_H_
 #define _CRYPTO_H_
 
+#include "config.h"
+
 #include <stdlib.h>		/* for rand() and srand() */
+
+#include "aes/rijndael.h"
 
 #include "prng.h"
 #include "global.h"
@@ -59,10 +63,16 @@
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
+/** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
+typedef struct {
+  rijndael_ctx ctx;		       /**< AES-128 encryption context */
+  unsigned char N[DTLS_CCM_BLOCKSIZE]; /**< nonce */
+} aes128_ccm_t;
+
 typedef struct dtls_cipher_context_t {
   /** numeric identifier of this cipher suite in host byte order. */
   dtls_cipher_t code;
-  unsigned char data[];			/**< The crypto context */
+  aes128_ccm_t data;		/**< The crypto context */
 } dtls_cipher_context_t;
 
 typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
@@ -156,10 +166,10 @@ typedef struct {
  * on error.
  */
 size_t dtls_p_hash(dtls_hashfunc_t h, 
-		   unsigned char *key, size_t keylen,
-		   unsigned char *label, size_t labellen,
-		   unsigned char *random1, size_t random1len,
-		   unsigned char *random2, size_t random2len,
+		   const unsigned char *key, size_t keylen,
+		   const unsigned char *label, size_t labellen,
+		   const unsigned char *random1, size_t random1len,
+		   const unsigned char *random2, size_t random2len,
 		   unsigned char *buf, size_t buflen);
 
 /**
@@ -167,10 +177,10 @@ size_t dtls_p_hash(dtls_hashfunc_t h,
  * 1.0, the PRF is P_MD5 ^ P_SHA1 while version 1.2 uses
  * P_SHA256. Currently, the actual PRF is selected at compile time.
  */
-size_t dtls_prf(unsigned char *key, size_t keylen,
-		unsigned char *label, size_t labellen,
-		unsigned char *random1, size_t random1len,
-		unsigned char *random2, size_t random2len,
+size_t dtls_prf(const unsigned char *key, size_t keylen,
+		const unsigned char *label, size_t labellen,
+		const unsigned char *random1, size_t random1len,
+		const unsigned char *random2, size_t random2len,
 		unsigned char *buf, size_t buflen);
 
 /**

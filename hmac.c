@@ -39,7 +39,7 @@
 
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
-  return (dtls_hmac_context_t *)malloc(DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
+  return (dtls_hmac_context_t *)malloc(sizeof(dtls_hmac_context_t));
 }
 
 static inline void
@@ -49,9 +49,7 @@ dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
 
 #else /* WITH_CONTIKI */
 #include "memb.h"
-
-typedef unsigned char _hmac_context_buffer_t[DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE];
-MEMB(hmac_context_storage, _hmac_context_buffer_t, DTLS_HASH_MAX);
+MEMB(hmac_context_storage, dtls_hmac_context_t, DTLS_HASH_MAX);
 
 static inline dtls_hmac_context_t *
 dtls_hmac_context_new() {
@@ -75,32 +73,32 @@ void
 dtls_hmac_update(dtls_hmac_context_t *ctx,
 		 const unsigned char *input, size_t ilen) {
   assert(ctx);
-  dtls_hash_update(ctx->data, input, ilen);
+  dtls_hash_update(&ctx->data, input, ilen);
 }
 
 dtls_hmac_context_t *
-dtls_hmac_new(unsigned char *key, size_t klen) {
+dtls_hmac_new(const unsigned char *key, size_t klen) {
   dtls_hmac_context_t *ctx;
 
   ctx = dtls_hmac_context_new();
-  if (ctx)
+  if (ctx) 
     dtls_hmac_init(ctx, key, klen);
 
   return ctx;
 }
 
 void
-dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {
+dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen) {
   int i;
 
   assert(ctx);
 
-  memset(ctx, 0, DTLS_HMAC_BLOCKSIZE + DTLS_HASH_CTX_SIZE);
+  memset(ctx, 0, sizeof(dtls_hmac_context_t));
 
   if (klen > DTLS_HMAC_BLOCKSIZE) {
-    dtls_hash_init(ctx->data);
-    dtls_hash_update(ctx->data, key, klen);
-    dtls_hash_finalize(ctx->pad, ctx->data);
+    dtls_hash_init(&ctx->data);
+    dtls_hash_update(&ctx->data, key, klen);
+    dtls_hash_finalize(ctx->pad, &ctx->data);
   } else
     memcpy(ctx->pad, key, klen);
 
@@ -108,7 +106,7 @@ dtls_hmac_init(dtls_hmac_context_t *ctx, unsigned char *key, size_t klen) {
   for (i=0; i < DTLS_HMAC_BLOCKSIZE; ++i)
     ctx->pad[i] ^= 0x36;
 
-  dtls_hash_init(ctx->data);
+  dtls_hash_init(&ctx->data);
   dtls_hmac_update(ctx, ctx->pad, DTLS_HMAC_BLOCKSIZE);
 
   /* create opad by xor-ing pad[i] with 0x36 ^ 0x5C: */
@@ -130,13 +128,13 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
   assert(ctx);
   assert(result);
   
-  len = dtls_hash_finalize(buf, ctx->data);
+  len = dtls_hash_finalize(buf, &ctx->data);
 
-  dtls_hash_init(ctx->data);
-  dtls_hash_update(ctx->data, ctx->pad, DTLS_HMAC_BLOCKSIZE);
-  dtls_hash_update(ctx->data, buf, len);
+  dtls_hash_init(&ctx->data);
+  dtls_hash_update(&ctx->data, ctx->pad, DTLS_HMAC_BLOCKSIZE);
+  dtls_hash_update(&ctx->data, buf, len);
 
-  len = dtls_hash_finalize(result, ctx->data);
+  len = dtls_hash_finalize(result, &ctx->data);
 
   return len;
 }

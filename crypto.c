@@ -28,8 +28,6 @@
 #include <assert.h>
 #endif
 
-#include "aes/rijndael.h"
-
 #include "global.h"
 #include "debug.h"
 #include "numeric.h"
@@ -37,18 +35,12 @@
 #include "crypto.h"
 #include "ccm.h"
 
-/** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
-typedef struct {
-  rijndael_ctx ctx;		       /**< AES-128 encryption context */
-  unsigned char N[DTLS_CCM_BLOCKSIZE]; /**< nonce */
-} aes128_ccm_t;
-
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
 
 static inline dtls_cipher_context_t *
 dtls_cipher_context_new() {
-  return (dtls_cipher_context_t *)malloc(sizeof(dtls_cipher_context_t) + sizeof(aes128_ccm_t));
+  return (dtls_cipher_context_t *)malloc(sizeof(dtls_cipher_context_t));
 }
 
 static inline void
@@ -56,9 +48,7 @@ dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
   free(ctx);
 }
 #else /* WITH_CONTIKI */
-
-typedef unsigned char _cipher_context_buffer_t[sizeof(dtls_cipher_context_t) + sizeof(aes128_ccm_t)];
-MEMB(cipher_storage, _cipher_context_buffer_t, DTLS_CIPHER_CONTEXT_MAX);
+MEMB(cipher_storage, dtls_cipher_context_t, DTLS_CIPHER_CONTEXT_MAX);
 
 static inline dtls_cipher_context_t *
 dtls_cipher_context_new() {
@@ -91,10 +81,10 @@ extern void dump(unsigned char *, size_t);
 
 size_t
 dtls_p_hash(dtls_hashfunc_t h,
-	    unsigned char *key, size_t keylen,
-	    unsigned char *label, size_t labellen,
-	    unsigned char *random1, size_t random1len,
-	    unsigned char *random2, size_t random2len,
+	    const unsigned char *key, size_t keylen,
+	    const unsigned char *label, size_t labellen,
+	    const unsigned char *random1, size_t random1len,
+	    const unsigned char *random2, size_t random2len,
 	    unsigned char *buf, size_t buflen) {
   dtls_hmac_context_t *hmac_a, *hmac_p;
 
@@ -116,9 +106,10 @@ dtls_p_hash(dtls_hashfunc_t h,
 
   hmac_p = dtls_hmac_new(key, keylen);
   if (!hmac_p)
-      goto error;
+    goto error;
 
   while (len + dlen < buflen) {
+
     /* FIXME: rewrite loop to avoid superflous call to dtls_hmac_init() */
     dtls_hmac_init(hmac_p, key, keylen);
     dtls_hmac_update(hmac_p, A, dlen);
@@ -155,10 +146,10 @@ dtls_p_hash(dtls_hashfunc_t h,
 }
 
 size_t 
-dtls_prf(unsigned char *key, size_t keylen,
-	 unsigned char *label, size_t labellen,
-	 unsigned char *random1, size_t random1len,
-	 unsigned char *random2, size_t random2len,
+dtls_prf(const unsigned char *key, size_t keylen,
+	 const unsigned char *label, size_t labellen,
+	 const unsigned char *random1, size_t random1len,
+	 const unsigned char *random2, size_t random2len,
 	 unsigned char *buf, size_t buflen) {
 
   /* Clear the result buffer */
@@ -251,7 +242,7 @@ void
 dtls_cipher_set_iv(dtls_cipher_context_t *ctx,
 		   unsigned char *iv, size_t length) {
   assert(ctx);
-  dtls_ccm_init((aes128_ccm_t *)ctx->data, iv, length);
+  dtls_ccm_init(&ctx->data, iv, length);
 }
 
 dtls_cipher_context_t *
@@ -267,7 +258,7 @@ dtls_cipher_new(dtls_cipher_t cipher,
 
   switch (cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
-    aes128_ccm_t *ccm_ctx = (aes128_ccm_t *)cipher_context->data;
+    aes128_ccm_t *ccm_ctx = &cipher_context->data;
     
     if (rijndael_set_key_enc_only(&ccm_ctx->ctx, key, 8 * keylen) < 0) {
       /* cleanup everything in case the key has the wrong size */
@@ -299,7 +290,7 @@ dtls_encrypt(dtls_cipher_context_t *ctx,
   if (ctx) {
     if (src != buf)
       memmove(buf, src, length);
-    return dtls_ccm_encrypt((aes128_ccm_t *)ctx->data, src, length, buf);
+    return dtls_ccm_encrypt(&ctx->data, src, length, buf);
   }
 
   return -1;
@@ -312,7 +303,7 @@ dtls_decrypt(dtls_cipher_context_t *ctx,
   if (ctx) {
     if (src != buf)
       memmove(buf, src, length);
-    return dtls_ccm_decrypt((aes128_ccm_t *)ctx->data, src, length, buf);
+    return dtls_ccm_decrypt(&ctx->data, src, length, buf);
   }
 
   return -1;
