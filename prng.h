@@ -38,6 +38,9 @@ dtls_prng_impl(unsigned char *buf, size_t len) {
 #else /* WITH_CONTIKI */
 #include <string.h>
 
+#ifdef HAVE_PRNG
+extern int contiki_prng_impl(unsigned char *buf, size_t len);
+#else
 /**
  * Fills \p buf with \p len random bytes. This is the default
  * implementation for prng().  You might want to change prng() to use
@@ -56,6 +59,7 @@ contiki_prng_impl(unsigned char *buf, size_t len) {
   memcpy(buf, &v, len);
   return 1;
 }
+#endif /* HAVE_PRNG */
 
 #define prng(Buf,Length) contiki_prng_impl((Buf), (Length))
 #define prng_init(Value) random_init((unsigned short)(Value))
