@@ -63,7 +63,8 @@ typedef enum {
   DTLS_STATE_CLIENTHELLO, DTLS_STATE_WAIT_SERVERHELLODONE,
   DTLS_STATE_WAIT_SERVERFINISHED, 
 
-  DTLS_STATE_CONNECTED
+  DTLS_STATE_CONNECTED,
+  DTLS_STATE_CLOSING
 } dtls_state_t;
 
 typedef struct {
@@ -171,6 +172,24 @@ void dtls_free_context(dtls_context_t *ctx);
 
 /** Sets one of the available callbacks write, read. */
 #define dtls_set_cb(ctx,cb,CB) do { (ctx)->cb_##CB = cb; } while(0)
+
+/**
+ * Establishes a DTLS channel with the specified remote peer @p dst.
+ * This function returns @c 0 if that channel already exists, a value
+ * greater than zero when a new ClientHello message was sent, and
+ * a value less than zero on error.
+ *
+ * @param ctx    The DTLS context to use.
+ * @param dst    The remote party to connect to.
+ * @return A value less than zero on error, greater or equal otherwise.
+ */
+int dtls_connect(dtls_context_t *ctx, const session_t *dst);
+
+/**
+ * Closes the DTLS connection associated with @p remote. This function
+ * returns zero on success, and a value less than zero on error.
+ */
+int dtls_close(dtls_context_t *ctx, const session_t *remote);
 
 /** 
  * Writes the application data given in @p buf to the peer specified

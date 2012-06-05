@@ -197,7 +197,7 @@ int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	      uint8 *buf, size_t buflen);
 
 dtls_peer_t *
-dtls_get_peer(struct dtls_context_t *ctx, session_t *session) {
+dtls_get_peer(struct dtls_context_t *ctx, const session_t *session) {
   dtls_peer_t *p = NULL;
 
 #ifndef WITH_CONTIKI
@@ -802,7 +802,7 @@ extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
 
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
-	      session_t *session) {
+	      const session_t *session) {
   dtls_peer_t *peer;
 
   peer = dtls_malloc_peer();
@@ -1803,7 +1803,40 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   return 1;
 }  
 
-#define DTLS_ALERT_CLOSE 0
+typedef enum {
+  DTLS_ALERT_LEVEL_WARNING=1,
+  DTLS_ALERT_LEVEL_FATAL=2
+} dtls_alert_level_t;
+
+typedef enum {
+  DTLS_ALERT_CLOSE=0
+} dtls_alert_t;
+
+static inline int
+dtls_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
+	   dtls_alert_t description) {
+  uint8_t msg[] = { level, description };
+
+  if (dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg)) > 0) {
+
+    /* indicate tear down */
+    peer->state = DTLS_STATE_CLOSING;
+  }
+  return 0;
+}
+
+int 
+dtls_close(dtls_context_t *ctx, const session_t *remote) {
+  int res = -1;
+  dtls_peer_t *peer;
+
+  peer = dtls_get_peer(ctx, remote);
+
+  if (peer)
+    res = dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
+
+  return res;
+}
 
 /** 
  * Handles incoming Alert messages. This function returns \c 1 if the
@@ -1819,8 +1852,11 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 
   switch (data[1]) {
   case DTLS_ALERT_CLOSE:
-    memcpy(ctx->sendbuf, data, 2);
-    dtls_send(ctx, peer, DTLS_CT_ALERT, ctx->sendbuf, 2);
+    /* Send close_notify only if the other party has initiated tear
+     * down. */
+    if (peer->state != DTLS_STATE_CLOSING)
+      dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
+
     return 1;
   default:
     ;
@@ -2146,7 +2182,7 @@ void dtls_free_context(dtls_context_t *ctx) {
 }
 
 int
-dtls_connect(dtls_context_t *ctx, session_t *dst) {
+dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   dtls_peer_t *peer;
   uint8 *p = ctx->sendbuf;
   size_t size;
