@@ -138,8 +138,6 @@ resolve_address(const char *server, struct sockaddr *dst) {
 }
 
 /*---------------------------------------------------------------------------*/
-extern int dtls_connect(dtls_context_t *ctx, session_t *dst);
-
 void
 usage( const char *program, const char *version) {
   const char *p;
