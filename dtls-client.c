@@ -181,8 +181,6 @@ init_dtls(session_t *dst) {
 }
 
 /*---------------------------------------------------------------------------*/
-extern int dtls_connect(dtls_context_t *ctx, session_t *dst);
-
 PROCESS_THREAD(udp_server_process, ev, data)
 {
   static int connected = 0;
