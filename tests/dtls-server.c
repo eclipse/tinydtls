@@ -1,10 +1,9 @@
 
-#ifndef DSRV_NO_DTLS
-
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -13,8 +12,12 @@
 #include <signal.h>
 
 #include "config.h" 
-#include "global.h" 
+#include "dtls.h" 
 #include "debug.h" 
+
+#define DEFAULT_PORT 20220
+
+extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
 
 #if 0
 /* SIGINT handler: set quit to 1 for graceful termination */
@@ -23,18 +26,6 @@ handle_sigint(int signum) {
   dsrv_stop(dsrv_get_context());
 }
 #endif
-
-#ifndef DSRV_NO_PROTOCOL_DEMUX
-protocol_t
-demux_protocol(struct sockaddr *raddr, socklen_t rlen,
-	       int ifindex, char *buf, int len) {
-  return (buf[0] & 0xfc) == 0x14 ? DTLS : RAW;
-}
-#endif /* DSRV_NO_PROTOCOL_DEMUX */
-
-void 
-peer_timeout(struct dsrv_context_t *ctx) {
-}
 
 void
 read_from_peer(struct dtls_context_t *ctx, 
@@ -52,7 +43,7 @@ send_to_peer(struct dtls_context_t *ctx,
 
   int fd = *(int *)dtls_get_app_data(ctx);
   return sendto(fd, data, len, MSG_DONTWAIT,
-		&session->raddr.sa, session->rlen);
+		&session->addr.sa, session->size);
 }
 
 int
@@ -66,31 +57,112 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   assert(fd);
 
-  session.rlen = sizeof(session.raddr);
+  session.size = sizeof(session.addr);
   len = recvfrom(*fd, buf, sizeof(buf), 0, 
-		 &session.raddr.sa, &session.rlen);
+		 &session.addr.sa, &session.size);
   
   if (len < 0) {
     perror("recvfrom");
     return -1;
   } else {
     dsrv_log(LOG_DEBUG, "got %d bytes from port %d\n", len, 
-	     ntohs(session.raddr.sin6.sin6_port));
+	     ntohs(session.addr.sin6.sin6_port));
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
 }    
 
 int 
+resolve_address(const char *server, struct sockaddr *dst) {
+  
+  struct addrinfo *res, *ainfo;
+  struct addrinfo hints;
+  static char addrstr[256];
+  int error;
+
+  memset(addrstr, 0, sizeof(addrstr));
+  if (server && strlen(server) > 0)
+    memcpy(addrstr, server, strlen(server));
+  else
+    memcpy(addrstr, "localhost", 9);
+
+  memset ((char *)&hints, 0, sizeof(hints));
+  hints.ai_socktype = SOCK_DGRAM;
+  hints.ai_family = AF_UNSPEC;
+
+  error = getaddrinfo(addrstr, "", &hints, &res);
+
+  if (error != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(error));
+    return error;
+  }
+
+  for (ainfo = res; ainfo != NULL; ainfo = ainfo->ai_next) {
+
+    switch (ainfo->ai_family) {
+    case AF_INET6:
+
+      memcpy(dst, ainfo->ai_addr, ainfo->ai_addrlen);
+      return ainfo->ai_addrlen;
+    default:
+      ;
+    }
+  }
+
+  freeaddrinfo(res);
+  return -1;
+}
+
+void
+usage(const char *program, const char *version) {
+  const char *p;
+
+  p = strrchr( program, '/' );
+  if ( p )
+    program = ++p;
+
+  fprintf(stderr, "%s v%s -- DTLS server implementation\n"
+	  "(c) 2011-2012 Olaf Bergmann <bergmann@tzi.org>\n\n"
+	  "usage: %s [-A address] [-p port] [-v num]\n"
+	  "\t-A address\t\tlisten on specified address (default is ::)\n"
+	  "\t-p port\t\tlisten on specified port (default is %d)\n"
+	  "\t-v num\t\tverbosity level (default: 3)\n",
+	   program, version, program, DEFAULT_PORT);
+}
+
+int 
 main(int argc, char **argv) {
   dtls_context_t *the_context = NULL;
+  log_t log_level = LOG_WARN;
   fd_set rfds, wfds;
   struct timeval timeout;
-  int fd, result;
+  int fd, opt, result;
   int on = 1;
-  struct sockaddr_in6 listen_addr = { AF_INET6, htons(20220), 0, IN6ADDR_ANY_INIT, 0 };
+  struct sockaddr_in6 listen_addr = { 
+    AF_INET6, htons(DEFAULT_PORT), 0, IN6ADDR_ANY_INIT, 0 
+  };
 
-  set_log_level(LOG_DEBUG);
+  while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
+    switch (opt) {
+    case 'A' :
+      if (resolve_address(optarg, (struct sockaddr *)&listen_addr) < 0) {
+	fprintf(stderr, "cannot resolve address\n");
+	exit(-1);
+      }
+      break;
+    case 'p' :
+      listen_addr.sin6_port = htons(atoi(optarg));
+      break;
+    case 'v' :
+      log_level = strtol(optarg, NULL, 10);
+      break;
+    default:
+      usage(argv[0], PACKAGE_VERSION);
+      exit(1);
+    }
+  }
+
+  set_log_level(log_level);
 
   /* init socket and set it to non-blocking */
   fd = socket(listen_addr.sin6_family, SOCK_DGRAM, 0);
@@ -156,10 +228,3 @@ main(int argc, char **argv) {
   dtls_free_context(the_context);
   exit(0);
 }
-
-#else
-/* just include a no-op when built without DTLS */
-int main(int argc, char **argv) {
-  return 0;
-}
-#endif /* DSRV_NO_DTLS */
