@@ -564,7 +564,7 @@ calculate_key_block(dtls_context_t *ctx,
       printf(" %02x", server_random[i]);
     printf("\n");
 
-    printf("pre_master_secret: (%d bytes):", pre_master_len);
+    printf("pre_master_secret: (%lu bytes):", pre_master_len);
     for (i = 0; i < pre_master_len; ++i)
       printf(" %02x", pre_master_secret[i]);
     printf("\n");
@@ -660,7 +660,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
 
   /* debug("dtls_update_parameters: msglen is %d\n", data_length); */
-  printf("dtls_update_parameters: msglen is %d\n", data_length);
+  printf("dtls_update_parameters: msglen is %lu\n", data_length);
 
   /* skip the handshake header and client version information */
   data += DTLS_HS_LENGTH + sizeof(uint16);
@@ -964,8 +964,15 @@ dtls_prepare_record(dtls_peer_t *peer,
     res = data_length;
   } else { /* TLS_PSK_WITH_AES_128_CCM_8 */   
     dtls_cipher_context_t *cipher_context;
-    unsigned char N[DTLS_CCM_BLOCKSIZE];
 
+    /** 
+     * length of additional_data for the AEAD cipher which consists of
+     * seq_num(2+6) + type(1) + version(2) + length(2)
+     */
+#define A_DATA_LEN 13
+#define A_DATA N
+    unsigned char N[max(DTLS_CCM_BLOCKSIZE, A_DATA_LEN)];
+    
     if (*rlen < sizeof(dtls_record_header_t) + data_length + 8) {
       warn("dtls_prepare_record(): send buffer too small\n");
       return -1;
@@ -1010,8 +1017,18 @@ dtls_prepare_record(dtls_peer_t *peer,
     printf("\n");
 #endif
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
-
-    res = dtls_encrypt(cipher_context, p + 8, data_length, p + 8);
+    
+    /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
+     * 
+     * additional_data = seq_num + TLSCompressed.type +
+     *                   TLSCompressed.version + TLSCompressed.length;
+     */
+    memcpy(A_DATA, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8); /* epoch and seq_num */
+    memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
+    dtls_int_to_uint16(A_DATA + 11, data_length); /* length */
+    
+    res = dtls_encrypt(cipher_context, p + 8, data_length, p + 8,
+		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
       return -1;
@@ -1548,8 +1565,15 @@ decrypt_verify(dtls_peer_t *peer,
     return 1;
   } else {			/* TLS_PSK_WITH_AES_128_CCM_8 */   
     dtls_cipher_context_t *cipher_context;
-    unsigned char N[DTLS_CCM_BLOCKSIZE];
+    /** 
+     * length of additional_data for the AEAD cipher which consists of
+     * seq_num(2+6) + type(1) + version(2) + length(2)
+     */
+#define A_DATA_LEN 13
+#define A_DATA N
+    unsigned char N[max(DTLS_CCM_BLOCKSIZE, A_DATA_LEN)];
     long int len;
+
 
     if (*clen < 16)		/* need at least IV and MAC */
       return -1;
@@ -1583,7 +1607,17 @@ decrypt_verify(dtls_peer_t *peer,
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
 
-    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext);
+    /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
+     * 
+     * additional_data = seq_num + TLSCompressed.type +
+     *                   TLSCompressed.version + TLSCompressed.length;
+     */
+    memcpy(A_DATA, &DTLS_RECORD_HEADER(packet)->epoch, 8); /* epoch and seq_num */
+    memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
+    dtls_int_to_uint16(A_DATA + 11, *clen - 8); /* length without nonce_explicit */
+
+    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext,
+		       A_DATA, A_DATA_LEN);
 
     ok = len >= 0;
     if (!ok)

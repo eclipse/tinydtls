@@ -34,7 +34,7 @@
 #define DTLS_CCM_BLOCKSIZE 16	/**< size of hmac blocks */
 #define DTLS_CCM_MAX       16	/**< max number of bytes in digest */
 
-/**
+/** 
  * Authenticates and encrypts a message using AES in CCM mode. Please
  * see also RFC 3610 for the meaning of \p M, \p L, \p lm and \p la.
  * 
@@ -49,17 +49,21 @@
  *            \p M bytes MAC. Therefore, the buffer must be at least
  *            \p lm + \p M bytes large.
  * \param lm  The actual length of \p msg.
+ * \param aad A pointer to the additional authentication data (can be \c NULL if
+ *            \p la is zero).
  * \param la  The number of additional authentication octets (may be zero).
  * \return FIXME
  */
 long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
-			 unsigned char *msg, size_t lm, size_t la);
+			 unsigned char *msg, size_t lm, 
+			 const unsigned char *aad, size_t la);
 
 long int
 dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
-			 unsigned char *msg, size_t lm, size_t la);
+			 unsigned char *msg, size_t lm, 
+			 const unsigned char *aad, size_t la);
 
 #endif /* _CCM_H_ */

@@ -204,7 +204,7 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
 	      const unsigned char *packet, size_t length,
 	      unsigned char *buf);
 
-/**
+/** 
  * Encrypts the specified \p src of given \p length, writing the
  * result to \p buf. The cipher implementation may add more data to
  * the result buffer such as an initialization vector or padding
@@ -219,12 +219,16 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * \param length The actual size of of \p src.
  * \param buf    The result buffer. \p src and \p buf must not 
  *               overlap.
+ * \param aad    additional data for AEAD ciphers
+ * \param aad_length actual size of @p aad
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
  */
 int dtls_encrypt(dtls_cipher_context_t *ctx, 
 		 const unsigned char *src, size_t length,
-		 unsigned char *buf);
+		 unsigned char *buf,
+		 const unsigned char *aad, size_t aad_length);
+
 /** 
  * Decrypts the given buffer \p src of given \p length, writing the
  * result to \p buf. The function returns \c -1 in case of an error,
@@ -238,12 +242,15 @@ int dtls_encrypt(dtls_cipher_context_t *ctx,
  * \param src     The buffer to decrypt.
  * \param length  The length of the input buffer. 
  * \param buf     The result buffer.
+ * \param aad     additional authentication data for AEAD ciphers
+ * \param aad_length actual size of @p aad
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
  */
 int dtls_decrypt(dtls_cipher_context_t *ctx, 
 		 const unsigned char *src, size_t length,
-		 unsigned char *buf);
+		 unsigned char *buf,
+		 const unsigned char *a_data, size_t a_data_length);
 
 /* helper functions */
 

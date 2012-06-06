@@ -191,7 +191,8 @@ dtls_ccm_init(aes128_ccm_t *ccm_ctx, unsigned char *N, size_t length) {
 
 size_t
 dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
-		 unsigned char *buf) {
+		 unsigned char *buf, 
+		 const unsigned char *aad, size_t la) {
   long int len;
 
   assert(ccm_ctx);
@@ -200,13 +201,14 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 				 max(2,(dtls_fls(srclen) >> 3) + 1), 
 				 ccm_ctx->N,
 				 buf, srclen, 
-				 0 /* la */);
+				 aad, la);
   return len;
 }
 
 size_t
 dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
-		size_t srclen, unsigned char *buf) {
+		 size_t srclen, unsigned char *buf,
+		 const unsigned char *aad, size_t la) {
   long int len;
 
   assert(ccm_ctx);
@@ -215,7 +217,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 				 max(2,(dtls_fls(srclen) >> 3) + 1),
 				 ccm_ctx->N, 
 				 buf, srclen, 
-				 0 /* la */);
+				 aad, la);
   return len;
 }
 
@@ -286,11 +288,13 @@ dtls_cipher_free(dtls_cipher_context_t *cipher_context) {
 int 
 dtls_encrypt(dtls_cipher_context_t *ctx, 
 	     const unsigned char *src, size_t length,
-	     unsigned char *buf) {
+	     unsigned char *buf,
+	     const unsigned char *aad, size_t la) {
   if (ctx) {
     if (src != buf)
       memmove(buf, src, length);
-    return dtls_ccm_encrypt(&ctx->data, src, length, buf);
+    return dtls_ccm_encrypt(&ctx->data, src, length, buf, 
+			    aad, la);
   }
 
   return -1;
@@ -299,11 +303,13 @@ dtls_encrypt(dtls_cipher_context_t *ctx,
 int 
 dtls_decrypt(dtls_cipher_context_t *ctx, 
 	     const unsigned char *src, size_t length,
-	     unsigned char *buf) {
+	     unsigned char *buf,
+	     const unsigned char *aad, size_t la) {
   if (ctx) {
     if (src != buf)
       memmove(buf, src, length);
-    return dtls_ccm_decrypt(&ctx->data, src, length, buf);
+    return dtls_ccm_decrypt(&ctx->data, src, length, buf,
+			    aad, la);
   }
 
   return -1;

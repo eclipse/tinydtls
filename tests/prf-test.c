@@ -45,4 +45,5 @@ main() {
   printf("PRF yields %lu bytes of random data:\n", result);
   hexdump(buf, result);
   printf("\n");
+  return 0;
 }

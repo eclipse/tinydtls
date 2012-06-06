@@ -64,27 +64,28 @@ int main(int argc, char **argv) {
 
     L = max(2,(fls(data[n].lm) >> 3) + 1);
     len = dtls_ccm_encrypt_message(&ctx, data[n].M, L, data[n].nonce, 
-				   data[n].msg, data[n].lm, data[n].la);
+				   data[n].msg + data[n].la, 
+				   data[n].lm - data[n].la, 
+				   data[n].msg, data[n].la);
     
+    len +=  + data[n].la;
     printf("Packet Vector #%d ", n+1);
-    if (len != data[n].r_lm
-	|| memcmp(data[n].msg, data[n].result, len))
+    if (len != data[n].r_lm || memcmp(data[n].msg, data[n].result, len))
       printf("FAILED, ");
     else 
       printf("OK, ");
     
-    printf("result is (total length = %d):\n\t", (int)len);
+    printf("result is (total length = %lu):\n\t", len);
     dump(data[n].msg, len);
 
-    /*
     len = dtls_ccm_decrypt_message(&ctx, data[n].M, L, data[n].nonce, 
-				   data[n].msg, len, data[n].la);
+				   data[n].msg + data[n].la, len - data[n].la, 
+				   data[n].msg, data[n].la);
     
     if (len < 0)
-      dsrv_log(LOG_ALERT, "Packet Vector #%d: cannot decrypt message\n", n+1);
-    else
-      printf("\t*** MAC verified (total length = %d) ***\n", (int)len);
-      */
+      printf("Packet Vector #%d: cannot decrypt message\n", n+1);
+    else 
+      printf("\t*** MAC verified (total length = %lu) ***\n", len + data[n].la);
   }
 
 #ifdef WITH_CONTIKI

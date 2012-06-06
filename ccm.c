@@ -76,7 +76,7 @@ block0(size_t M,       /* number of auth bytes */
  * \return     The result is written to \p X.
  */
 void
-add_auth_data(rijndael_ctx *ctx, unsigned char *msg, size_t la,
+add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, size_t la,
 	      unsigned char B[DTLS_CCM_BLOCKSIZE], 
 	      unsigned char X[DTLS_CCM_BLOCKSIZE]) {
   size_t i,j; 
@@ -170,7 +170,8 @@ mac(rijndael_ctx *ctx,
 long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
-			 unsigned char *msg, size_t lm, size_t la) {
+			 unsigned char *msg, size_t lm, 
+			 const unsigned char *aad, size_t la) {
   size_t i, len;
   unsigned long C;
   unsigned long counter = 1; /* \bug does not work correctly on ia32 when
@@ -181,10 +182,9 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   unsigned char X[DTLS_CCM_BLOCKSIZE]; /* X_i = encrypted B_i blocks */
 
   len = lm;			/* save original length */
-  lm -= la;			/* detract additional auth data count */
   /* create the initial authentication block B0 */
   block0(M, L, la, lm, N, B);
-  add_auth_data(ctx, msg, la, B, X);
+  add_auth_data(ctx, aad, la, B, X);
 
   /* initialize block template */
   A[0] = L-1;
@@ -192,7 +192,6 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   /* copy the nonce */
   memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
   
-  msg += la;
   while (lm >= DTLS_CCM_BLOCKSIZE) {
     /* calculate MAC */
     mac(ctx, msg, DTLS_CCM_BLOCKSIZE, B, X);
@@ -235,7 +234,8 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 long int
 dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 			 unsigned char N[DTLS_CCM_BLOCKSIZE], 
-			 unsigned char *msg, size_t lm, size_t la) {
+			 unsigned char *msg, size_t lm, 
+			 const unsigned char *aad, size_t la) {
   
   size_t len;
   unsigned long C;
@@ -246,15 +246,15 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   unsigned char S[DTLS_CCM_BLOCKSIZE]; /* S_i = encrypted A_i blocks */
   unsigned char X[DTLS_CCM_BLOCKSIZE]; /* X_i = encrypted B_i blocks */
 
-  if (lm < (la + M)) 
+  if (lm < M)
     goto error;
 
   len = lm;	      /* save original length */
-  lm -= (la + M);     /* detract additional auth data count and MAC size*/
+  lm -= M;	      /* detract MAC size*/
+
   /* create the initial authentication block B0 */
   block0(M, L, la, lm, N, B);
-
-  add_auth_data(ctx, msg, la, B, X);
+  add_auth_data(ctx, aad, la, B, X);
 
   /* initialize block template */
   A[0] = L-1;
@@ -262,7 +262,6 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   /* copy the nonce */
   memcpy(A + 1, N, DTLS_CCM_BLOCKSIZE - L);
   
-  msg += la;
   while (lm >= DTLS_CCM_BLOCKSIZE) {
     /* decrypt */
     encrypt(ctx, L, counter, msg, DTLS_CCM_BLOCKSIZE, A, S);
