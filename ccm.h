@@ -31,8 +31,9 @@
 
 /* implementation of Counter Mode CBC-MAC, RFC 3610 */
 
-#define DTLS_CCM_BLOCKSIZE 16	/**< size of hmac blocks */
-#define DTLS_CCM_MAX       16	/**< max number of bytes in digest */
+#define DTLS_CCM_BLOCKSIZE  16	/**< size of hmac blocks */
+#define DTLS_CCM_MAX        16	/**< max number of bytes in digest */
+#define DTLS_CCM_NONCE_SIZE 12	/**< size of nonce */
 
 /** 
  * Authenticates and encrypts a message using AES in CCM mode. Please

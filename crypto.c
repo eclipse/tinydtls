@@ -198,7 +198,7 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
   assert(ccm_ctx);
 
   len = dtls_ccm_encrypt_message(&ccm_ctx->ctx, 8 /* M */, 
-				 max(2,(dtls_fls(srclen) >> 3) + 1), 
+				 max(2, 15 - DTLS_CCM_NONCE_SIZE),
 				 ccm_ctx->N,
 				 buf, srclen, 
 				 aad, la);
@@ -214,7 +214,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
   assert(ccm_ctx);
 
   len = dtls_ccm_decrypt_message(&ccm_ctx->ctx, 8 /* M */, 
-				 max(2,(dtls_fls(srclen) >> 3) + 1),
+				 max(2, 15 - DTLS_CCM_NONCE_SIZE),
 				 ccm_ctx->N, 
 				 buf, srclen, 
 				 aad, la);

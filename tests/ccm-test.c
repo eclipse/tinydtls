@@ -58,11 +58,10 @@ int main(int argc, char **argv) {
 
     if (rijndael_set_key_enc_only(&ctx, data[n].key, 8*sizeof(data[n].key)) < 0) {
       fprintf(stderr, "cannot set key\n");
-      // irgendwie beisst sich eine ifdef WITH_CONTIKI Verwendung hier ?
       return -1;
     }
 
-    L = max(2,(fls(data[n].lm) >> 3) + 1);
+    L = 15 - 13; /* the Nonce in ccm-testdata.c is always 13 Bytes */
     len = dtls_ccm_encrypt_message(&ctx, data[n].M, L, data[n].nonce, 
 				   data[n].msg + data[n].la, 
 				   data[n].lm - data[n].la, 
