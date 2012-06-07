@@ -74,7 +74,7 @@ dnl AC_TYPE_UINT64_T
 
 # Checks for library functions.
 AC_FUNC_MALLOC
-AC_CHECK_FUNCS([memset select socket strdup strerror])
+AC_CHECK_FUNCS([memset select socket strdup strerror vprintf])
 
 AC_CONFIG_HEADERS([config.h])
 

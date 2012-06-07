@@ -50,6 +50,7 @@
 #ifdef CONTIKI_TARGET_MINIMAL_NET
 #undef HAVE_ASSERT_H
 #define assert(x)
+#define HAVE_VPRINTF
 #endif /* CONTIKI_TARGET_MINIMAL_NET */
 
 #if defined(TMOTE_SKY)
