@@ -1124,6 +1124,54 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   return res <= 0 ? res : buflen - (len - res);
 }
 
+typedef enum {
+  DTLS_ALERT_LEVEL_WARNING=1,
+  DTLS_ALERT_LEVEL_FATAL=2
+} dtls_alert_level_t;
+
+typedef enum {
+  DTLS_ALERT_CLOSE=0,
+  DTLS_ALERT_UNEXPECTED_MESSAGE=10,
+  DTLS_ALERT_BAD_RECORD_MAC=20,
+  DTLS_ALERT_RECORD_OVERFLOW=22,
+  DTLS_ALERT_DECOMPRESSION_FAILURE=30,
+  DTLS_ALERT_HANDSHAKE_FAILURE=40,
+  DTLS_ALERT_ILLEGAL_PARAMETER=47,
+  DTLS_ALERT_ACCESS_DENIED=49,
+  DTLS_ALERT_DECODE_ERROR=50,
+  DTLS_ALERT_DECRYPT_ERROR=51,
+  DTLS_ALERT_PROTOCOL_VERSION=70,
+  DTLS_ALERT_INSUFFICIENT_SECURITY=70,
+  DTLS_ALERT_INTERNAL_ERROR=80,
+  DTLS_ALERT_USER_CANCELED=90,
+  DTLS_ALERT_NO_RENEGOTIATION=100,
+  DTLS_ALERT_UNSUPPORTED_EXTENSION=110
+} dtls_alert_t;
+
+static inline int
+dtls_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
+	   dtls_alert_t description) {
+  uint8_t msg[] = { level, description };
+
+  dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg));
+  return 0;
+}
+
+int 
+dtls_close(dtls_context_t *ctx, const session_t *remote) {
+  int res = -1;
+  dtls_peer_t *peer;
+
+  peer = dtls_get_peer(ctx, remote);
+
+  if (peer) {
+    res = dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
+    /* indicate tear down */
+    peer->state = DTLS_STATE_CLOSING;
+  }
+  return res;
+}
+
 int
 dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 
@@ -1739,7 +1787,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       if (!dtls_update_parameters(ctx, peer, data, data_length)) {
 	
 	warn("error updating security parameters\n");
-	/* FIXME: send Alert */
+	dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING, 
+		   DTLS_ALERT_NO_RENEGOTIATION);
 	return 0;
       }
 
@@ -1837,41 +1886,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   return 1;
 }  
 
-typedef enum {
-  DTLS_ALERT_LEVEL_WARNING=1,
-  DTLS_ALERT_LEVEL_FATAL=2
-} dtls_alert_level_t;
-
-typedef enum {
-  DTLS_ALERT_CLOSE=0
-} dtls_alert_t;
-
-static inline int
-dtls_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
-	   dtls_alert_t description) {
-  uint8_t msg[] = { level, description };
-
-  if (dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg)) > 0) {
-
-    /* indicate tear down */
-    peer->state = DTLS_STATE_CLOSING;
-  }
-  return 0;
-}
-
-int 
-dtls_close(dtls_context_t *ctx, const session_t *remote) {
-  int res = -1;
-  dtls_peer_t *peer;
-
-  peer = dtls_get_peer(ctx, remote);
-
-  if (peer)
-    res = dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
-
-  return res;
-}
-
 /** 
  * Handles incoming Alert messages. This function returns \c 1 if the
  * connection should be closed and the peer is to be invalidated.
@@ -1886,11 +1900,10 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 
   switch (data[1]) {
   case DTLS_ALERT_CLOSE:
-    /* Send close_notify only if the other party has initiated tear
-     * down. */
-    if (peer->state != DTLS_STATE_CLOSING)
+    if (peer->state != DTLS_STATE_CLOSING) {
+      peer->state = DTLS_STATE_CLOSING;
       dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
-
+    }
     return 1;
   default:
     ;
@@ -2031,6 +2044,8 @@ dtls_handle_message(dtls_context_t *ctx,
 
       warn("error updating security parameters\n");
       /* FIXME: send handshake failure Alert */
+      dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, 
+		 DTLS_ALERT_HANDSHAKE_FAILURE);
       dtls_free_peer(peer);
       return -1;
     }
