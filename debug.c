@@ -224,9 +224,7 @@ dsrv_log(log_t level, char *format, ...) {
     printf("%s ", loglevels[level]);
 
   va_start(ap, format);
-#ifdef HAVE_VPRINTF
   vprintf(format, ap);
-#endif
   va_end(ap);
   fflush(stdout);
 }
@@ -248,9 +246,9 @@ dsrv_log(log_t level, char *format, ...) {
   va_start(ap, format);
 #ifdef HAVE_VPRINTF
   vprintf(format, ap);
-#else /* HAVE_VPRINTF */
+#else
   PRINTF(format, ap);
-#endif /* HAVE_VPRINTF */
+#endif
   va_end(ap);
 }
 #endif /* WITH_CONTIKI */
