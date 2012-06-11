@@ -52,7 +52,7 @@ static struct uip_udp_conn *server_conn;
 
 static dtls_context_t *dtls_context;
 
-void
+int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
@@ -61,6 +61,7 @@ read_from_peer(struct dtls_context_t *ctx,
 
   /* echo incoming application data */
   /* dtls_write(ctx, session, data, len); */
+  return 0;
 }
 
 int
@@ -81,6 +82,23 @@ send_to_peer(struct dtls_context_t *ctx,
   return len;
 }
 
+int
+get_key(struct dtls_context_t *ctx, 
+	const session_t *session, 
+	const unsigned char *id, size_t id_len, 
+	const dtls_key_t **result) {
+
+  static const dtls_key_t psk = {
+    .type = DTLS_KEY_PSK,
+    .key.psk.id = (unsigned char *)"Client_identity", 
+    .key.psk.id_length = 15,
+    .key.psk.key = (unsigned char *)"secretPSK", 
+    .key.psk.key_length = 9
+  };
+
+  *result = &psk;
+  return 0;
+}
 
 PROCESS(udp_server_process, "UDP server process");
 AUTOSTART_PROCESSES(&udp_server_process);
@@ -105,7 +123,7 @@ print_local_addresses(void)
   int i;
   uint8_t state;
 
-  PRINTF("Server IPv6 addresses: ");
+  PRINTF("Server IPv6 addresses: \n");
   for(i = 0; i < UIP_DS6_ADDR_NB; i++) {
     state = uip_ds6_if.addr_list[i].state;
     if(uip_ds6_if.addr_list[i].isused &&
@@ -118,6 +136,12 @@ print_local_addresses(void)
 
 void
 init_dtls() {
+  static dtls_handler_t cb = {
+    .write = send_to_peer,
+    .read  = read_from_peer,
+    .event = NULL,
+    .get_key = get_key
+  };
 #if UIP_CONF_ROUTER
   uip_ipaddr_t ipaddr;
 #endif /* UIP_CONF_ROUTER */
@@ -138,27 +162,22 @@ init_dtls() {
   uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF);
 #endif /* UIP_CONF_ROUTER */
 
-  print_local_addresses();
-
   server_conn = udp_new(NULL, 0, NULL);
   udp_bind(server_conn, UIP_HTONS(20220));
 
   set_log_level(LOG_DEBUG);
 
   dtls_context = dtls_new_context(server_conn);
-  if (dtls_context) {
-    dtls_set_psk(dtls_context, (unsigned char *)"secretPSK", 9,
-		 (unsigned char *)"Client_identity", 15);
-		 
-    dtls_set_cb(dtls_context, read_from_peer, read);
-    dtls_set_cb(dtls_context, send_to_peer, write);
-  }
+  if (dtls_context)
+    dtls_set_handler(dtls_context, &cb);
 }
 
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(udp_server_process, ev, data)
 {
   PROCESS_BEGIN();
+
+  print_local_addresses();
 
   dtls_init();
   init_dtls();

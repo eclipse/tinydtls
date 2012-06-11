@@ -37,6 +37,11 @@
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
 #include "uthash.h"
+#else /* WITH_CONTIKI */
+# ifndef NDEBUG
+#   define DEBUG DEBUG_PRINT
+#   include "net/uip-debug.h"
+#  endif /* NDEBUG */
 #endif /* WITH_CONTIKI */
 
 #include "debug.h"
@@ -170,14 +175,14 @@ dtls_init() {
 #endif /* WITH_CONTIKI */
 }
 
-/* Calls cb_write() with given arguments if defined, otherwise an
+/* Calls cb_alert() with given arguments if defined, otherwise an
  * error message is logged and the result is -1. This is just an
  * internal helper.
  */
-#define CB_WRITE(Context, Session, Buf, Len)				\
-  ((Context)->cb_write							\
-   ? (Context)->cb_write((Context), (Session), (Buf), (Len))		\
-   : (dsrv_log(LOG_CRIT, "no send function registered"), -1))
+#define CALL(Context, which, ...)					\
+  ((Context)->h && (Context)->h->which					\
+   ? (Context)->h->which((Context), ##__VA_ARGS__)			\
+   : -1)
 
 /** 
  * Sends the fragment of length \p buflen given in \p buf to the
@@ -500,7 +505,7 @@ dtls_verify_peer(dtls_context_t *ctx,
       dtls_int_to_uint16(ctx->sendbuf + 11, 
 			 p - (ctx->sendbuf + DTLS_RH_LENGTH));
 
-      CB_WRITE(ctx, session, ctx->sendbuf, p - ctx->sendbuf);
+      (void)CALL(ctx, write, session, ctx->sendbuf, p - ctx->sendbuf);
     } else {
       if (peer->epoch) {
 	debug("renegotiation, therefore we accept it anyway:");
@@ -539,18 +544,31 @@ known_cipher(dtls_cipher_t code) {
   return code == TLS_PSK_WITH_AES_128_CCM_8;
 }
 
-void
+int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_security_parameters_t *config,
+		    const dtls_key_t *key,
 		    unsigned char client_random[32],
 		    unsigned char server_random[32]) {
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
   pre_master_secret = config->key_block;
 
+  assert(key);
+  switch (key->type) {
+  case DTLS_KEY_PSK: {
   /* Temporarily use the key_block storage space for the pre master secret. */
-  pre_master_len = dtls_pre_master_secret(ctx->psk, ctx->psk_length, 
+    pre_master_len = dtls_pre_master_secret(key->key.psk.key, key->key.psk.key_length, 
 					  pre_master_secret);
+    
+    break;
+  }
+  default:
+    debug("calculate_key_block: unknown key type\n");
+    return 0;
+  }
+
+#ifndef NDEBUG
   {
     int i;
 
@@ -564,11 +582,16 @@ calculate_key_block(dtls_context_t *ctx,
       printf(" %02x", server_random[i]);
     printf("\n");
 
+    printf("psk: (%lu bytes):", key->key.psk.key_length);
+    hexdump(key->key.psk.key, key->key.psk.key_length);
+    printf("\n");
+
     printf("pre_master_secret: (%lu bytes):", pre_master_len);
     for (i = 0; i < pre_master_len; ++i)
       printf(" %02x", pre_master_secret[i]);
     printf("\n");
   }
+#endif /* NDEBUG */
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
@@ -577,6 +600,7 @@ calculate_key_block(dtls_context_t *ctx,
 	   config->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH);
 
+#ifndef NDEBUG
   {
     int i;
     printf("master_secret (%d bytes):", DTLS_MASTER_SECRET_LENGTH);
@@ -584,6 +608,7 @@ calculate_key_block(dtls_context_t *ctx,
       printf(" %02x", config->master_secret[i]);
     printf("\n");
   }
+#endif /* NDEBUG */
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
@@ -633,6 +658,7 @@ calculate_key_block(dtls_context_t *ctx,
 
   }
 #endif
+  return 1;
 }
 
 /**
@@ -660,7 +686,6 @@ dtls_update_parameters(dtls_context_t *ctx,
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
 
   /* debug("dtls_update_parameters: msglen is %d\n", data_length); */
-  printf("dtls_update_parameters: msglen is %lu\n", data_length);
 
   /* skip the handshake header and client version information */
   data += DTLS_HS_LENGTH + sizeof(uint16);
@@ -1116,37 +1141,13 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* FIXME: copy to peer's sendqueue (after fragmentation if
    * necessary) and initialize retransmit timer */
-  res = CB_WRITE(ctx, &peer->session, sendbuf, len);
+  res = CALL(ctx, write, &peer->session, sendbuf, len);
 
   /* Guess number of bytes application data actually sent:
    * dtls_prepare_record() tells us in len the number of bytes to
    * send, res will contain the bytes actually sent. */
   return res <= 0 ? res : buflen - (len - res);
 }
-
-typedef enum {
-  DTLS_ALERT_LEVEL_WARNING=1,
-  DTLS_ALERT_LEVEL_FATAL=2
-} dtls_alert_level_t;
-
-typedef enum {
-  DTLS_ALERT_CLOSE=0,
-  DTLS_ALERT_UNEXPECTED_MESSAGE=10,
-  DTLS_ALERT_BAD_RECORD_MAC=20,
-  DTLS_ALERT_RECORD_OVERFLOW=22,
-  DTLS_ALERT_DECOMPRESSION_FAILURE=30,
-  DTLS_ALERT_HANDSHAKE_FAILURE=40,
-  DTLS_ALERT_ILLEGAL_PARAMETER=47,
-  DTLS_ALERT_ACCESS_DENIED=49,
-  DTLS_ALERT_DECODE_ERROR=50,
-  DTLS_ALERT_DECRYPT_ERROR=51,
-  DTLS_ALERT_PROTOCOL_VERSION=70,
-  DTLS_ALERT_INSUFFICIENT_SECURITY=70,
-  DTLS_ALERT_INTERNAL_ERROR=80,
-  DTLS_ALERT_USER_CANCELED=90,
-  DTLS_ALERT_NO_RENEGOTIATION=100,
-  DTLS_ALERT_UNSUPPORTED_EXTENSION=110
-} dtls_alert_t;
 
 static inline int
 dtls_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
@@ -1179,12 +1180,18 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   uint8 *p = buf, *q = ctx->sendbuf;
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
+  const dtls_key_t *key;
 
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
    * encoding function, so we do not need to guess.) */
   assert(sizeof(buf) >=
 	 DTLS_RH_LENGTH + DTLS_HS_LENGTH + DTLS_SH_LENGTH + 20);
+
+  if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0) {
+    debug("dtls_send_server_hello(): no key for session available\n");
+    return -1;
+  }
 
   /* Handshake header */
   p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO, 
@@ -1202,8 +1209,9 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   prng(p, 28);
   dtls_int_to_uint32(p + 28, clock_time());
 
-  calculate_key_block(ctx, OTHER_CONFIG(peer), 
-		      OTHER_CONFIG(peer)->client_random, p);
+  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
+			   OTHER_CONFIG(peer)->client_random, p))
+    return -1;
 
   p += 32;
 
@@ -1218,7 +1226,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
     if (OTHER_CONFIG(peer)->compression >= 0)
       *p++ = compression_methods[OTHER_CONFIG(peer)->compression];
 
-    /* no PSK hint, therefore, we do not need the server key exchange */
+    /* FIXME: if key->psk.id != NULL we need the server key exchange */
 
     /* update the finish hash 
        (FIXME: better put this in generic record_send function) */
@@ -1236,7 +1244,6 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   q += qlen;
   qlen = sizeof(ctx->sendbuf) - qlen;
 
-  printf("dtls_send_server_hello(): create ServerHelloDone\n");
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
@@ -1258,7 +1265,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
     return res;
   }
 
-  return CB_WRITE(ctx, &peer->session,  
+  return CALL(ctx, write, &peer->session,  
 		  ctx->sendbuf, (q + qlen) - ctx->sendbuf);
 }
 
@@ -1271,16 +1278,39 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
     
 int 
 dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer, int is_client) {
+  const dtls_key_t *key;
   uint8 *p = ctx->sendbuf;
-  size_t size = ctx->psk_id_length + sizeof(uint16);
+  size_t size;
   int ht = is_client 
     ? DTLS_HT_CLIENT_KEY_EXCHANGE 
     : DTLS_HT_SERVER_KEY_EXCHANGE;
+  unsigned char *id = NULL;
+  size_t id_len = 0;
 
+  if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0) {
+    dsrv_log(LOG_CRIT, "no key to send in kx\n");
+    return -2;
+  }
+
+  assert(key);
+
+  switch (key->type) {
+  case DTLS_KEY_PSK: {
+    id_len = key->key.psk.id_length;
+    id = key->key.psk.id;
+    break;
+  }
+  default:
+    dsrv_log(LOG_CRIT, "key type not supported\n");
+    return -3;
+  }
+  
+  size = id_len + sizeof(uint16);
   p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
 
-  dtls_int_to_uint16(p, ctx->psk_id_length);
-  memcpy(p + sizeof(uint16), ctx->psk_id, ctx->psk_id_length);
+  dtls_int_to_uint16(p, id_len);
+  memcpy(p + sizeof(uint16), id, id_len);
+
   p += size;
 
   update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
@@ -1336,6 +1366,7 @@ check_server_hello(dtls_context_t *ctx,
   uint8 *p = ctx->sendbuf;
   size_t size;
   int res;
+  const dtls_key_t *key;
 
   /* This function is called when we expect a ServerHello (i.e. we
    * have sent a ClientHello).  We might instead receive a HelloVerify
@@ -1367,10 +1398,13 @@ check_server_hello(dtls_context_t *ctx,
     data += sizeof(uint16);	      /* skip version field */
     data_length -= sizeof(uint16);
 
+    /* FIXME: check PSK hint */
+    if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0
+	|| !calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
+				OTHER_CONFIG(peer)->client_random, data)) {
+      goto error;
+    }
     /* store server random data */
-    calculate_key_block(ctx, OTHER_CONFIG(peer), 
-			OTHER_CONFIG(peer)->client_random,
-			data);
 
     /* memcpy(OTHER_CONFIG(peer)->server_random, data, */
     /* 	   sizeof(OTHER_CONFIG(peer)->server_random)); */
@@ -1769,7 +1803,6 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     } else {
       /* send alert */
     }
-    printf("done\n");
     break;
       
   case DTLS_STATE_CONNECTED:
@@ -1893,32 +1926,69 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 int
 handle_alert(dtls_context_t *ctx, dtls_peer_t *peer, 
 	     uint8 *record_header, uint8 *data, size_t data_length) {
+  int free_peer = 0;		/* indicates whether to free peer */
+
   if (data_length < 2)
     return 0;
 
   info("** Alert: level %d, description %d\n", data[0], data[1]);
 
+  /* The peer object is invalidated for FATAL alerts and close
+   * notifies. This is done in two steps.: First, remove the object
+   * from our list of peers. After that, the event handler callback is
+   * invoked with the still existing peer object. Finally, the storage
+   * used by peer is released.
+   */
+  if (data[0] == DTLS_ALERT_LEVEL_FATAL || data[1] == DTLS_ALERT_CLOSE) {
+    dsrv_log(LOG_ALERT, "%d invalidate peer\n", data[1]);
+    
+#ifndef WITH_CONTIKI
+    HASH_DEL_PEER(ctx->peers, peer);
+#else /* WITH_CONTIKI */
+    list_remove(ctx->peers, peer);
+
+#ifndef NDEBUG
+    PRINTF("removed peer [");
+    PRINT6ADDR(&peer->session.addr);
+    PRINTF("]:%d\n", uip_ntohs(peer->session.port));
+#endif
+#endif /* WITH_CONTIKI */
+
+    free_peer = 1;
+
+  }
+
+  (void)CALL(ctx, event, &peer->session, 
+	     (dtls_alert_level_t)data[0], (unsigned short)data[1]);
   switch (data[1]) {
   case DTLS_ALERT_CLOSE:
+    /* If state is DTLS_STATE_CLOSING, we have already sent a
+     * close_notify so, do not send that again. */
     if (peer->state != DTLS_STATE_CLOSING) {
       peer->state = DTLS_STATE_CLOSING;
       dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE);
-    }
-    return 1;
+    } else
+      peer->state = DTLS_STATE_CLOSED;
+    break;
   default:
     ;
   }
   
-  return 1;
+  if (free_peer)
+    dtls_free_peer(peer);
+
+  return free_peer;
 }
 
 int
 dtls_read(dtls_context_t *ctx, session_t *session, uint8 *msg, size_t msglen) {
   netq_t *node;
 
+#ifndef NDEBUG
   printf("dtls_read()\n");
   hexdump(msg, msglen);
   printf("\n");
+#endif /* NDEBUG */
   node = netq_node_new();
   if (!node)
     return -1;
@@ -1963,6 +2033,7 @@ dtls_handle_message(dtls_context_t *ctx,
   {
     dtls_peer_t *p = NULL;
     HASH_FIND_PEER(ctx->peers, session, p);
+#ifndef NDEBUG
     if (!p) {
       printf("dtls_handle_message: PEER NOT FOUND\n");
       {
@@ -1974,6 +2045,7 @@ dtls_handle_message(dtls_context_t *ctx,
       }
     } else 
       printf("dtls_handle_message: FOUND PEER\n");
+#endif /* NDEBUG */
   }
 #else /* WITH_CONTIKI */
   for (peer = list_head(ctx->peers); 
@@ -2111,28 +2183,20 @@ dtls_handle_message(dtls_context_t *ctx,
 
     case DTLS_CT_ALERT:
       if (handle_alert(ctx, peer, msg, data, data_length)) {
-
-	/* invalidate peer */
-#ifndef WITH_CONTIKI
-	HASH_DEL_PEER(ctx->peers, peer);
-#else /* WITH_CONTIKI */
-	list_remove(ctx->peers, peer);
-#endif /* WITH_CONTIKI */
-
-	dtls_free_peer(peer);
-
+	/* handle alert has invalidated peer */
+	peer = NULL;
 	return 0;
       }
-      break;
 
     case DTLS_CT_HANDSHAKE:
       handle_handshake(ctx, peer, msg, data, data_length);
+      if (peer->state == DTLS_STATE_CONNECTED)
+	CALL(ctx, event, &peer->session, 0, DTLS_EVENT_CONNECTED);
       break;
 
     case DTLS_CT_APPLICATION_DATA:
       info("** application data:\n");
-      if (ctx->cb_read) 
-	ctx->cb_read(ctx, &peer->session, data, data_length);
+      CALL(ctx, read, &peer->session, data, data_length);
       break;
     default:
       info("dropped unknown message of type %d\n",msg[0]);
@@ -2180,32 +2244,6 @@ dtls_new_context(void *app_data) {
   return NULL;
 }
 
-int
-dtls_set_psk(dtls_context_t *ctx, unsigned char *psk, size_t length,
-	     unsigned char *psk_identity, size_t id_length) {
-  /** @todo: store psk in key_store */
-
-  ctx->psk = psk;
-  ctx->psk_length = length;
-  
-  ctx->psk_id = psk_identity;
-  ctx->psk_id_length = id_length;
-
-  return 1;
-}
-
-void
-dtls_remove_psk(dtls_context_t *ctx, 
-		unsigned char *psk_identity, size_t id_length) {
-  /** @todo: remove psk_identity from key storage */
-
-  ctx->psk = NULL;
-  ctx->psk_length = 0;
-
-  ctx->psk_id = NULL;
-  ctx->psk_id_length = 0;
-}
-
 void dtls_free_context(dtls_context_t *ctx) {
   dtls_peer_t *p;
   
@@ -2226,8 +2264,6 @@ void dtls_free_context(dtls_context_t *ctx) {
       dtls_free_peer(p);
   }
 #endif /* WITH_CONTIKI */
-
-  dtls_remove_psk(ctx, ctx->psk_id, ctx->psk_id_length);
 }
 
 int
@@ -2255,6 +2291,11 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
 
   peer = dtls_new_peer(ctx, dst);
 
+  if (!peer) {
+    dsrv_log(LOG_CRIT, "cannot create new peer\n");
+    return -1;
+  }
+    
   /* set peer role to server: */
   OTHER_CONFIG(peer)->role = DTLS_SERVER;
   CURRENT_CONFIG(peer)->role = DTLS_SERVER;

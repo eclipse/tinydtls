@@ -27,6 +27,27 @@ static size_t len = 0;
 
 static str output_file = { 0, NULL }; /* output file name */
 
+/* This function is the "key store" for tinyDTLS. It is called to
+ * retrieve a key for the given identiy within this particular
+ * session. */
+int
+get_key(struct dtls_context_t *ctx, 
+	const session_t *session, 
+	const unsigned char *id, size_t id_len, 
+	const dtls_key_t **result) {
+
+  static const dtls_key_t psk = {
+    .type = DTLS_KEY_PSK,
+    .key.psk.id = (unsigned char *)"Client_identity", 
+    .key.psk.id_length = 15,
+    .key.psk.key = (unsigned char *)"secretPSK", 
+    .key.psk.key_length = 9
+  };
+   
+  *result = &psk;
+  return 0;
+}
+
 void
 try_send(struct dtls_context_t *ctx, session_t *dst) {
   int res;
@@ -43,12 +64,13 @@ handle_stdin() {
     len += strlen(buf + len);
 }
 
-void
+int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
   for (i = 0; i < len; i++)
     printf("%c", data[i]);
+  return 0;
 }
 
 int
@@ -157,6 +179,13 @@ usage( const char *program, const char *version) {
 	   program, version, program, DEFAULT_PORT);
 }
 
+static dtls_handler_t cb = {
+  .write = send_to_peer,
+  .read  = read_from_peer,
+  .event = NULL,
+  .get_key = get_key
+};
+
 int 
 main(int argc, char **argv) {
   dtls_context_t *dtls_context = NULL;
@@ -250,10 +279,7 @@ main(int argc, char **argv) {
     exit(-1);
   }
 
-  dtls_set_psk(dtls_context, (unsigned char *)"secretPSK", 9,
-	       (unsigned char *)"Client_identity", 15);
-  dtls_set_cb(dtls_context, read_from_peer, read);
-  dtls_set_cb(dtls_context, send_to_peer, write);
+  dtls_set_handler(dtls_context, &cb);
 
   dtls_connect(dtls_context, &dst);
 
