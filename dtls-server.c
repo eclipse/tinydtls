@@ -112,8 +112,7 @@ dtls_handle_read(dtls_context_t *ctx) {
     session.port = UIP_UDP_BUF->srcport;
     session.size = sizeof(session.addr) + sizeof(session.port);
     
-    /* call read function to fill peer's receive queue */
-    dtls_read(ctx, &session, uip_appdata, uip_datalen());
+    dtls_handle_message(ctx, &session, uip_appdata, uip_datalen());
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -191,7 +190,6 @@ PROCESS_THREAD(udp_server_process, ev, data)
     PROCESS_WAIT_EVENT();
     if(ev == tcpip_event) {
       dtls_handle_read(dtls_context);
-      dtls_dispatch(dtls_context);
     }
 #if 0
     if (bytes_read > 0) {

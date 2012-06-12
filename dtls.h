@@ -211,10 +211,11 @@ typedef struct dtls_context_t {
   dtls_peer_t *peers;		/**< peer hash map */
 #else /* WITH_CONTIKI */
   LIST_STRUCT(peers);
+
+  struct etimer retransmit_timer; /**< fires when the next packet must be sent */
 #endif /* WITH_CONTIKI */
 
   LIST_STRUCT(sendqueue);	/**< the packets to send */
-  LIST_STRUCT(recvqueue);	/**< received packets */
 
   void *app;			/**< application-specific data */
 
@@ -278,7 +279,7 @@ int dtls_close(dtls_context_t *ctx, const session_t *remote);
 int dtls_write(struct dtls_context_t *ctx, session_t *session, 
 	       uint8 *buf, size_t len);
 
-#define DTLS_COOKIE_LENGTH 32
+#define DTLS_COOKIE_LENGTH 16
 
 #define DTLS_CT_CHANGE_CIPHER_SPEC 20
 #define DTLS_CT_ALERT              21
@@ -363,26 +364,15 @@ int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
 
 /** 
  * Handles incoming data as DTLS message from given peer.
+ *
+ * @param ctx     The dtls context to use.
+ * @param session The current session
+ * @param msg     The received data
+ * @param msglen  The actual length of @p msg.
+ * @return A value less than zero on error, zero on success.
  */
 int dtls_handle_message(dtls_context_t *ctx, session_t *session,
 			uint8 *msg, int msglen);
-
-/**
- * This function is called to add the received @p msg of size @p len to
- * the internal receive queue.
- *
- * @param ctx     The dtls context to use.
- * @param remote  Sender of the data.
- * @param msg     The received data
- * @param len     The actual length of @p msg.
- * @return A value less than zero on error, greater zero on success.
- */
-int dtls_read(dtls_context_t *ctx, session_t *remote, uint8 *msg, size_t len);
-
-/**
- * Dispatches messages from the receive queue.
- */
-void dtls_dispatch(dtls_context_t *ctx);
 
 #endif /* _DTLS_H_ */
 

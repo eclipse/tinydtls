@@ -123,6 +123,11 @@ typedef struct {
 #define DTLS_MAX_BUF 256
 #endif
 
+#ifndef DTLS_DEFAULT_MAX_RETRANSMIT
+/** Number of message retransmissions. */
+#define DTLS_DEFAULT_MAX_RETRANSMIT 5
+#endif
+
 /** Known cipher suites.*/
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */

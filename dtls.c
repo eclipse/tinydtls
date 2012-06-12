@@ -152,6 +152,8 @@ dtls_free_peer(dtls_peer_t *peer) {
   free(peer);
 }
 #else /* WITH_CONTIKI */
+PROCESS(dtls_retransmit_process, "DTLS retransmit process");
+
 #include "memb.h"
 MEMB(peer_storage, dtls_peer_t, DTLS_PEER_MAX);
 
@@ -200,6 +202,11 @@ dtls_init() {
  */
 int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	      uint8 *buf, size_t buflen);
+
+/**
+ * Stops ongoing retransmissions of handshake messages for @p peer.
+ */
+void dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer);
 
 dtls_peer_t *
 dtls_get_peer(struct dtls_context_t *ctx, const session_t *session) {
@@ -1139,6 +1146,30 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   printf("\n");
 #endif
 
+  if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
+    /* copy handshake messages other than HelloVerify into retransmit buffer */
+    netq_t *n = netq_node_new();
+    if (n) {
+      n->t = clock_time() + 2 * CLOCK_SECOND;
+      n->retransmit_cnt = 0;
+      n->timeout = 2 * CLOCK_SECOND;
+      n->peer = peer;
+      n->length = buflen;
+      memcpy(n->data, buf, buflen);
+
+      if (!netq_insert_node((netq_t **)ctx->sendqueue, n)) {
+	warn("cannot add packet to retransmit buffer\n");
+	netq_node_free(n);
+      } else {
+	/* must set timer within the context of the retransmit process */
+	PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
+	etimer_set(&ctx->retransmit_timer, n->timeout);
+	PROCESS_CONTEXT_END(&dtls_retransmit_process);
+      }
+    } else 
+      warn("retransmit buffer full\n");
+  }
+
   /* FIXME: copy to peer's sendqueue (after fragmentation if
    * necessary) and initialize retransmit timer */
   res = CALL(ctx, write, &peer->session, sendbuf, len);
@@ -1974,44 +2005,12 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
     ;
   }
   
-  if (free_peer)
+  if (free_peer) {
+    dtls_stop_retransmission(ctx, peer);
     dtls_free_peer(peer);
+  }
 
   return free_peer;
-}
-
-int
-dtls_read(dtls_context_t *ctx, session_t *session, uint8 *msg, size_t msglen) {
-  netq_t *node;
-
-#ifndef NDEBUG
-  printf("dtls_read()\n");
-  hexdump(msg, msglen);
-  printf("\n");
-#endif /* NDEBUG */
-  node = netq_node_new();
-  if (!node)
-    return -1;
-
-  memcpy(&node->remote, session, sizeof(session_t));
-  /* incoming packet may be truncated when internal storage is too small */
-  node->length = min(msglen, sizeof(netq_packet_t));
-  memcpy(node->data, msg, node->length);
-
-  netq_insert_node((netq_t **)ctx->recvqueue, node);
-
-  return node->length;
-}
-
-void
-dtls_dispatch(dtls_context_t *ctx) {
-  netq_t *node;
-
-  /* dispatch all packets from queue */
-  while ((node = list_pop(ctx->recvqueue))) {
-    dtls_handle_message(ctx, &node->remote, node->data, node->length);
-    netq_node_free(node);
-  }
 }
 
 /** 
@@ -2150,6 +2149,12 @@ dtls_handle_message(dtls_context_t *ctx,
 
   assert(peer);
 
+  /* FIXME: check sequence number of record and drop message if the
+   * number is not exactly the last number that we have responded to + 1. 
+   * Otherwise, stop retransmissions for this specific peer and 
+   * continue processing. */
+  dtls_stop_retransmission(ctx, peer);
+
   while ((rlen = is_record(msg,msglen))) {
 
     debug("got packet %d (%d bytes)\n", msg[0], rlen);
@@ -2190,8 +2195,11 @@ dtls_handle_message(dtls_context_t *ctx,
 
     case DTLS_CT_HANDSHAKE:
       handle_handshake(ctx, peer, msg, data, data_length);
-      if (peer->state == DTLS_STATE_CONNECTED)
+      if (peer->state == DTLS_STATE_CONNECTED) {
+	/* stop retransmissions */
+	dtls_stop_retransmission(ctx, peer);
 	CALL(ctx, event, &peer->session, 0, DTLS_EVENT_CONNECTED);
+      }
       break;
 
     case DTLS_CT_APPLICATION_DATA:
@@ -2227,7 +2235,12 @@ dtls_new_context(void *app_data) {
   /* LIST_STRUCT_INIT(c, key_store); */
   
   LIST_STRUCT_INIT(c, sendqueue);
-  LIST_STRUCT_INIT(c, recvqueue);
+
+  process_start(&dtls_retransmit_process, (char *)c);
+  PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
+  /* the retransmit timer must be initialized to some large value */
+  etimer_set(&c->retransmit_timer, 0xFFFF);
+  PROCESS_CONTEXT_END(&coap_retransmit_process);
 #endif /* WITH_CONTIKI */
 
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
@@ -2360,6 +2373,101 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
 
   return res;
 }
+
+void
+dtls_retransmit(dtls_context_t *context, netq_t *node) {
+  if (!context || !node)
+    return;
+
+  /* re-initialize timeout when maximum number of retransmissions are not reached yet */
+  if (node->retransmit_cnt < DTLS_DEFAULT_MAX_RETRANSMIT) {
+      unsigned char sendbuf[DTLS_MAX_BUF];
+      size_t len = sizeof(sendbuf);
+
+      node->retransmit_cnt++;
+      node->t += (node->timeout << node->retransmit_cnt);
+      netq_insert_node((netq_t **)context->sendqueue, node);
+      
+      debug("** retransmit packet\n");
+      
+      if (dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, 
+			      node->data, node->length, 
+			      sendbuf, &len) > 0) {
+	
+#ifndef NDEBUG
+	debug("retransmit %d bytes\n", len);
+	hexdump(sendbuf, sizeof(dtls_record_header_t));
+	printf("\n");
+	hexdump(node->data, node->length);
+	printf("\n");
+#endif
+	
+	(void)CALL(context, write, &node->peer->session, sendbuf, len);
+      }
+      return;
+  }
+
+  /* no more retransmissions, remove node from system */
+  
+  debug("** removed transaction\n");
+
+  /* And finally delete the node */
+  netq_node_free(node);
+}
+
+void
+dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer) {
+  void *node;
+  node = list_head((list_t)context->sendqueue); 
+
+  while (node) {
+    if (dtls_session_equals(&((netq_t *)node)->peer->session,
+			    &peer->session)) {
+      void *tmp = node;
+      node = list_item_next(node);
+      list_remove((list_t)context->sendqueue, tmp);
+      netq_node_free((netq_t *)tmp);
+    } else
+      node = list_item_next(node);    
+  }
+}
+
+#ifdef WITH_CONTIKI
+/*---------------------------------------------------------------------------*/
+/* message retransmission */
+/*---------------------------------------------------------------------------*/
+PROCESS_THREAD(dtls_retransmit_process, ev, data)
+{
+  clock_time_t now;
+  netq_t *node;
+
+  PROCESS_BEGIN();
+
+  debug("Started DTLS retransmit process\r\n");
+
+  while(1) {
+    PROCESS_YIELD();
+    if (ev == PROCESS_EVENT_TIMER) {
+      if (etimer_expired(&the_dtls_context.retransmit_timer)) {
+	
+	node = list_head(the_dtls_context.sendqueue);
+	
+	now = clock_time();
+	while (node && node->t <= now) {
+	  dtls_retransmit(&the_dtls_context, list_pop(the_dtls_context.sendqueue));
+	  node = list_head(the_dtls_context.sendqueue);
+	}
+
+	/* need to set timer to some value even if no nextpdu is available */
+	etimer_set(&the_dtls_context.retransmit_timer, 
+		   node ? node->t - now : 0xFFFF);
+      } 
+    }
+  }
+  
+  PROCESS_END();
+}
+#endif /* WITH_CONTIKI */
 
 #ifndef NDEBUG
 /** dumps packets in usual hexdump format */

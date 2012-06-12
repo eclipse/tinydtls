@@ -186,6 +186,23 @@ static dtls_handler_t cb = {
   .get_key = get_key
 };
 
+void
+usage( const char *program, const char *version) {
+  const char *p;
+
+  p = strrchr( program, '/' );
+  if ( p )
+    program = ++p;
+
+  fprintf(stderr, "%s v%s -- DTLS client implementation\n"
+	  "(c) 2011-2012 Olaf Bergmann <bergmann@tzi.org>\n\n"
+	  "usage: %s [-o file][-p port] [-v num] addr [port]\n"
+	  "\t-o file\t\toutput received data to this file (use '-' for STDOUT)\n"
+	  "\t-p port\t\tlisten on specified port (default is %d)\n"
+	  "\t-v num\t\tverbosity level (default: 3)\n",
+	   program, version, program, DEFAULT_PORT);
+}
+
 int 
 main(int argc, char **argv) {
   dtls_context_t *dtls_context = NULL;

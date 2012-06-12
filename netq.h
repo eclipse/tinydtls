@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "global.h"
+#include "dtls.h"
 #include "time.h"
 
 /**
@@ -37,10 +38,7 @@ typedef struct netq_t {
   unsigned char retransmit_cnt;	/**< retransmission counter, will be removed when zero */
   unsigned int timeout;		/**< randomized timeout value */
 
-  session_t remote;		/**< remote address */
-#if 0
-  coap_tid_t id;		/**< unique transaction id */
-#endif
+  dtls_peer_t *peer;		/**< remote address */
 
   size_t length;		/**< actual length of data */
   netq_packet_t data;		/**< the datagram to send */
