@@ -377,6 +377,60 @@ int dtls_handle_message(dtls_context_t *ctx, session_t *session,
 #endif /* _DTLS_H_ */
 
 /**
+ * @mainpage 
+ *
+ * @author Olaf Bergmann, TZI Uni Bremen
+ *
+ * This library provides a very simple datagram server with DTLS
+ * support. It is designed to support session multiplexing in
+ * single-threaded applications and thus targets specifically on
+ * embedded systems.
+ *
+ * @section license License
+ *
+ * This software is under the <a 
+ * href="http://www.opensource.org/licenses/mit-license.php">MIT License</a>.
+ * 
+ * @subsection uthash UTHash
+ *
+ * This library uses <a href="http://uthash.sourceforge.net/">uthash</a> to manage
+ * its peers (not used for Contiki). @b uthash uses the <b>BSD revised license</b>, see
+ * <a href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>.
+ *
+ * @subsection aes Rijndael Implementation From OpenBSD
+ *
+ * The AES implementation is taken from rijndael.{c,h} contained in the crypto 
+ * sub-system of the OpenBSD operating system. It is copyright by Vincent Rijmen, *
+ * Antoon Bosselaers and Paulo Barreto. See <a 
+ * href="http://www.openbsd.org/cgi-bin/cvsweb/src/sys/crypto/rijndael.c">rijndael.c</a> 
+ * for License info.
+ *
+ * @section download Getting the Files
+ *
+ * You can get the sources either from the <a 
+ * href="http://sourceforge.net/projects/tinydtls/files">downloads</a> section or 
+ * through git from the <a 
+ * href="http://sourceforge.net/projects/tinydtls/develop">project develop page</a>.
+ *
+ * @section config Configuration
+ *
+ * Use @c configure to set up everything for a successful build. For Contiki, use the
+ * option @c --with-contiki.
+ *
+ * @section build Building
+ *
+ * After configuration, just type 
+ * @code
+make
+ * @endcode
+ * optionally followed by
+ * @code
+make install
+ * @endcode
+ * The Contiki version is integrated with the Contiki build system, hence you do not
+ * need to invoke @c make explicitely. Just add @c tinydtls to the variable @c APPS
+ * in your @c Makefile.
+ *
  * @addtogroup dtls_usage DTLS Usage
  *
  * @section dtls_server_example DTLS Server Example
@@ -389,22 +443,26 @@ int dtls_handle_message(dtls_context_t *ctx, session_t *session,
  * creation of the dtls_context_t using dtls_new_context(), and a callback
  * for sending data. Received packets are read by the application and
  * passed to dtls_handle_message() as shown in @ref dtls_read_cb. 
- * For any useful communication to happen, a read call back should be 
- * registered as well. A shared secret is set by dtls_set_psk().
+ * For any useful communication to happen, read and write call backs 
+ * and a key management function should be registered as well. 
  * 
  * @code 
  dtls_context_t *the_context = NULL;
  int fd, result;
+
+ static dtls_handler_t cb = {
+   .write = send_to_peer,
+   .read  = read_from_peer,
+   .event = NULL,
+   .get_key = get_key
+ };
 
  fd = socket(...);
  if (fd < 0 || bind(fd, ...) < 0)
    exit(-1);
 
  the_context = dtls_new_context(&fd);
- dtls_set_psk(the_context, (unsigned char *)"secretPSK", 9);
-
- dtls_set_cb(the_context, read_from_peer, read);
- dtls_set_cb(the_context, send_to_peer, write);
+ dtls_set_handler(the_context, &cb);
 
  while (1) {
    ...initialize fd_set rfds and timeout ...
@@ -435,8 +493,8 @@ int dtls_handle_read(struct dtls_context_t *ctx) {
 
   assert(fd);
 
-  session.rlen = sizeof(session.raddr);
-  len = recvfrom(*fd, buf, sizeof(buf), 0, &session.raddr.sa, &session.rlen);
+  session.size = sizeof(session.addr);
+  len = recvfrom(*fd, buf, sizeof(buf), 0, &session.addr.sa, &session.size);
   
   return len < 0 ? len : dtls_handle_message(ctx, &session, buf, len);
 }    
@@ -447,15 +505,15 @@ int dtls_handle_read(struct dtls_context_t *ctx) {
  * cleartext data as its argument. A read callback for a simple echo server
  * could look like this:
  * @code
-void read_from_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, size_t len) {
-  dtls_write(ctx, session, data, len);
+int read_from_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, size_t len) {
+  return dtls_write(ctx, session, data, len);
 }
  * @endcode 
  * 
  * @subsection dtls_send_cb The Send Callback
  * 
  * The callback function send_to_peer() is called whenever data must be
- * send over the network. Here, the sendto() system call is used to
+ * sent over the network. Here, the sendto() system call is used to
  * transmit data within the given session. The socket descriptor required
  * by sendto() has been registered as application data when the DTLS context
  * was created with dtls_new_context().
@@ -463,11 +521,155 @@ void read_from_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data,
  * sent at the time this callback is invoked. The following example thus
  * is incomplete as it would have to deal with EAGAIN somehow.
  * @code
-int send_to_peer(struct dtls_context_t *ctx, session_t *dst, uint8 *data, size_t len) {
-
+int send_to_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, size_t len) {
   int fd = *(int *)dtls_get_app_data(ctx);
-  return sendto(fd, data, len, MSG_DONTWAIT, &dst->raddr.sa, dst->rlen);
+  return sendto(fd, data, len, MSG_DONTWAIT, &session->addr.sa, session->size);
+}
+ * @endcode
+ * 
+ * @subsection dtls_get_key The Key Storage
+ *
+ * When a new DTLS session is created, the library must ask the application
+ * for keying material. To do so, it invokes the registered call-back function
+ * get_key() with the current context and session information as parameter.
+ * When the function is called with the @p id parameter set, the result must
+ * point to a dtls_key_t structure for the given identity. When @p id is 
+ * @c NULL, the function must pick a suitable identity and return a pointer to
+ * the corresponding dtls_key_t structure. The following example shows a
+ * simple key storage for a pre-shared key for @c Client_identity:
+ * 
+ * @code
+int get_key(struct dtls_context_t *ctx, 
+	const session_t *session, 
+	const unsigned char *id, size_t id_len, 
+	const dtls_key_t **result) {
+
+  static const dtls_key_t psk = {
+    .type = DTLS_KEY_PSK,
+    .key.psk.id = (unsigned char *)"my identity", 
+    .key.psk.id_length = 11,
+    .key.psk.key = (unsigned char *)"secret", 
+    .key.psk.key_length = 6
+  };
+   
+  *result = &psk;
+  return 0;
+}
+ * @endcode
+ * 
+ * @subsection dtls_events The Event Notifier
+ *
+ * Applications that want to be notified whenever the status of a DTLS session
+ * has changed can register an event handling function with the field @c event
+ * in the dtls_handler_t structure (see \ref dtls_server_example). The call-back
+ * function is called for alert messages and internal state changes. For alert
+ * messages, the argument @p level will be set to a value greate than zero, and
+ * @p code will indicate the notification code. For internal events, @p level
+ * is @c 0, and @p code a value greater than @c 255. 
+ *
+ * Currently, the only defined internal event is @c DTLS_EVENT_CONNECTED. It
+ * indicates successful establishment of a new DTLS channel.
+ *
+ * @code
+int handle_event(struct dtls_context_t *ctx, session_t *session, 
+                 dtls_alert_level_t level, unsigned short code) {
+  ... do something with event ...
+  return 0;
+}
+ * @endcode
+ *
+ * @section dtls_client_example DTLS Client Example
+ *
+ * A DTLS client is constructed like a server but needs to actively setup
+ * a new session by calling dtls_connect() at some point. As this function
+ * usually returns before the new DTLS channel is established, the application
+ * must register an event handler and wait for @c DTLS_EVENT_CONNECT before
+ * it can send data over the DTLS channel.
+ *
+ */
+
+/**
+ * @addtogroup contiki Contiki
+ *
+ * To use tinyDTLS as Contiki application, place the source code in the directory 
+ * @c apps/tinydtls in the Contiki source tree and invoke configure with the option
+ * @c --with-contiki. This will create the tinydtls Makefile and config.h from the
+ * templates @c Makefile.contiki and @c config.h.contiki instead of the usual 
+ * templates ending in @c .in.
+ *
+ * Then, create a Contiki project with @c APPS += tinydtls in its Makefile. A sample
+ * server could look like this (with read_from_peer() and get_key() as shown above).
+ *
+ * @code
+#include "contiki.h"
+
+#include "config.h"
+#include "dtls.h"
+
+#define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
+#define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLIPH_LEN])
+
+int send_to_peer(struct dtls_context_t *, session_t *, uint8 *, size_t);
+
+static struct uip_udp_conn *server_conn;
+static dtls_context_t *dtls_context;
+
+static dtls_handler_t cb = {
+  .write = send_to_peer,
+  .read  = read_from_peer,
+  .event = NULL,
+  .get_key = get_key
+};
+
+PROCESS(server_process, "DTLS server process");
+AUTOSTART_PROCESSES(&server_process);
+
+PROCESS_THREAD(server_process, ev, data)
+{
+  PROCESS_BEGIN();
+
+  dtls_init();
+
+  server_conn = udp_new(NULL, 0, NULL);
+  udp_bind(server_conn, UIP_HTONS(5684));
+
+  dtls_context = dtls_new_context(server_conn);
+  if (!dtls_context) {
+    dsrv_log(LOG_EMERG, "cannot create context\n");
+    PROCESS_EXIT();
+  }
+
+  dtls_set_handler(dtls_context, &cb);
+
+  while(1) {
+    PROCESS_WAIT_EVENT();
+    if(ev == tcpip_event && uip_newdata()) {
+      session_t session;
+
+      uip_ipaddr_copy(&session.addr, &UIP_IP_BUF->srcipaddr);
+      session.port = UIP_UDP_BUF->srcport;
+      session.size = sizeof(session.addr) + sizeof(session.port);
+    
+      dtls_handle_message(ctx, &session, uip_appdata, uip_datalen());
+    }
+  }
+
+  PROCESS_END();
+}
+
+int send_to_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, size_t len) {
+  struct uip_udp_conn *conn = (struct uip_udp_conn *)dtls_get_app_data(ctx);
+
+  uip_ipaddr_copy(&conn->ripaddr, &session->addr);
+  conn->rport = session->port;
+
+  uip_udp_packet_send(conn, data, len);
+
+  /* Restore server connection to allow data from any node */
+  memset(&conn->ripaddr, 0, sizeof(server_conn->ripaddr));
+  memset(&conn->rport, 0, sizeof(conn->rport));
+
+  return len;
 }
  * @endcode
  */
-
