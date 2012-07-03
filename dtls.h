@@ -665,7 +665,6 @@ int send_to_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, si
 
   uip_udp_packet_send(conn, data, len);
 
-  /* Restore server connection to allow data from any node */
   memset(&conn->ripaddr, 0, sizeof(server_conn->ripaddr));
   memset(&conn->rport, 0, sizeof(conn->rport));
 
