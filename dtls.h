@@ -397,6 +397,11 @@ int dtls_handle_message(dtls_context_t *ctx, session_t *session,
  * its peers (not used for Contiki). @b uthash uses the <b>BSD revised license</b>, see
  * <a href="http://uthash.sourceforge.net/license.html">http://uthash.sourceforge.net/license.html</a>.
  *
+ * @subsection sha256 Aaron D. Gifford's SHA256 Implementation
+ *
+ * tinyDTLS provides HMAC-SHA256 with BSD-licensed code from Aaron D. Gifford, 
+ * see <a href="http://www.aarongifford.com/">www.aarongifford.com</a>.
+ *
  * @subsection aes Rijndael Implementation From OpenBSD
  *
  * The AES implementation is taken from rijndael.{c,h} contained in the crypto 
