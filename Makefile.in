@@ -39,7 +39,7 @@ package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 SOURCES:= dtls.c crypto.c ccm.c hmac.c debug.c netq.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o @OPT_OBJS@
 HEADERS:=dtls.h hmac.h debug.h config.h uthash.h numeric.h crypto.h global.h ccm.h \
- netq.h t_list.h alert.h
+ netq.h t_list.h alert.h utlist.h prng.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE
 SUBDIRS:=tests doc sha2 aes
