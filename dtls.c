@@ -33,6 +33,9 @@
 #ifdef HAVE_TIME_H
 #include <time.h>
 #define clock_time() (time(NULL))
+#ifndef CLOCK_SECOND
+# define CLOCK_SECOND 1024
+#endif
 #endif
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
@@ -1160,11 +1163,13 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
       if (!netq_insert_node((netq_t **)ctx->sendqueue, n)) {
 	warn("cannot add packet to retransmit buffer\n");
 	netq_node_free(n);
+#ifdef WITH_CONTIKI
       } else {
 	/* must set timer within the context of the retransmit process */
 	PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
 	etimer_set(&ctx->retransmit_timer, n->timeout);
 	PROCESS_CONTEXT_END(&dtls_retransmit_process);
+#endif /* WITH_CONTIKI */
       }
     } else 
       warn("retransmit buffer full\n");
