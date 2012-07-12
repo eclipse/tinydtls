@@ -2235,12 +2235,12 @@ dtls_new_context(void *app_data) {
   memset(c, 0, sizeof(dtls_context_t));
   c->app = app_data;
   
+  LIST_STRUCT_INIT(c, sendqueue);
+
 #ifdef WITH_CONTIKI
   LIST_STRUCT_INIT(c, peers);
   /* LIST_STRUCT_INIT(c, key_store); */
   
-  LIST_STRUCT_INIT(c, sendqueue);
-
   process_start(&dtls_retransmit_process, (char *)c);
   PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
   /* the retransmit timer must be initialized to some large value */
