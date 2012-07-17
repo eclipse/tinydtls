@@ -131,7 +131,7 @@ typedef struct {
 /** Known cipher suites.*/
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
-  TLS_PSK_WITH_AES_128_CCM_8 = 0x00fd /**< TBD, see draft-mcgrew-tls-aes-ccm  */
+  TLS_PSK_WITH_AES_128_CCM_8 = 0xC0A8 /**< see RFC 6655 */
 } dtls_cipher_t;
 
 /** 
