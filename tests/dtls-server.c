@@ -220,7 +220,11 @@ main(int argc, char **argv) {
   }
 #endif
   on = 1;
+#ifdef IPV6_RECVPKTINFO
   if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
+#else /* IPV6_RECVPKTINFO */
+  if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
+#endif /* IPV6_RECVPKTINFO */
     dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
   }
 
