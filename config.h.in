@@ -12,6 +12,9 @@
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
+/* Define to 1 if you have the `fls' function. */
+#undef HAVE_FLS
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
@@ -33,6 +36,9 @@
 
 /* Define to 1 if you have the `select' function. */
 #undef HAVE_SELECT
+
+/* Define to 1 if struct sockaddr_in6 has a member sin6_len. */
+#undef HAVE_SOCKADDR_IN6_SIN6_LEN
 
 /* Define to 1 if you have the `socket' function. */
 #undef HAVE_SOCKET
@@ -57,6 +63,9 @@
 
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
+
+/* Define to 1 if you have the `strnlen' function. */
+#undef HAVE_STRNLEN
 
 /* Define to 1 if you have the <sys/param.h> header file. */
 #undef HAVE_SYS_PARAM_H

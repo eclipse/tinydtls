@@ -166,9 +166,18 @@ main(int argc, char **argv) {
   struct timeval timeout;
   int fd, opt, result;
   int on = 1;
-  struct sockaddr_in6 listen_addr = { 
-    AF_INET6, htons(DEFAULT_PORT), 0, IN6ADDR_ANY_INIT, 0 
-  };
+  struct sockaddr_in6 listen_addr;
+
+  memset(&listen_addr, 0, sizeof(struct sockaddr_in6));
+
+  /* fill extra field for 4.4BSD-based systems (see RFC 3493, section 3.4) */
+#if defined(SIN6_LEN) || defined(HAVE_SOCKADDR_IN6_SIN6_LEN)
+  listen_addr.sin6_len = sizeof(struct sockaddr_in6);
+#endif
+
+  listen_addr.sin6_family = AF_INET6;
+  listen_addr.sin6_port = htons(DEFAULT_PORT);
+  listen_addr.sin6_addr = in6addr_any;
 
   while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
     switch (opt) {

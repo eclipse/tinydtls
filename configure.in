@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.3.1])
+AC_INIT([tinydtls], [0.3.2])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -62,7 +62,7 @@ OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 AC_SUBST(OPT_OBJS)
 
 # Checks for header files.
-AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h sys/param.h sys/socket.h sys/time.h time.h unistd.h])
+AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h sys/time.h time.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -72,9 +72,14 @@ dnl AC_TYPE_UINT16_T
 dnl AC_TYPE_UINT32_T
 dnl AC_TYPE_UINT64_T
 
+AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
+		[AC_DEFINE(HAVE_SOCKADDR_IN6_SIN6_LEN, [1], 
+                  [Define to 1 if struct sockaddr_in6 has a member sin6_len.])], [], 
+		[#include <netinet/in.h>])
+
 # Checks for library functions.
 AC_FUNC_MALLOC
-AC_CHECK_FUNCS([memset select socket strdup strerror])
+AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls])
 
 AC_CONFIG_HEADERS([config.h])
 
