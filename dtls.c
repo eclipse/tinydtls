@@ -2341,9 +2341,12 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
 
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
-  prng(OTHER_CONFIG(peer)->client_random, 
-       sizeof(OTHER_CONFIG(peer)->client_random));
+
+  /* Set client random: First 4 bytes are the client's Unix timestamp,
+   * followed by 28 bytes of generate random data. */
   dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
+  prng(OTHER_CONFIG(peer)->client_random + sizeof(uint32),
+       sizeof(OTHER_CONFIG(peer)->client_random) - sizeof(uint32));
   memcpy(p, OTHER_CONFIG(peer)->client_random, 
 	 sizeof(OTHER_CONFIG(peer)->client_random));
   p += 32;
