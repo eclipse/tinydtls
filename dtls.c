@@ -1395,12 +1395,78 @@ dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 }
 
 static int
+dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
+                       uint8 cookie[], size_t cookie_length) {
+  uint8 *p = ctx->sendbuf;
+  size_t size;
+
+  /* add to size:
+   *   1. length of session id (including length field)
+   *   2. length of cookie (including length field)
+   *   3. cypher suites
+   *   4. compression methods
+   */
+  size = DTLS_CH_LENGTH + 8 + cookie_length;
+
+  /* force sending 0 as handshake message sequence number by setting
+   * peer to NULL */
+  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, peer,
+				size, 0, size, p);
+
+  dtls_int_to_uint16(p, DTLS_VERSION);
+  p += sizeof(uint16);
+
+  if (cookie_length == 0) {
+    /* Set client random: First 4 bytes are the client's Unix timestamp,
+     * followed by 28 bytes of generate random data. */
+    dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
+    prng(OTHER_CONFIG(peer)->client_random + sizeof(uint32),
+         sizeof(OTHER_CONFIG(peer)->client_random) - sizeof(uint32));
+  }
+  /* we must use the same Client Random as for the previous request */
+  memcpy(p, OTHER_CONFIG(peer)->client_random,
+	 sizeof(OTHER_CONFIG(peer)->client_random));
+  p += sizeof(OTHER_CONFIG(peer)->client_random);
+
+  /* session id (length 0) */
+  dtls_int_to_uint8(p, 0);
+  p += sizeof(uint8);
+
+  /* cookie */
+  dtls_int_to_uint8(p, cookie_length);
+  p += sizeof(uint8);
+  if (cookie_length != 0) {
+    memcpy(p, cookie, cookie_length);
+    p += cookie_length;
+  }
+
+  /* add known cipher(s) */
+  dtls_int_to_uint16(p, 2);
+  p += sizeof(uint16);
+
+  dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
+  p += sizeof(uint16);
+
+  /* compression method */
+  dtls_int_to_uint8(p, 1);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, TLS_COMP_NULL);
+  p += sizeof(uint8);
+
+  if (cookie_length != 0) {
+    update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
+  }
+
+  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, ctx->sendbuf,
+                   p - ctx->sendbuf);
+}
+
+static int
 check_server_hello(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
   dtls_hello_verify_t *hv;
-  uint8 *p = ctx->sendbuf;
-  size_t size;
   int res;
   const dtls_key_t *key;
 
@@ -1477,47 +1543,8 @@ check_server_hello(dtls_context_t *ctx,
 
   hv = (dtls_hello_verify_t *)(data + DTLS_HS_LENGTH);
 
-  /* FIXME: dtls_send_client_hello(ctx,peer,cookie) */
-  size = DTLS_CH_LENGTH + 8 + dtls_uint8_to_int(&hv->cookie_length);
+  res = dtls_send_client_hello(ctx, peer, hv->cookie, hv->cookie_length);
 
-  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, peer, 
-				size, 0, size, p);
-
-  dtls_int_to_uint16(p, DTLS_VERSION);
-  p += sizeof(uint16);
-
-  /* we must use the same Client Random as for the previous request */
-  memcpy(p, OTHER_CONFIG(peer)->client_random, 
-	 sizeof(OTHER_CONFIG(peer)->client_random));
-  p += sizeof(OTHER_CONFIG(peer)->client_random);
-
-  /* session id (length 0) */
-  dtls_int_to_uint8(p, 0);
-  p += sizeof(uint8);
-
-  dtls_int_to_uint8(p, dtls_uint8_to_int(&hv->cookie_length));
-  p += sizeof(uint8);
-  memcpy(p, hv->cookie, dtls_uint8_to_int(&hv->cookie_length));
-  p += dtls_uint8_to_int(&hv->cookie_length);
-
-  /* add known cipher(s) */
-  dtls_int_to_uint16(p, 2);
-  p += sizeof(uint16);
-  
-  dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
-  p += sizeof(uint16);
-  
-  /* compression method */
-  dtls_int_to_uint8(p, 1);  
-  p += sizeof(uint8);
-
-  dtls_int_to_uint8(p, 0);
-  p += sizeof(uint8);
-
-  update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
-
-  res = dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, ctx->sendbuf, 
-		  p - ctx->sendbuf);
   if (res < 0)
     warn("cannot send ClientHello\n");
 
@@ -2287,8 +2314,6 @@ void dtls_free_context(dtls_context_t *ctx) {
 int
 dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   dtls_peer_t *peer;
-  uint8 *p = ctx->sendbuf;
-  size_t size;
   int res;
 
   /* check if we have DTLS state for addr/port/ifindex */
@@ -2324,56 +2349,8 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   list_add(ctx->peers, peer);
 #endif /* WITH_CONTIKI */
 
-  /* send ClientHello with some Cookie */
-
-  /* add to size:
-   *   1. length of session id (including length field)
-   *   2. length of cookie (including length field)
-   *   3. cypher suites
-   *   4. compression methods 
-   */
-  size = DTLS_CH_LENGTH + 8;
-
-  /* force sending 0 as handshake message sequence number by setting
-   * peer to NULL */
-  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, NULL, 
-				size, 0, size, p);
-
-  dtls_int_to_uint16(p, DTLS_VERSION);
-  p += sizeof(uint16);
-
-  /* Set client random: First 4 bytes are the client's Unix timestamp,
-   * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
-  prng(OTHER_CONFIG(peer)->client_random + sizeof(uint32),
-       sizeof(OTHER_CONFIG(peer)->client_random) - sizeof(uint32));
-  memcpy(p, OTHER_CONFIG(peer)->client_random, 
-	 sizeof(OTHER_CONFIG(peer)->client_random));
-  p += 32;
-
-  /* session id (length 0) */
-  dtls_int_to_uint8(p, 0);
-  p += sizeof(uint8);
-
-  dtls_int_to_uint8(p, 0);
-  p += sizeof(uint8);
-
-  /* add supported cipher suite */
-  dtls_int_to_uint16(p, 2);
-  p += sizeof(uint16);
-  
-  dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
-  p += sizeof(uint16);
-  
-  /* compression method */
-  dtls_int_to_uint8(p, 1);  
-  p += sizeof(uint8);
-
-  dtls_int_to_uint8(p, TLS_COMP_NULL);
-  p += sizeof(uint8);
-
-  res = dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, ctx->sendbuf, 
-		  p - ctx->sendbuf);
+  /* send ClientHello with empty Cookie */
+  res = dtls_send_client_hello(ctx, peer, NULL, 0);
   if (res < 0)
     warn("cannot send ClientHello\n");
   else 
