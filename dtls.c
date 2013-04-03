@@ -1240,10 +1240,10 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
 
-  /* Set server random: First generate 28 bytes of random data and then 
-   * overwrite the leading 4 bytes with the timestamp. */
-  prng(p, 28);
-  dtls_int_to_uint32(p + 28, clock_time());
+  /* Set server random: First 4 bytes are the server's Unix timestamp,
+   * followed by 28 bytes of generate random data. */
+  dtls_int_to_uint32(p, clock_time());
+  prng(p + 4, 28);
 
   if (!calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
 			   OTHER_CONFIG(peer)->client_random, p))
