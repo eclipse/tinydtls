@@ -1,6 +1,7 @@
 /* dtls -- a very basic DTLS implementation
  *
  * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2013 Hauke Mehrtens <hauke@hauke-m.de>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -557,24 +558,35 @@ known_cipher(dtls_cipher_t code) {
 int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_security_parameters_t *config,
-		    const dtls_key_t *key,
+		    session_t *session,
 		    unsigned char client_random[32],
 		    unsigned char server_random[32]) {
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
   pre_master_secret = config->key_block;
 
-  assert(key);
-  switch (key->type) {
-  case DTLS_KEY_PSK: {
+  switch (config->cipher) {
+  case TLS_PSK_WITH_AES_128_CCM_8: {
+    const dtls_psk_key_t *psk;
+
+    if (CALL(ctx, get_psk_key, session, NULL, 0, &psk) < 0) {
+      dsrv_log(LOG_CRIT, "no psk key for session available\n");
+      return 0;
+    }
   /* Temporarily use the key_block storage space for the pre master secret. */
-    pre_master_len = dtls_psk_pre_master_secret(key->key.psk.key, key->key.psk.key_length, 
+    pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
 						pre_master_secret);
-    
+
+#ifndef NDEBUG
+    printf("psk: (%lu bytes):", psk->key_length);
+    hexdump(psk->key, psk->key_length);
+    printf("\n");
+#endif /* NDEBUG */
+
     break;
   }
   default:
-    debug("calculate_key_block: unknown key type\n");
+    dsrv_log(LOG_CRIT, "calculate_key_block: unknown cipher\n");
     return 0;
   }
 
@@ -590,10 +602,6 @@ calculate_key_block(dtls_context_t *ctx,
     printf("server_random:");
     for (i = 0; i < 32; ++i)
       printf(" %02x", server_random[i]);
-    printf("\n");
-
-    printf("psk: (%lu bytes):", key->key.psk.key_length);
-    hexdump(key->key.psk.key, key->key.psk.key_length);
     printf("\n");
 
     printf("pre_master_secret: (%lu bytes):", pre_master_len);
@@ -1216,18 +1224,12 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   uint8 *p = buf, *q = ctx->sendbuf;
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
-  const dtls_key_t *key;
 
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
    * encoding function, so we do not need to guess.) */
   assert(sizeof(buf) >=
 	 DTLS_RH_LENGTH + DTLS_HS_LENGTH + DTLS_SH_LENGTH + 20);
-
-  if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0) {
-    debug("dtls_send_server_hello(): no key for session available\n");
-    return -1;
-  }
 
   /* Handshake header */
   p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO, 
@@ -1245,7 +1247,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_int_to_uint32(p, clock_time());
   prng(p + 4, 28);
 
-  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
+  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session, 
 			   OTHER_CONFIG(peer)->client_random, p))
     return -1;
 
@@ -1313,41 +1315,36 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
 
     
 int 
-dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer, int is_client) {
-  const dtls_key_t *key;
+dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer,
+	     dtls_security_parameters_t *config, int is_client) {
   uint8 *p = ctx->sendbuf;
   size_t size;
   int ht = is_client 
     ? DTLS_HT_CLIENT_KEY_EXCHANGE 
     : DTLS_HT_SERVER_KEY_EXCHANGE;
-  unsigned char *id = NULL;
-  size_t id_len = 0;
 
-  if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0) {
-    dsrv_log(LOG_CRIT, "no key to send in kx\n");
-    return -2;
-  }
+  switch (config->cipher) {
+  case TLS_PSK_WITH_AES_128_CCM_8: {
+    const dtls_psk_key_t *psk;
 
-  assert(key);
+    if (CALL(ctx, get_psk_key, &peer->session, NULL, 0, &psk) < 0) {
+      dsrv_log(LOG_CRIT, "no psk key to send in kx\n");
+      return -2;
+    }
 
-  switch (key->type) {
-  case DTLS_KEY_PSK: {
-    id_len = key->key.psk.id_length;
-    id = key->key.psk.id;
+    size = psk->id_length + sizeof(uint16);
+    p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
+
+    dtls_int_to_uint16(p, psk->id_length);
+    memcpy(p + sizeof(uint16), psk->id, psk->id_length);
+    p += size;
+
     break;
   }
   default:
-    dsrv_log(LOG_CRIT, "key type not supported\n");
+    dsrv_log(LOG_CRIT, "cipher not supported\n");
     return -3;
   }
-  
-  size = id_len + sizeof(uint16);
-  p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
-
-  dtls_int_to_uint16(p, id_len);
-  memcpy(p + sizeof(uint16), id, id_len);
-
-  p += size;
 
   update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
   return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
@@ -1469,7 +1466,7 @@ check_server_hello(dtls_context_t *ctx,
 		      uint8 *data, size_t data_length) {
   dtls_hello_verify_t *hv;
   int res;
-  const dtls_key_t *key;
+  uint8 *server_random;
 
   /* This function is called when we expect a ServerHello (i.e. we
    * have sent a ClientHello).  We might instead receive a HelloVerify
@@ -1501,16 +1498,12 @@ check_server_hello(dtls_context_t *ctx,
     data += sizeof(uint16);	      /* skip version field */
     data_length -= sizeof(uint16);
 
-    /* FIXME: check PSK hint */
-    if (CALL(ctx, get_key, &peer->session, NULL, 0, &key) < 0
-	|| !calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
-				OTHER_CONFIG(peer)->client_random, data)) {
-      goto error;
-    }
     /* store server random data */
+    server_random = data;
 
     /* memcpy(OTHER_CONFIG(peer)->server_random, data, */
     /* 	   sizeof(OTHER_CONFIG(peer)->server_random)); */
+    /* skip server random */
     data += sizeof(OTHER_CONFIG(peer)->client_random);
     data_length -= sizeof(OTHER_CONFIG(peer)->client_random);
 
@@ -1531,6 +1524,13 @@ check_server_hello(dtls_context_t *ctx,
     /* Check if NULL compression was selected. We do not know any other. */
     if (dtls_uint8_to_int(data) != TLS_COMP_NULL) {
       dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
+      goto error;
+    }
+
+    /* FIXME: check PSK hint */
+    if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
+			     OTHER_CONFIG(peer)->client_random,
+			     server_random)) {
       goto error;
     }
 
@@ -1602,7 +1602,7 @@ check_server_hellodone(dtls_context_t *ctx,
 		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
 
   /* send ClientKeyExchange */
-  if (dtls_send_kx(ctx, peer, 1) < 0) {
+  if (dtls_send_kx(ctx, peer, OTHER_CONFIG(peer), 1) < 0) {
     debug("cannot send KeyExchange message\n");
     return 0;
   }

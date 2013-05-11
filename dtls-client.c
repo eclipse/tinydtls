@@ -98,17 +98,16 @@ send_to_peer(struct dtls_context_t *ctx,
 }
 
 int
-get_key(struct dtls_context_t *ctx, 
-	const session_t *session, 
-	const unsigned char *id, size_t id_len, 
-	const dtls_key_t **result) {
+get_psk_key(struct dtls_context_t *ctx, 
+	    const session_t *session, 
+	    const unsigned char *id, size_t id_len, 
+	    const dtls_psk_key_t **result) {
 
-  static const dtls_key_t psk = {
-    .type = DTLS_KEY_PSK,
-    .key.psk.id = (unsigned char *)"Client_identity", 
-    .key.psk.id_length = 15,
-    .key.psk.key = (unsigned char *)"secretPSK", 
-    .key.psk.key_length = 9
+  static const dtls_psk_key_t psk = {
+    .id = (unsigned char *)"Client_identity", 
+    .id_length = 15,
+    .key = (unsigned char *)"secretPSK", 
+    .key_length = 9
   };
    
   *result = &psk;
@@ -175,7 +174,7 @@ init_dtls(session_t *dst) {
     .write = send_to_peer,
     .read  = read_from_peer,
     .event = NULL,
-    .get_key = get_key
+    .get_psk_key = get_psk_key
   };
   PRINTF("DTLS client started\n");
 
