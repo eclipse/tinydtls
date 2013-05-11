@@ -547,20 +547,29 @@ static inline int is_psk_supported(dtls_context_t *ctx){
   return ctx && ctx->h && ctx->h->get_psk_key;
 }
 
+static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client){
+  return ctx && ctx->h && ((!is_client && ctx->h->get_ecdsa_key) || 
+			   (is_client && ctx->h->verify_ecdsa_key));
+}
+
 /**
  * Returns @c 1 if @p code is a cipher suite other than @c
  * TLS_NULL_WITH_NULL_NULL that we recognize.
  *
  * @param ctx   The current DTLS context
  * @param code The cipher suite identifier to check
+ * @param is_client 1 for a dtls client, 0 for server
  * @return @c 1 iff @p code is recognized,
  */ 
 static int
-known_cipher(dtls_context_t *ctx, dtls_cipher_t code) {
+known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
   int psk;
+  int ecdsa;
 
   psk = is_psk_supported(ctx);
-  return psk && code == TLS_PSK_WITH_AES_128_CCM_8;
+  ecdsa = is_ecdsa_supported(ctx, is_client);
+  return (psk && code == TLS_PSK_WITH_AES_128_CCM_8) ||
+	 (ecdsa && code == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
 }
 
 int
@@ -687,6 +696,55 @@ calculate_key_block(dtls_context_t *ctx,
   return 1;
 }
 
+/* TODO: add a generic method which iterates over a list and searches for a specifc key */
+static int verifiy_ext_eliptic_curves(uint8 *data, size_t data_length) {
+  int i, curve_name;
+
+  /* length of curve list */
+  i = dtls_uint16_to_int(data);
+  data += sizeof(uint16);
+  if (i + sizeof(uint16) != data_length) {
+    warn("the list of the supported eliptic curves should be tls extension length - 2\n");
+    return -1;
+  }
+
+  for (i = data_length - sizeof(uint16); i > 0; i -= sizeof(uint16)) {
+    /* check if this curve is supported */
+    curve_name = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+
+    if (curve_name == TLS_EXT_ELLIPTIC_CURVES_SECP256R1)
+      return 0;
+  }
+
+  warn("no supported eliptic curve found\n");
+  return -2;
+}
+
+static int verifiy_ext_cert_type(uint8 *data, size_t data_length) {
+  int i, cert_type;
+
+  /* length of cert type list */
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  if (i + sizeof(uint8) != data_length) {
+    warn("the list of the supported certificate types should be tls extension length - 1\n");
+    return -1;
+  }
+
+  for (i = data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
+    /* check if this cert type is supported */
+    cert_type = dtls_uint8_to_int(data);
+    data += sizeof(uint8);
+
+    if (cert_type == TLS_CERT_TYPE_OOB)
+      return 0;
+  }
+
+  warn("no supported certificate type found\n");
+  return -2;
+}
+
 /**
  * Updates the security parameters of given \p peer.  As this must be
  * done before the new configuration is activated, it changes the
@@ -706,6 +764,9 @@ dtls_update_parameters(dtls_context_t *ctx,
 		       uint8 *data, size_t data_length) {
   int i, j;
   int ok;
+  int ext_elliptic_curve;
+  int ext_client_cert_type;
+  int ext_server_cert_type;
   dtls_security_parameters_t *config = OTHER_CONFIG(peer);
 
   assert(config);
@@ -748,7 +809,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   ok = 0;
   while (i && !ok) {
     config->cipher = dtls_uint16_to_int(data);
-    ok = known_cipher(ctx, config->cipher);
+    ok = known_cipher(ctx, config->cipher, 0);
     i -= sizeof(uint16);
     data += sizeof(uint16);
   }
@@ -785,7 +846,75 @@ dtls_update_parameters(dtls_context_t *ctx,
     i -= sizeof(uint8);
     data += sizeof(uint8);    
   }
-  
+
+  if (data_length < sizeof(uint16)) { 
+    /* no tls extensions specified */
+    if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+      return 0;
+    }
+    return 1;
+  }
+
+  /* get the length of the tls extension list */
+  j = dtls_uint16_to_int(data);
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  if (data_length < j)
+    goto error;
+
+  ext_elliptic_curve = 0;
+  ext_client_cert_type = 0;
+  ext_server_cert_type = 0;
+
+  /* check for TLS extensions needed for this cipher */
+  while (data_length) {
+    if (data_length < sizeof(uint16) * 2)
+      goto error;
+
+    /* get the tls extension type */
+    i = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+    data_length -= sizeof(uint16);
+
+    /* get the length of the tls extension */
+    j = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+    data_length -= sizeof(uint16);
+
+    if (data_length < j)
+      goto error;
+
+    switch (i) {
+      case TLS_EXT_ELLIPTIC_CURVES:
+        ext_elliptic_curve = 1;
+        if (verifiy_ext_eliptic_curves(data, j))
+          goto error;
+        break;
+      case TLS_EXT_CLIENT_CERIFICATE_TYPE:
+        ext_client_cert_type = 1;
+        if (verifiy_ext_cert_type(data, j))
+          goto error;
+        break;
+      case TLS_EXT_SERVER_CERIFICATE_TYPE:
+        ext_server_cert_type = 1;
+        if (verifiy_ext_cert_type(data, j))
+          goto error;
+        break;
+      default:
+        warn("unsupported tls extension: %i\n", i);
+        break;
+    }
+    data += j;
+    data_length -= j;
+  }
+  if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type) {
+      warn("not all required tls extensions found in client hello\n");
+      return 0;
+    }
+  }
+
   return ok;
  error:
   warn("ClientHello too short (%d bytes)\n", data_length);
@@ -1405,11 +1534,15 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   uint8 *p = ctx->sendbuf;
   size_t size;
   uint8_t cipher_size;
+  uint8_t extension_size;
   int psk;
+  int ecdsa;
 
   psk = is_psk_supported(ctx);
+  ecdsa = is_ecdsa_supported(ctx, 1);
 
-  cipher_size = (psk) ? 2 : 0;
+  cipher_size = 2 + ((ecdsa) ? 2 : 0) + ((psk) ? 2 : 0);
+  extension_size = (ecdsa) ? 2 + 6 + 6 + 8 : 0;
 
   if (cipher_size == 0) {
     dsrv_log(LOG_CRIT, "no cipher callbacks implemented\n");
@@ -1420,8 +1553,9 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
    *   2. length of cookie (including length field)
    *   3. cypher suites
    *   4. compression methods
+   *   5. extensions
    */
-  size = DTLS_CH_LENGTH + 4 + 2 + cipher_size + cookie_length;
+  size = DTLS_CH_LENGTH + 4 + cipher_size + extension_size + cookie_length;
 
   /* force sending 0 as handshake message sequence number by setting
    * peer to NULL */
@@ -1457,9 +1591,13 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   /* add known cipher(s) */
-  dtls_int_to_uint16(p, cipher_size);
+  dtls_int_to_uint16(p, cipher_size - 2);
   p += sizeof(uint16);
 
+  if (ecdsa) {
+    dtls_int_to_uint16(p, TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+    p += sizeof(uint16);
+  }
   if (psk) {
     dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
     p += sizeof(uint16);
@@ -1471,6 +1609,59 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   dtls_int_to_uint8(p, TLS_COMP_NULL);
   p += sizeof(uint8);
+
+  if (extension_size) {
+    /* length of the extensions */
+    dtls_int_to_uint16(p, extension_size - 2);
+    p += sizeof(uint16);
+  }
+
+  if (ecdsa) {
+    /* client certificate type extension */
+    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERIFICATE_TYPE);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 2);
+    p += sizeof(uint16);
+
+    /* length of the list */
+    dtls_int_to_uint8(p, 1);
+    p += sizeof(uint8);
+
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    p += sizeof(uint8);
+
+    /* client certificate type extension */
+    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERIFICATE_TYPE);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 2);
+    p += sizeof(uint16);
+
+    /* length of the list */
+    dtls_int_to_uint8(p, 1);
+    p += sizeof(uint8);
+
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    p += sizeof(uint8);
+
+    /* elliptic_curves */
+    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 4);
+    p += sizeof(uint16);
+
+    /* length of the list */
+    dtls_int_to_uint16(p, 2);
+    p += sizeof(uint16);
+
+    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES_SECP256R1);
+    p += sizeof(uint16);
+  }
 
   if (cookie_length != 0) {
     update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
@@ -1533,7 +1724,7 @@ check_server_hello(dtls_context_t *ctx,
      * to check if the cipher suite selected by the server is in our
      * list of known cipher suites. Subsets are not supported. */
     OTHER_CONFIG(peer)->cipher = dtls_uint16_to_int(data);
-    if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher)) {
+    if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher, 1)) {
       dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n", 
 	       data[0], data[1]);
       goto error;
