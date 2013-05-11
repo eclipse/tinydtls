@@ -1410,7 +1410,8 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* force sending 0 as handshake message sequence number by setting
    * peer to NULL */
-  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO, peer,
+  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO,
+				(cookie_length == 0) ? NULL : peer,
 				size, 0, size, p);
 
   dtls_int_to_uint16(p, DTLS_VERSION);
