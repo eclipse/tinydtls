@@ -543,16 +543,24 @@ uint8 compression_methods[] = {
   TLS_COMP_NULL 
 };
 
+static inline int is_psk_supported(dtls_context_t *ctx){
+  return ctx && ctx->h && ctx->h->get_psk_key;
+}
+
 /**
  * Returns @c 1 if @p code is a cipher suite other than @c
  * TLS_NULL_WITH_NULL_NULL that we recognize.
  *
+ * @param ctx   The current DTLS context
  * @param code The cipher suite identifier to check
  * @return @c 1 iff @p code is recognized,
  */ 
-static inline int
-known_cipher(dtls_cipher_t code) {
-  return code == TLS_PSK_WITH_AES_128_CCM_8;
+static int
+known_cipher(dtls_context_t *ctx, dtls_cipher_t code) {
+  int psk;
+
+  psk = is_psk_supported(ctx);
+  return psk && code == TLS_PSK_WITH_AES_128_CCM_8;
 }
 
 int
@@ -740,7 +748,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   ok = 0;
   while (i && !ok) {
     config->cipher = dtls_uint16_to_int(data);
-    ok = known_cipher(config->cipher);
+    ok = known_cipher(ctx, config->cipher);
     i -= sizeof(uint16);
     data += sizeof(uint16);
   }
@@ -1396,6 +1404,16 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
                        uint8 cookie[], size_t cookie_length) {
   uint8 *p = ctx->sendbuf;
   size_t size;
+  uint8_t cipher_size;
+  int psk;
+
+  psk = is_psk_supported(ctx);
+
+  cipher_size = (psk) ? 2 : 0;
+
+  if (cipher_size == 0) {
+    dsrv_log(LOG_CRIT, "no cipher callbacks implemented\n");
+  }
 
   /* add to size:
    *   1. length of session id (including length field)
@@ -1403,7 +1421,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
    *   3. cypher suites
    *   4. compression methods
    */
-  size = DTLS_CH_LENGTH + 8 + cookie_length;
+  size = DTLS_CH_LENGTH + 4 + 2 + cipher_size + cookie_length;
 
   /* force sending 0 as handshake message sequence number by setting
    * peer to NULL */
@@ -1439,11 +1457,13 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   /* add known cipher(s) */
-  dtls_int_to_uint16(p, 2);
+  dtls_int_to_uint16(p, cipher_size);
   p += sizeof(uint16);
 
-  dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
-  p += sizeof(uint16);
+  if (psk) {
+    dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
+    p += sizeof(uint16);
+  }
 
   /* compression method */
   dtls_int_to_uint8(p, 1);
@@ -1513,7 +1533,7 @@ check_server_hello(dtls_context_t *ctx,
      * to check if the cipher suite selected by the server is in our
      * list of known cipher suites. Subsets are not supported. */
     OTHER_CONFIG(peer)->cipher = dtls_uint16_to_int(data);
-    if (!known_cipher(OTHER_CONFIG(peer)->cipher)) {
+    if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher)) {
       dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n", 
 	       data[0], data[1]);
       goto error;
