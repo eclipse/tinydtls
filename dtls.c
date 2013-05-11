@@ -568,8 +568,8 @@ calculate_key_block(dtls_context_t *ctx,
   switch (key->type) {
   case DTLS_KEY_PSK: {
   /* Temporarily use the key_block storage space for the pre master secret. */
-    pre_master_len = dtls_pre_master_secret(key->key.psk.key, key->key.psk.key_length, 
-					  pre_master_secret);
+    pre_master_len = dtls_psk_pre_master_secret(key->key.psk.key, key->key.psk.key_length, 
+						pre_master_secret);
     
     break;
   }

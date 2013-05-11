@@ -222,8 +222,8 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 }
 
 size_t
-dtls_pre_master_secret(unsigned char *key, size_t keylen,
-		       unsigned char *result) {
+dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
+			   unsigned char *result) {
   unsigned char *p = result;
 
   dtls_int_to_uint16(p, keylen);

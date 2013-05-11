@@ -264,8 +264,8 @@ int dtls_decrypt(dtls_cipher_context_t *ctx,
  * @param result The derived pre master secret.
  * @return The actual length of @p result.
  */
-size_t dtls_pre_master_secret(unsigned char *key, size_t keylen,
-			      unsigned char *result);
+size_t dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
+				  unsigned char *result);
 
 /**
  * Creates a new dtls_cipher_context_t object for given @c cipher.
