@@ -110,6 +110,13 @@ typedef struct dtls_psk_key_t {
   size_t key_length;     /**< length of key */
 } dtls_psk_key_t;
 
+typedef struct dtls_ecdsa_key_t {
+  dtls_ecdh_curve curve;
+  const unsigned char *priv_key;	/** < private key as bytes > */
+  const unsigned char *pub_key_x;	/** < x part of the public key for the given private key > */
+  const unsigned char *pub_key_y;	/** < y part of the public key for the given private key > */
+} dtls_ecdsa_key_t;
+
 /** Length of the secret that is used for generating Hello Verify cookies. */
 #define DTLS_COOKIE_SECRET_LENGTH 12
 
@@ -193,6 +200,55 @@ typedef struct {
 		     const session_t *session, 
 		     const unsigned char *id, size_t id_len, 
 		     const dtls_psk_key_t **result);
+
+  /**
+   * Called during handshake to get the server's or client's ecdsa
+   * key used to authenticate this server or client in this 
+   * session. If found, the key must be stored in @p result and 
+   * the return value must be @c 0. If not found, @p result is 
+   * undefined and the return value must be less than zero.
+   *
+   * If ECDSA should not be supported, set this pointer to NULL.
+   *
+   * Implement this if you want to provide your own certificate to 
+   * the other peer. This is mandatory for a server providing ECDSA
+   * support and optional for a client. A client doing DTLS client
+   * authentication has to implementing this callback.
+   *
+   * @param ctx     The current dtls context.
+   * @param session The session where the key will be used.
+   * @param result  Must be set to the key object to used for the given
+   *                session.
+   * @return @c 0 if result is set, or less than zero on error.
+   */
+  int (*get_ecdsa_key)(struct dtls_context_t *ctx, 
+		       const session_t *session,
+		       const dtls_ecdsa_key_t **result);
+
+  /**
+   * Called during handshake to check the peer's pubic key in this
+   * session. If the public key matches the session and should be
+   * considerated valid the return value must be @c 0. If not valid,
+   * the return value must be less than zero.
+   *
+   * If ECDSA should not be supported, set this pointer to NULL.
+   *
+   * Implement this if you want to verify the other peers public key.
+   * This is mandatory for a DTLS client doing based ECDSA
+   * authentication. A server implementing this will request the
+   * client to do DTLS client authentication.
+   *
+   * @param ctx          The current dtls context.
+   * @param session      The session where the key will be used.
+   * @param other_pub_x  x component of the public key.
+   * @param other_pub_y  y component of the public key.
+   * @return @c 0 if public key matches, or less than zero on error.
+   */
+  int (*verify_ecdsa_key)(struct dtls_context_t *ctx, 
+			  const session_t *session,
+			  const unsigned char *other_pub_x,
+			  const unsigned char *other_pub_y,
+			  size_t key_size);
 } dtls_handler_t;
 
 /** Holds global information of the DTLS engine. */

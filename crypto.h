@@ -64,6 +64,10 @@
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
+typedef enum {
+  DTLS_ECDH_CURVE_SECP256R1
+} dtls_ecdh_curve;
+
 /** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
 typedef struct {
   rijndael_ctx ctx;		       /**< AES-128 encryption context */
