@@ -1,0 +1,16 @@
+*.o
+*~
+Makefile
+autom4te.cache/
+config.h
+config.log
+config.status
+configure
+doc/Doxyfile
+doc/doxygen.out
+doc/html/
+libtinydtls.a
+tests/ccm-test
+tests/dtls-client
+tests/dtls-server
+tests/prf-test
