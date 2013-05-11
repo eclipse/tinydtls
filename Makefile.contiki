@@ -23,7 +23,7 @@ LDFLAGS += -Wl,--gc-sections,--undefined=_reset_vector__,--undefined=InterruptVe
 
 CFLAGS += -DUIP_CONF_TCP=0 -DSHA2_USE_INTTYPES_H
 
-APPS += tinydtls/aes tinydtls/sha2 tinydtls
+APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
 
 ccm-test: tests/ccm-test
 

@@ -88,5 +88,6 @@ AC_CONFIG_FILES([Makefile
                  doc/Doxyfile
                  tests/Makefile
 		 sha2/Makefile
-		 aes/Makefile])
+		 aes/Makefile
+		 ecc/Makefile])
 AC_OUTPUT
