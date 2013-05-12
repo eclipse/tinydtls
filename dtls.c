@@ -81,6 +81,8 @@
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + 32 + 1 + 2 + 1)
+#define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
+#define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
 #define DTLS_CKX_LENGTH 1
 #define DTLS_FIN_LENGTH 12
 
@@ -139,6 +141,9 @@ static const unsigned char prf_label_key[] = "key expansion";
 static const unsigned char prf_label_client[] = "client";
 static const unsigned char prf_label_server[] = "server";
 static const unsigned char prf_label_finished[] = " finished";
+
+/* first part of Raw public key */
+static const unsigned char cert_asn1_header[] = {0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04};
 
 extern void netq_init();
 extern void crypto_init();
@@ -1462,6 +1467,148 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 }
 
 static int
+dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
+			    const dtls_ecdsa_key_t *key, uint8 *q,
+			    size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH + DTLS_CE_LENGTH];
+  uint8 *p;
+
+  /* Certificate 
+   *
+   * Start message construction at beginning of buffer. */
+  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE, 
+				peer,
+				DTLS_CE_LENGTH,
+				0, DTLS_CE_LENGTH,
+				buf);
+
+  dtls_int_to_uint24(p, 94);
+  p += sizeof(uint24);
+
+  dtls_int_to_uint24(p, 91);
+  p += sizeof(uint24);
+  
+  memcpy(p, &cert_asn1_header, sizeof(cert_asn1_header));
+  p += sizeof(cert_asn1_header);
+
+  memcpy(p, key->pub_key_x, DTLS_EC_KEY_SIZE);
+  p += DTLS_EC_KEY_SIZE;
+
+  memcpy(p, key->pub_key_y, DTLS_EC_KEY_SIZE);
+  p += DTLS_EC_KEY_SIZE;
+
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
+
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
+}
+
+static int
+dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
+				   const dtls_ecdsa_key_t *key, uint8 *q,
+				   size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH];
+  uint8 *p;
+  uint8 *key_params;
+  uint8 *ephemeral_pub_x;
+  uint8 *ephemeral_pub_y;
+  unsigned char *result_r;
+  unsigned char *result_s;
+  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+
+  /* ServerKeyExchange 
+   *
+   * Start message construction at beginning of buffer. */
+  p = dtls_set_handshake_header(DTLS_HT_SERVER_KEY_EXCHANGE, 
+				peer,
+				DTLS_SKEXEC_LENGTH,
+				0, DTLS_SKEXEC_LENGTH,
+				buf);
+
+  key_params = p;
+  /* ECCurveType curve_type: named_curve */
+  dtls_int_to_uint8(p, 3);
+  p += sizeof(uint8);
+
+  /* NamedCurve namedcurve: secp256r1 */
+  dtls_int_to_uint16(p, 23);
+  p += sizeof(uint16);
+
+  dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
+  p += sizeof(uint8);
+
+  /* This should be an uncompressed point, but I do not have access to the sepc. */
+  dtls_int_to_uint8(p, 4);
+  p += sizeof(uint8);
+
+  /* store the pointer to the x component of the pub key and make space */
+  ephemeral_pub_x = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  /* store the pointer to the y component of the pub key and make space */
+  ephemeral_pub_y = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  dtls_ecdsa_generate_key(config->ecdsa.own_eph_priv,
+			  ephemeral_pub_x, ephemeral_pub_y,
+			  DTLS_EC_KEY_SIZE);
+
+  /* length of signature */
+  dtls_int_to_uint16(p, 70);
+  p += sizeof(uint16);
+
+  /* ASN.1 SEQUENCE */
+  dtls_int_to_uint8(p, 48);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, 68);
+  p += sizeof(uint8);
+
+  /* ASN.1 Integer r */
+  dtls_int_to_uint8(p, 2);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  p += sizeof(uint8);
+
+  /* store the pointer to the r component of the signature and make space */
+  result_r = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  /* ASN.1 Integer s */
+  dtls_int_to_uint8(p, 2);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  p += sizeof(uint8);
+
+  /* store the pointer to the s component of the signature and make space */
+  result_s = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  /* sign the ephemeral and its paramaters */
+  dtls_ecdsa_create_sig(key->priv_key, DTLS_EC_KEY_SIZE,
+		       config->client_random, sizeof(config->client_random),
+		       config->server_random, sizeof(config->server_random),
+		       key_params,
+		       1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
+		       result_r, result_s);
+
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
+
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			      buf, p - buf,
+			      q, qlen);
+}
+
+static int
 dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 			    size_t *qlen)
 {
@@ -1502,6 +1649,35 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 
   q += qlen;
   qlen = sizeof(ctx->sendbuf) - qlen;
+
+  if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    const dtls_ecdsa_key_t *ecdsa_key;
+
+    if (CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key) < 0) {
+      dsrv_log(LOG_CRIT, "no ecdsa certificate to send in certificate\n");
+      return -1;
+    }
+
+    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key, q, &qlen);
+
+    if (res < 0) {
+      debug("dtls_server_hello: cannot prepare Certificate record\n");
+      return res;
+    }
+
+    q += qlen;
+    qlen = sizeof(ctx->sendbuf) - qlen;
+
+    res = dtls_send_server_key_exchange_ecdh(ctx, peer, ecdsa_key, q, &qlen);
+
+    if (res < 0) {
+      debug("dtls_server_hello: cannot prepare Server Key Exchange record\n");
+      return res;
+    }
+
+    q += qlen;
+    qlen = sizeof(ctx->sendbuf) - qlen;
+  }
 
   res = dtls_send_server_hello_done(ctx, peer, q, &qlen);
 

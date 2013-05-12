@@ -83,6 +83,10 @@ typedef struct dtls_cipher_context_t {
 typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
 typedef struct {
+  uint8 own_eph_priv[32];
+} dtls_security_parameters_ecdsa_t;
+
+typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
   uint8  server_random[32];	/**< server random gmt and bytes */
 
@@ -104,6 +108,8 @@ typedef struct {
 
   dtls_cipher_context_t *read_cipher;  /**< decryption context */
   dtls_cipher_context_t *write_cipher; /**< encryption context */
+
+  dtls_security_parameters_ecdsa_t ecdsa;
 } dtls_security_parameters_t;
 
 /* The following macros provide access to the components of the
@@ -272,6 +278,8 @@ int dtls_decrypt(dtls_cipher_context_t *ctx,
  */
 size_t dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 				  unsigned char *result);
+
+#define DTLS_EC_KEY_SIZE 32
 
 size_t dtls_ecdh_pre_master_secret(unsigned char *priv_key,
 				   unsigned char *pub_key_x,
