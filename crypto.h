@@ -84,6 +84,10 @@ typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
 typedef struct {
   uint8 own_eph_priv[32];
+  uint8 other_eph_pub_x[32];
+  uint8 other_eph_pub_y[32];
+  uint8 other_pub_x[32];
+  uint8 other_pub_y[32];
 } dtls_security_parameters_ecdsa_t;
 
 typedef struct {

@@ -102,8 +102,12 @@
       ((L) >= DTLS_HS_LENGTH + DTLS_HV_LENGTH && (M)[0] == DTLS_HT_HELLO_VERIFY_REQUEST)
 #define IS_SERVERHELLO(M,L) \
       ((L) >= DTLS_HS_LENGTH + 6 && (M)[0] == DTLS_HT_SERVER_HELLO)
+#define IS_SERVERKEYEXCHANGE(M,L) \
+      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_KEY_EXCHANGE)
 #define IS_SERVERHELLODONE(M,L) \
       ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_HELLO_DONE)
+#define IS_CERTIFICATE(M,L) \
+      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE)
 #define IS_FINISHED(M,L) \
       ((L) >= DTLS_HS_LENGTH + DTLS_FIN_LENGTH && (M)[0] == DTLS_HT_FINISHED)
 
@@ -2003,6 +2007,188 @@ check_server_hello(dtls_context_t *ctx,
 }
 
 static int
+check_server_certificate(dtls_context_t *ctx, 
+			 dtls_peer_t *peer,
+			 uint8 *data, size_t data_length)
+{
+  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+
+  if (!IS_CERTIFICATE(data, data_length))
+    return 0;
+
+  update_hs_hash(peer, data, data_length);
+
+  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+
+  data += DTLS_HS_LENGTH;
+
+  if (dtls_uint24_to_int(data) != 94) {
+    dsrv_log(LOG_ALERT, "expect length of 94 bytes for server certificate message\n");
+    return 0;
+  }
+  data += sizeof(uint24);
+
+  if (dtls_uint24_to_int(data) != 91) {
+    dsrv_log(LOG_ALERT, "expect length of 91 bytes for certificate\n");
+    return 0;
+  }
+  data += sizeof(uint24);
+
+  data += sizeof(cert_asn1_header);
+
+  memcpy(config->ecdsa.other_pub_x, data,
+	 sizeof(config->ecdsa.other_pub_x));
+  data += sizeof(config->ecdsa.other_pub_x);
+
+  memcpy(config->ecdsa.other_pub_y, data,
+	 sizeof(config->ecdsa.other_pub_y));
+  data += sizeof(config->ecdsa.other_pub_y);
+
+  if (CALL(ctx, verify_ecdsa_key, &peer->session,
+	   config->ecdsa.other_pub_x,
+	   config->ecdsa.other_pub_y,
+	   sizeof(config->ecdsa.other_pub_x)) < 0) {
+    warn("The certificate was not accepted\n");
+    return 0;
+  }
+
+  return 1;
+}
+
+static int
+check_server_key_exchange(dtls_context_t *ctx, 
+			  dtls_peer_t *peer,
+			  uint8 *data, size_t data_length)
+{
+  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  int i;
+  unsigned char *result_r;
+  unsigned char *result_s;
+  unsigned char *key_params;
+
+  if (!IS_SERVERKEYEXCHANGE(data, data_length))
+    return 0;
+
+  update_hs_hash(peer, data, data_length);
+
+  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+
+  data += DTLS_HS_LENGTH;
+
+  if (data_length < DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH) {
+    dsrv_log(LOG_ALERT, "the package length does not match the expected\n");
+    return 0;
+  }
+  key_params = data;
+
+  if (dtls_uint8_to_int(data) != 3) {
+    dsrv_log(LOG_ALERT, "Only named curves supported\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint16_to_int(data) != 23) {
+    dsrv_log(LOG_ALERT, "secp256r1 supported\n");
+    return 0;
+  }
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  if (dtls_uint8_to_int(data) != 65) {
+    dsrv_log(LOG_ALERT, "expected 65 bytes long public point\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != 4) {
+    dsrv_log(LOG_ALERT, "expected uncompressed public point\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  memcpy(config->ecdsa.other_eph_pub_x, data, sizeof(config->ecdsa.other_eph_pub_y));
+  data += sizeof(config->ecdsa.other_eph_pub_y);
+  data_length -= sizeof(config->ecdsa.other_eph_pub_y);
+
+  memcpy(config->ecdsa.other_eph_pub_y, data, sizeof(config->ecdsa.other_eph_pub_y));
+  data += sizeof(config->ecdsa.other_eph_pub_y);
+  data_length -= sizeof(config->ecdsa.other_eph_pub_y);
+
+
+  if (data_length < dtls_uint16_to_int(data)) {
+    dsrv_log(LOG_ALERT, "signature length wrong\n");
+    return 0;
+  }
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  if (dtls_uint8_to_int(data) != 48) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected SEQUENCE\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (data_length < dtls_uint8_to_int(data)) {
+    dsrv_log(LOG_ALERT, "signature length wrong\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != 2) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  /* Sometimes these values have a leeding 0 byte */
+  result_r = data + i - DTLS_EC_KEY_SIZE;
+
+  data += i;
+  data_length -= i;
+
+  if (dtls_uint8_to_int(data) != 2) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  /* Sometimes these values have a leeding 0 byte */
+  result_s = data + i - DTLS_EC_KEY_SIZE;
+
+  data += i;
+  data_length -= i;
+
+  i = dtls_ecdsa_verify_sig(config->ecdsa.other_pub_x, config->ecdsa.other_pub_y,
+  			    sizeof(config->ecdsa.other_pub_x),
+			    config->client_random, sizeof(config->client_random),
+			    config->server_random, sizeof(config->server_random),
+			    key_params,
+			    1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
+			    result_r, result_s);
+
+  if (!i) {
+    dsrv_log(LOG_ALERT, "wrong signature\n");
+    return 0;
+  }
+  return 1;
+}
+
+static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
@@ -2226,12 +2412,38 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 
     debug("DTLS_STATE_CLIENTHELLO\n");
     if (check_server_hello(ctx, peer, data, data_length)) {
-      peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
+      if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
+        peer->state = DTLS_STATE_WAIT_SERVERCERTIFICATE;
+      else
+        peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
     /* update_hs_hash(peer, data, data_length); */
     }
 
     break;
 
+  case DTLS_STATE_WAIT_SERVERCERTIFICATE:
+    /* expect a Certificate */
+
+    debug("DTLS_STATE_WAIT_SERVERCERTIFICATE\n");
+
+    if (check_server_certificate(ctx, peer, data, data_length)) {
+      peer->state = DTLS_STATE_WAIT_SERVERKEYEXCHANGE;
+      /* update_hs_hash(peer, data, data_length); */
+    }
+
+    break;
+
+  case DTLS_STATE_WAIT_SERVERKEYEXCHANGE:
+    /* expect a ServerKeyExchange */
+
+    debug("DTLS_STATE_WAIT_SERVERKEYEXCHANGE\n");
+
+    if (check_server_key_exchange(ctx, peer, data, data_length)) {
+      peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
+      /* update_hs_hash(peer, data, data_length); */
+    }
+
+    break;
   case DTLS_STATE_WAIT_SERVERHELLODONE:
     /* expect a ServerHelloDone */
 
