@@ -406,7 +406,8 @@ dtls_cipher_new(dtls_cipher_t cipher,
   }
 
   switch (cipher) {
-  case TLS_PSK_WITH_AES_128_CCM_8: {
+  case TLS_PSK_WITH_AES_128_CCM_8:
+  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
     aes128_ccm_t *ccm_ctx = &cipher_context->data;
     
     if (rijndael_set_key_enc_only(&ccm_ctx->ctx, key, 8 * keylen) < 0) {
