@@ -84,6 +84,7 @@
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
 #define DTLS_CKX_LENGTH 1
+#define DTLS_CKXEC_LENGTH (1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_FIN_LENGTH 12
 
 #define HS_HDR_LENGTH  DTLS_RH_LENGTH + DTLS_HS_LENGTH
@@ -1725,6 +1726,32 @@ dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint16(p, psk->id_length);
     memcpy(p + sizeof(uint16), psk->id, psk->id_length);
     p += size;
+
+    break;
+  }
+  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
+    uint8 *ephemeral_pub_x;
+    uint8 *ephemeral_pub_y;
+
+    size = DTLS_CKXEC_LENGTH;
+
+    p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
+
+    dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
+    p += sizeof(uint8);
+
+    /* This should be an uncompressed point, but I do not have access to the sepc. */
+    dtls_int_to_uint8(p, 4);
+    p += sizeof(uint8);
+
+    ephemeral_pub_x = p;
+    p += DTLS_EC_KEY_SIZE;
+    ephemeral_pub_y = p;
+    p += DTLS_EC_KEY_SIZE;
+
+    dtls_ecdsa_generate_key(OTHER_CONFIG(peer)->ecdsa.own_eph_priv,
+    			    ephemeral_pub_x, ephemeral_pub_y,
+    			    DTLS_EC_KEY_SIZE);
 
     break;
   }
