@@ -84,6 +84,7 @@ typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
 typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
+  uint8  server_random[32];	/**< server random gmt and bytes */
 
   dtls_peer_type role; /**< denotes if the remote peer is DTLS_CLIENT or DTLS_SERVER */
   unsigned char compression;		/**< compression method */

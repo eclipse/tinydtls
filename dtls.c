@@ -1390,14 +1390,12 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   /* Set server random: First 4 bytes are the server's Unix timestamp,
    * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(p, clock_time());
-  prng(p + 4, 28);
+  dtls_int_to_uint32(OTHER_CONFIG(peer)->server_random, clock_time());
+  prng(OTHER_CONFIG(peer)->server_random + 4, 28);
 
-  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session, 
-			   OTHER_CONFIG(peer)->client_random, p))
-    return -1;
-
-  p += 32;
+  memcpy(p, OTHER_CONFIG(peer)->server_random,
+         sizeof(OTHER_CONFIG(peer)->server_random));
+  p += sizeof(OTHER_CONFIG(peer)->server_random);
 
   *p++ = 0;			/* no session id */
 
@@ -1731,7 +1729,6 @@ check_server_hello(dtls_context_t *ctx,
 		      uint8 *data, size_t data_length) {
   dtls_hello_verify_t *hv;
   int res;
-  uint8 *server_random;
 
   /* This function is called when we expect a ServerHello (i.e. we
    * have sent a ClientHello).  We might instead receive a HelloVerify
@@ -1764,13 +1761,11 @@ check_server_hello(dtls_context_t *ctx,
     data_length -= sizeof(uint16);
 
     /* store server random data */
-    server_random = data;
-
-    /* memcpy(OTHER_CONFIG(peer)->server_random, data, */
-    /* 	   sizeof(OTHER_CONFIG(peer)->server_random)); */
+    memcpy(OTHER_CONFIG(peer)->server_random, data,
+	   sizeof(OTHER_CONFIG(peer)->server_random));
     /* skip server random */
-    data += sizeof(OTHER_CONFIG(peer)->client_random);
-    data_length -= sizeof(OTHER_CONFIG(peer)->client_random);
+    data += sizeof(OTHER_CONFIG(peer)->server_random);
+    data_length -= sizeof(OTHER_CONFIG(peer)->server_random);
 
     SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
     
@@ -1793,11 +1788,6 @@ check_server_hello(dtls_context_t *ctx,
     }
 
     /* FIXME: check PSK hint */
-    if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
-			     OTHER_CONFIG(peer)->client_random,
-			     server_random)) {
-      goto error;
-    }
 
     return 1;
   }
@@ -1832,6 +1822,12 @@ check_server_hellodone(dtls_context_t *ctx,
   /* send ClientKeyExchange */
   if (dtls_send_kx(ctx, peer, OTHER_CONFIG(peer), 1) < 0) {
     debug("cannot send KeyExchange message\n");
+    return 0;
+  }
+
+  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
+			   OTHER_CONFIG(peer)->client_random,
+			   OTHER_CONFIG(peer)->server_random)) {
     return 0;
   }
 
@@ -2161,6 +2157,12 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     warn("expected ChangeCipherSpec during handshake\n");
     return 0;
 
+  }
+
+  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
+			   OTHER_CONFIG(peer)->client_random,
+			   OTHER_CONFIG(peer)->server_random)) {
+    return 0;
   }
 
   if (init_cipher(OTHER_CONFIG(peer))) {
