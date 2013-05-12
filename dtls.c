@@ -982,7 +982,46 @@ static inline int
 check_client_keyexchange(dtls_context_t *ctx, 
 			 dtls_peer_t *peer,
 			 uint8 *data, size_t length) {
-  return length >= DTLS_CKX_LENGTH && data[0] == DTLS_HT_CLIENT_KEY_EXCHANGE;
+
+  if (data[0] != DTLS_HT_CLIENT_KEY_EXCHANGE) {
+    debug("This is not a client key exchange\n");
+    return 0;
+  }
+
+  if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+
+    if (length < DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH) {
+      debug("The client key exchange is too short\n");
+      return 0;
+    }
+    data += DTLS_HS_LENGTH;
+
+    if (dtls_uint8_to_int(data) != 65) {
+      dsrv_log(LOG_ALERT, "expected 65 bytes long public point\n");
+      return 0;
+    }
+    data += sizeof(uint8);
+
+    if (dtls_uint8_to_int(data) != 4) {
+      dsrv_log(LOG_ALERT, "expected uncompressed public point\n");
+      return 0;
+    }
+    data += sizeof(uint8);
+
+    memcpy(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x, data,
+	   sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x));
+    data += sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x);
+
+    memcpy(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y, data,
+	   sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y));
+    data += sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y);
+  } else {
+    if (length < DTLS_CKX_LENGTH) {
+      debug("The client key exchange is too short\n");
+      return 0;
+    }
+  }
+  return 1;
 }
 
 static int
