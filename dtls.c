@@ -1357,25 +1357,21 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   return res;
 }
 
-int
-dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
-
-  static uint8 buf[DTLS_MAX_BUF];
-  uint8 *p = buf, *q = ctx->sendbuf;
-  size_t qlen = sizeof(ctx->sendbuf);
-  int res;
+static int
+dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
+		       size_t *qlen)
+{
+  /* Ensure that the largest message to create fits in our source
+   * buffer. (The size of the destination buffer is checked by the
+   * encoding function, so we do not need to guess.) */
+  uint8 buf[DTLS_HS_LENGTH + DTLS_SH_LENGTH + 2 + 5 + 5 + 8];
+  uint8 *p;
   int ecdsa;
   uint8 extension_size;
 
   ecdsa = OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
 
   extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
-
-  /* Ensure that the largest message to create fits in our source
-   * buffer. (The size of the destination buffer is checked by the
-   * encoding function, so we do not need to guess.) */
-  assert(sizeof(buf) >=
-	 DTLS_RH_LENGTH + DTLS_HS_LENGTH + DTLS_SH_LENGTH + 20);
 
   /* Handshake header */
   p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO, 
@@ -1460,16 +1456,17 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
      (FIXME: better put this in generic record_send function) */
   update_hs_hash(peer, buf, p - buf);
 
-  res = dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			    buf, p - buf,
-			    q, &qlen);
-  if (res < 0) {
-    debug("dtls_server_hello: cannot prepare ServerHello record\n");
-    return res;
-  }
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
+}
 
-  q += qlen;
-  qlen = sizeof(ctx->sendbuf) - qlen;
+static int
+dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
+			    size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH];
+  uint8 *p;
 
   /* ServerHelloDone 
    *
@@ -1484,15 +1481,36 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
      (FIXME: better put this in generic record_send function) */
   update_hs_hash(peer, buf, p - buf);
 
-  res = dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			    buf, p - buf,
-			    q, &qlen);
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
+}
+
+int
+dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
+{
+  uint8 *q = ctx->sendbuf;
+  size_t qlen = sizeof(ctx->sendbuf);
+  int res;
+
+  res = dtls_send_server_hello(ctx, peer, q, &qlen);
+
+  if (res < 0) {
+    debug("dtls_server_hello: cannot prepare ServerHello record\n");
+    return res;
+  }
+
+  q += qlen;
+  qlen = sizeof(ctx->sendbuf) - qlen;
+
+  res = dtls_send_server_hello_done(ctx, peer, q, &qlen);
+
   if (res < 0) {
     debug("dtls_server_hello: cannot prepare ServerHelloDone record\n");
     return res;
   }
 
-  return CALL(ctx, write, &peer->session,  
+  return CALL(ctx, write, &peer->session,
 		  ctx->sendbuf, (q + qlen) - ctx->sendbuf);
 }
 
@@ -2120,7 +2138,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       /* update finish MAC */
       update_hs_hash(peer, data, data_length); 
 
-      if (dtls_send_server_hello(ctx, peer) > 0)
+      if (dtls_send_server_hello_msgs(ctx, peer) > 0)
 	peer->state = DTLS_STATE_SERVERHELLO;
     
       /* after sending the ServerHelloDone, we expect the 
@@ -2401,7 +2419,7 @@ dtls_handle_message(dtls_context_t *ctx,
     /* update finish MAC */
     update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
  
-    if (dtls_send_server_hello(ctx, peer) > 0)
+    if (dtls_send_server_hello_msgs(ctx, peer) > 0)
       peer->state = DTLS_STATE_SERVERHELLO;
     
     /* after sending the ServerHelloDone, we expect the 
