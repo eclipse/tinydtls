@@ -612,6 +612,14 @@ calculate_key_block(dtls_context_t *ctx,
 
     break;
   }
+  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
+    pre_master_len = dtls_ecdh_pre_master_secret(config->ecdsa.own_eph_priv,
+						 config->ecdsa.other_eph_pub_x,
+						 config->ecdsa.other_eph_pub_y,
+						 sizeof(config->ecdsa.own_eph_priv),
+						 pre_master_secret);
+    break;
+  }
   default:
     dsrv_log(LOG_CRIT, "calculate_key_block: unknown cipher\n");
     return 0;
