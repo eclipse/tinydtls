@@ -114,6 +114,7 @@ typedef struct {
   dtls_cipher_context_t *write_cipher; /**< encryption context */
 
   dtls_security_parameters_ecdsa_t ecdsa;
+  int do_client_auth;
 } dtls_security_parameters_t;
 
 /* The following macros provide access to the components of the

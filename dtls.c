@@ -105,6 +105,8 @@
       ((L) >= DTLS_HS_LENGTH + 6 && (M)[0] == DTLS_HT_SERVER_HELLO)
 #define IS_SERVERKEYEXCHANGE(M,L) \
       ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_KEY_EXCHANGE)
+#define IS_CERTIFICATEREQUEST(M,L) \
+      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE_REQUEST)
 #define IS_SERVERHELLODONE(M,L) \
       ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_HELLO_DONE)
 #define IS_CERTIFICATE(M,L) \
@@ -1661,6 +1663,55 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 }
 
 static int
+dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
+				     uint8 *q, size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH + 8];
+  uint8 *p;
+
+  /* ServerHelloDone 
+   *
+   * Start message construction at beginning of buffer. */
+  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE_REQUEST, 
+				peer,
+				8, /* ServerHelloDone has no extra fields */
+				0, 8, /* ServerHelloDone has no extra fields */
+				buf);
+
+  /* certificate_types */
+  dtls_int_to_uint8(p, 1);
+  p += sizeof(uint8);
+
+  /* ecdsa_sign */
+  dtls_int_to_uint8(p, 64);
+  p += sizeof(uint8);
+
+  /* supported_signature_algorithms */
+  dtls_int_to_uint16(p, 2);
+  p += sizeof(uint16);
+
+  /* sha256 */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
+  p += sizeof(uint8);
+
+  /* ecdsa */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
+  p += sizeof(uint8);
+
+  /* certificate_authoritiess */
+  dtls_int_to_uint16(p, 0);
+  p += sizeof(uint16);
+
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
+
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
+}
+
+static int
 dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 			    size_t *qlen)
 {
@@ -1729,6 +1780,19 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 
     q += qlen;
     qlen = sizeof(ctx->sendbuf) - qlen;
+
+    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+	ctx && ctx->h && ctx->h->verify_ecdsa_key) {
+      res = dtls_send_server_certificate_request(ctx, peer, q, &qlen);
+
+      if (res < 0) {
+        debug("dtls_server_hello: cannot prepare certificate Request record\n");
+        return res;
+      }
+
+      q += qlen;
+      qlen = sizeof(ctx->sendbuf) - qlen;
+    }
   }
 
   res = dtls_send_server_hello_done(ctx, peer, q, &qlen);
@@ -2263,6 +2327,85 @@ check_server_key_exchange(dtls_context_t *ctx,
 }
 
 static int
+check_certificate_request(dtls_context_t *ctx, 
+			  dtls_peer_t *peer,
+			  uint8 *data, size_t data_length)
+{
+  int i;
+  int auth_alg;
+  int sig_alg;
+  int hash_alg;
+
+  if (!IS_CERTIFICATEREQUEST(data, data_length))
+    return 0;
+
+  update_hs_hash(peer, data, data_length);
+
+  assert(OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+
+  data += DTLS_HS_LENGTH;
+
+  if (data_length < DTLS_HS_LENGTH + 5) {
+    dsrv_log(LOG_ALERT, "the package length does not match the expected\n");
+    return 0;
+  }
+
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  if (i + 1 > data_length) {
+    dsrv_log(LOG_ALERT, "the cerfificate types are too long\n");
+    return 0;
+  }
+
+  auth_alg = 0;
+  for (; i > 0 ; i -= sizeof(uint8)) {
+    if (dtls_uint8_to_int(data) == 64 && auth_alg == 0)
+      auth_alg = dtls_uint8_to_int(data);
+    data += sizeof(uint8);
+  }
+
+  if (auth_alg != 64) {
+    dsrv_log(LOG_ALERT, "the request authentication algorithem is not supproted\n");
+    return 0;
+  }
+
+  i = dtls_uint16_to_int(data);
+  data += sizeof(uint16);
+  if (i + 1 > data_length) {
+    dsrv_log(LOG_ALERT, "the signature and hash algorithm list is too long\n");
+    return 0;
+  }
+
+  hash_alg = 0;
+  sig_alg = 0;
+  for (; i > 0 ; i -= sizeof(uint16)) {
+    int current_hash_alg;
+    int current_sig_alg;
+
+    current_hash_alg = dtls_uint8_to_int(data);
+    data += sizeof(uint8);
+    current_sig_alg = dtls_uint8_to_int(data);
+    data += sizeof(uint8);
+
+    if (current_hash_alg == 4 && hash_alg == 0 && 
+        current_sig_alg == 3 && sig_alg == 0) {
+      hash_alg = current_hash_alg;
+      sig_alg = current_sig_alg;
+    }
+  }
+
+  if (hash_alg != 4 || sig_alg != 3) {
+    dsrv_log(LOG_ALERT, "no supported hash and signature algorithem\n");
+    return 0;
+  }
+
+  /* common names are ignored */
+
+  OTHER_CONFIG(peer)->do_client_auth = 1;
+  return 1;
+}
+
+static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length) {
@@ -2523,9 +2666,14 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 
     debug("DTLS_STATE_WAIT_SERVERHELLODONE\n");
 
-    if (check_server_hellodone(ctx, peer, data, data_length)) {
-      peer->state = DTLS_STATE_WAIT_SERVERFINISHED;
-      /* update_hs_hash(peer, data, data_length); */
+    /* TODO: use the hadnshae type in state machine */
+    if (IS_CERTIFICATEREQUEST(data, data_length)) {
+      check_certificate_request(ctx, peer, data, data_length);
+    } else {
+      if (check_server_hellodone(ctx, peer, data, data_length)) {
+        peer->state = DTLS_STATE_WAIT_SERVERFINISHED;
+        /* update_hs_hash(peer, data, data_length); */
+      }
     }
 
     break;
