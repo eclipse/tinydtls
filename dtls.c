@@ -696,6 +696,45 @@ calculate_key_block(dtls_context_t *ctx,
   return 1;
 }
 
+int
+init_cipher(dtls_security_parameters_t *config)
+{
+  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
+  dtls_cipher_free(config->read_cipher);
+
+  assert(config->cipher != TLS_NULL_WITH_NULL_NULL);
+  config->read_cipher = dtls_cipher_new(config->cipher,
+					dtls_kb_remote_write_key(config),
+					dtls_kb_key_size(config));
+
+  if (!config->read_cipher) {
+    warn("cannot create read cipher\n");
+    return -1;
+  }
+
+  dtls_cipher_set_iv(config->read_cipher,
+		     dtls_kb_remote_iv(config),
+		     dtls_kb_iv_size(config));
+
+
+  dtls_cipher_free(config->write_cipher);
+  
+  config->write_cipher = dtls_cipher_new(config->cipher,
+					 dtls_kb_local_write_key(config),
+					 dtls_kb_key_size(config));
+
+  if (!config->write_cipher) {
+    dtls_cipher_free(config->read_cipher);
+    warn("cannot create write cipher\n");
+    return -1;
+  }
+
+  dtls_cipher_set_iv(config->write_cipher,
+		     dtls_kb_local_iv(config),
+		     dtls_kb_iv_size(config));
+  return 0;
+}
+
 /* TODO: add a generic method which iterates over a list and searches for a specifc key */
 static int verifiy_ext_eliptic_curves(uint8 *data, size_t data_length) {
   int i, curve_name;
@@ -936,42 +975,6 @@ check_ccs(dtls_context_t *ctx,
   if (DTLS_RECORD_HEADER(record)->content_type != DTLS_CT_CHANGE_CIPHER_SPEC
       || data_length < 1 || data[0] != 1)
     return 0;
-
-  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
-  /* client */
-  dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
-
-  assert(OTHER_CONFIG(peer)->cipher != TLS_NULL_WITH_NULL_NULL);
-  OTHER_CONFIG(peer)->read_cipher = 
-    dtls_cipher_new(OTHER_CONFIG(peer)->cipher,
-		    dtls_kb_client_write_key(OTHER_CONFIG(peer)),
-		    dtls_kb_key_size(OTHER_CONFIG(peer)));
-
-  if (!OTHER_CONFIG(peer)->read_cipher) {
-    warn("cannot create read cipher\n");
-    return 0;
-  }
-
-  dtls_cipher_set_iv(OTHER_CONFIG(peer)->read_cipher,
-		     dtls_kb_client_iv(OTHER_CONFIG(peer)),
-		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
-
-  /* server */
-  dtls_cipher_free(OTHER_CONFIG(peer)->write_cipher);
-  
-  OTHER_CONFIG(peer)->write_cipher = 
-    dtls_cipher_new(OTHER_CONFIG(peer)->cipher,
-		    dtls_kb_server_write_key(OTHER_CONFIG(peer)),
-		    dtls_kb_key_size(OTHER_CONFIG(peer)));
-
-  if (!OTHER_CONFIG(peer)->write_cipher) {
-    warn("cannot create write cipher\n");
-    return 0;
-  }
-
-  dtls_cipher_set_iv(OTHER_CONFIG(peer)->write_cipher,
-		     dtls_kb_server_iv(OTHER_CONFIG(peer)),
-		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
 
   return 1;
 }
@@ -1826,46 +1829,13 @@ check_server_hellodone(dtls_context_t *ctx,
   
   update_hs_hash(peer, data, data_length);
 
-  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
-  /* client */
-  dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
-
-  assert(OTHER_CONFIG(peer)->cipher != TLS_NULL_WITH_NULL_NULL);
-  OTHER_CONFIG(peer)->read_cipher = 
-    dtls_cipher_new(OTHER_CONFIG(peer)->cipher,
-		    dtls_kb_server_write_key(OTHER_CONFIG(peer)),
-		    dtls_kb_key_size(OTHER_CONFIG(peer)));
-
-  if (!OTHER_CONFIG(peer)->read_cipher) {
-    warn("cannot create read cipher\n");
-    return 0;
-  }
-
-  dtls_cipher_set_iv(OTHER_CONFIG(peer)->read_cipher,
-		     dtls_kb_server_iv(OTHER_CONFIG(peer)),
-		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
-
-  /* server */
-  dtls_cipher_free(OTHER_CONFIG(peer)->write_cipher);
-  
-  OTHER_CONFIG(peer)->write_cipher = 
-    dtls_cipher_new(OTHER_CONFIG(peer)->cipher,
-		    dtls_kb_client_write_key(OTHER_CONFIG(peer)),
-		    dtls_kb_key_size(OTHER_CONFIG(peer)));
-  
-  if (!OTHER_CONFIG(peer)->write_cipher) {
-    dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
-    warn("cannot create write cipher\n");
-    return 0;
-  }
-  
-  dtls_cipher_set_iv(OTHER_CONFIG(peer)->write_cipher,
-		     dtls_kb_client_iv(OTHER_CONFIG(peer)),
-		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
-
   /* send ClientKeyExchange */
   if (dtls_send_kx(ctx, peer, OTHER_CONFIG(peer), 1) < 0) {
     debug("cannot send KeyExchange message\n");
+    return 0;
+  }
+
+  if (init_cipher(OTHER_CONFIG(peer))) {
     return 0;
   }
 
@@ -2191,6 +2161,10 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     warn("expected ChangeCipherSpec during handshake\n");
     return 0;
 
+  }
+
+  if (init_cipher(OTHER_CONFIG(peer))) {
+    return 0;
   }
 
   /* send change cipher spec message and switch to new configuration */
