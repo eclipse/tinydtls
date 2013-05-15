@@ -1815,8 +1815,11 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
     
 int
 dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
-			      dtls_security_parameters_t *config) {
-  uint8 *p = ctx->sendbuf;
+			      dtls_security_parameters_t *config, uint8 *q,
+			      size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH];
+  uint8 *p;
   size_t size;
 
   switch (config->cipher) {
@@ -1830,7 +1833,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 
     size = psk->id_length + sizeof(uint16);
     p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
-				  peer, size, 0, size, p);
+				  peer, size, 0, size, buf);
 
     dtls_int_to_uint16(p, psk->id_length);
     memcpy(p + sizeof(uint16), psk->id, psk->id_length);
@@ -1845,7 +1848,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     size = DTLS_CKXEC_LENGTH;
 
     p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
-				  peer, size, 0, size, p);
+				  peer, size, 0, size, buf);
 
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
@@ -1870,9 +1873,13 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     return -3;
   }
 
-  update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
-  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
-		   ctx->sendbuf, p - ctx->sendbuf);
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
+
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
 }
 
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
@@ -2407,7 +2414,11 @@ check_certificate_request(dtls_context_t *ctx,
 static int
 check_server_hellodone(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
-		      uint8 *data, size_t data_length) {
+		      uint8 *data, size_t data_length)
+{
+  uint8 *q = ctx->sendbuf;
+  size_t qlen = sizeof(ctx->sendbuf);
+  int res;
 
   /* calculate master key, send CCS */
   if (!IS_SERVERHELLODONE(data, data_length))
@@ -2415,9 +2426,38 @@ check_server_hellodone(dtls_context_t *ctx,
   
   update_hs_hash(peer, data, data_length);
 
+  if (OTHER_CONFIG(peer)->do_client_auth) {
+    const dtls_ecdsa_key_t *ecdsa_key;
+
+    if (CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key) < 0) {
+      dsrv_log(LOG_CRIT, "no ecdsa certificate to send in certificate\n");
+      return -1;
+    }
+
+    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key, q, &qlen);
+
+    if (res < 0) {
+      debug("dtls_server_hello: cannot prepare Certificate record\n");
+      return 0;
+    }
+
+    q += qlen;
+    qlen = sizeof(ctx->sendbuf) - qlen;
+  }
+
   /* send ClientKeyExchange */
-  if (dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer)) < 0) {
+  res = dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer), q, &qlen);
+
+  if (res < 0) {
     debug("cannot send KeyExchange message\n");
+    return 0;
+  }
+
+  res = CALL(ctx, write, &peer->session,
+	     ctx->sendbuf, (q + qlen) - ctx->sendbuf);
+
+  if (res < 0) {
+    debug("cannot send messages\n");
     return 0;
   }
 
