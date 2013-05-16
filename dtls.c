@@ -2731,6 +2731,16 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
   /************************************************************************
    * Server states
    ************************************************************************/
+  case DTLS_STATE_WAIT_CLIENTCERTIFICATE:
+    /* expect a Certificate */
+
+    debug("DTLS_STATE_WAIT_SERVERCERTIFICATE\n");
+
+    if (check_server_certificate(ctx, peer, data, data_length)) {
+      peer->state = DTLS_STATE_SERVERHELLO;
+      /* update_hs_hash(peer, data, data_length); */
+    }
+    break;
 
   case DTLS_STATE_SERVERHELLO:
     /* here we expect a ClientHello */
@@ -2787,8 +2797,13 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       /* update finish MAC */
       update_hs_hash(peer, data, data_length); 
 
-      if (dtls_send_server_hello_msgs(ctx, peer) > 0)
-	peer->state = DTLS_STATE_SERVERHELLO;
+      if (dtls_send_server_hello_msgs(ctx, peer) > 0) {
+        if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+	    ctx && ctx->h && ctx->h->verify_ecdsa_key)
+          peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
+        else
+          peer->state = DTLS_STATE_SERVERHELLO;
+      }
     
       /* after sending the ServerHelloDone, we expect the 
        * ClientKeyExchange (possibly containing the PSK id),
@@ -3068,8 +3083,13 @@ dtls_handle_message(dtls_context_t *ctx,
     /* update finish MAC */
     update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
  
-    if (dtls_send_server_hello_msgs(ctx, peer) > 0)
-      peer->state = DTLS_STATE_SERVERHELLO;
+    if (dtls_send_server_hello_msgs(ctx, peer) > 0) {
+      if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+	  ctx && ctx->h && ctx->h->verify_ecdsa_key)
+        peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
+      else
+        peer->state = DTLS_STATE_SERVERHELLO;
+    }
     
     /* after sending the ServerHelloDone, we expect the 
      * ClientKeyExchange (possibly containing the PSK id),
