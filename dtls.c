@@ -85,6 +85,7 @@
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
 #define DTLS_CKX_LENGTH 1
 #define DTLS_CKXEC_LENGTH (1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
+#define DTLS_CV_LENGTH (1 + 1 + 2 + 1 + 1 + 1 + 1 + DTLS_EC_KEY_SIZE + 1 + 1 + DTLS_EC_KEY_SIZE)
 #define DTLS_FIN_LENGTH 12
 
 #define HS_HDR_LENGTH  DTLS_RH_LENGTH + DTLS_HS_LENGTH
@@ -1085,6 +1086,11 @@ update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
   dtls_hash_update(&peer->hs_state.hs_hash, data, length);
 }
 
+static void
+copy_hs_hash(dtls_peer_t *peer, dtls_hash_ctx *hs_hash) {
+  memcpy(hs_hash, &peer->hs_state.hs_hash, sizeof(peer->hs_state.hs_hash));
+}
+
 static inline size_t
 finalize_hs_hash(dtls_peer_t *peer, uint8 *buf) {
   return dtls_hash_finalize(buf, &peer->hs_state.hs_hash);
@@ -1882,6 +1888,86 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 			     q, qlen);
 }
 
+static int
+dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
+				   const dtls_ecdsa_key_t *key, uint8 *q,
+				   size_t *qlen)
+{
+  uint8 buf[DTLS_HS_LENGTH + DTLS_CV_LENGTH];
+  uint8 *p;
+  unsigned char *result_r;
+  unsigned char *result_s;
+  dtls_hash_ctx hs_hash;
+  unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
+
+  /* ServerKeyExchange 
+   *
+   * Start message construction at beginning of buffer. */
+  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE_VERIFY, 
+				peer,
+				DTLS_CV_LENGTH,
+				0, DTLS_CV_LENGTH,
+				buf);
+
+  /* sha256 */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
+  p += sizeof(uint8);
+
+  /* ecdsa */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
+  p += sizeof(uint8);
+
+  /* length of signature */
+  dtls_int_to_uint16(p, 70);
+  p += sizeof(uint16);
+
+  /* ASN.1 SEQUENCE */
+  dtls_int_to_uint8(p, 48);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, 68);
+  p += sizeof(uint8);
+
+  /* ASN.1 Integer r */
+  dtls_int_to_uint8(p, 2);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  p += sizeof(uint8);
+
+  /* store the pointer to the r component of the signature and make space */
+  result_r = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  /* ASN.1 Integer s */
+  dtls_int_to_uint8(p, 2);
+  p += sizeof(uint8);
+
+  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  p += sizeof(uint8);
+
+  /* store the pointer to the s component of the signature and make space */
+  result_s = p;
+  p += DTLS_EC_KEY_SIZE;
+
+  copy_hs_hash(peer, &hs_hash);
+
+  dtls_hash_finalize(sha256hash, &hs_hash);
+
+  /* sign the ephemeral and its paramaters */
+  dtls_ecdsa_create_sig_hash(key->priv_key, DTLS_EC_KEY_SIZE,
+			     sha256hash, sizeof(sha256hash),
+			     result_r, result_s);
+
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
+
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
+			     buf, p - buf,
+			     q, qlen);
+}
+
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
   ((Length + dtls_kb_iv_size(CURRENT_CONFIG(Peer)) + \
     dtls_kb_digest_size(CURRENT_CONFIG(Peer))) /     \
@@ -2419,6 +2505,7 @@ check_server_hellodone(dtls_context_t *ctx,
   uint8 *q = ctx->sendbuf;
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
+  const dtls_ecdsa_key_t *ecdsa_key;
 
   /* calculate master key, send CCS */
   if (!IS_SERVERHELLODONE(data, data_length))
@@ -2427,7 +2514,6 @@ check_server_hellodone(dtls_context_t *ctx,
   update_hs_hash(peer, data, data_length);
 
   if (OTHER_CONFIG(peer)->do_client_auth) {
-    const dtls_ecdsa_key_t *ecdsa_key;
 
     if (CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key) < 0) {
       dsrv_log(LOG_CRIT, "no ecdsa certificate to send in certificate\n");
@@ -2451,6 +2537,19 @@ check_server_hellodone(dtls_context_t *ctx,
   if (res < 0) {
     debug("cannot send KeyExchange message\n");
     return 0;
+  }
+
+  if (OTHER_CONFIG(peer)->do_client_auth) {
+
+    q += qlen;
+    qlen = sizeof(ctx->sendbuf) - qlen;
+
+    res = dtls_send_certificate_verify_ecdh(ctx, peer, ecdsa_key, q, &qlen);
+
+    if (res < 0) {
+      debug("dtls_server_hello: cannot prepare Certificate record\n");
+      return 0;
+    }
   }
 
   res = CALL(ctx, write, &peer->session,
