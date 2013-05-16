@@ -112,6 +112,8 @@
       ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_HELLO_DONE)
 #define IS_CERTIFICATE(M,L) \
       ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE)
+#define IS_CERTIFICATEVERIFY(M,L) \
+      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE_VERIFY)
 #define IS_FINISHED(M,L) \
       ((L) >= DTLS_HS_LENGTH + DTLS_FIN_LENGTH && (M)[0] == DTLS_HT_FINISHED)
 
@@ -1420,6 +1422,115 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
     peer->state = DTLS_STATE_CLOSING;
   }
   return res;
+}
+
+static int
+check_client_certificate_verify(dtls_context_t *ctx, 
+				dtls_peer_t *peer,
+				uint8 *data, size_t data_length)
+{
+  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  int i;
+  unsigned char *result_r;
+  unsigned char *result_s;
+  dtls_hash_ctx hs_hash;
+  unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
+
+  if (!IS_CERTIFICATEVERIFY(data, data_length))
+    return 0;
+
+  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+
+  data += DTLS_HS_LENGTH;
+
+  if (data_length < DTLS_HS_LENGTH + DTLS_CV_LENGTH) {
+    dsrv_log(LOG_ALERT, "the package length does not match the expected\n");
+    return 0;
+  }
+
+  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_SHA256) {
+    dsrv_log(LOG_ALERT, "only sha256 is supported in certificate verify\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_ECDSA) {
+    dsrv_log(LOG_ALERT, "only ecdsa signature is supported in client verify\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (data_length < dtls_uint16_to_int(data)) {
+    dsrv_log(LOG_ALERT, "signature length wrong\n");
+    return 0;
+  }
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  if (dtls_uint8_to_int(data) != 48) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected SEQUENCE\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (data_length < dtls_uint8_to_int(data)) {
+    dsrv_log(LOG_ALERT, "signature length wrong\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != 2) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  /* Sometimes these values have a leeding 0 byte */
+  result_r = data + i - DTLS_EC_KEY_SIZE;
+
+  data += i;
+  data_length -= i;
+
+  if (dtls_uint8_to_int(data) != 2) {
+    dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
+    return 0;
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  /* Sometimes these values have a leeding 0 byte */
+  result_s = data + i - DTLS_EC_KEY_SIZE;
+
+  data += i;
+  data_length -= i;
+
+  copy_hs_hash(peer, &hs_hash);
+
+  dtls_hash_finalize(sha256hash, &hs_hash);
+
+  i = dtls_ecdsa_verify_sig_hash(config->ecdsa.other_pub_x, config->ecdsa.other_pub_y,
+  			    sizeof(config->ecdsa.other_pub_x),
+			    sha256hash, sizeof(sha256hash),
+			    result_r, result_s);
+
+  if (!i) {
+    dsrv_log(LOG_ALERT, "wrong signature\n");
+    return 0;
+  }
+  return 1;
 }
 
 static int
@@ -2851,6 +2962,25 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       return 0;			/* drop it, whatever it is */
     }
     
+    update_hs_hash(peer, data, data_length);
+
+    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+	ctx && ctx->h && ctx->h->verify_ecdsa_key)
+      peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
+    else
+      peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
+    break;
+
+  case DTLS_STATE_WAIT_CERTIFICATEVERIFY:
+    /* expect a Certificate */
+
+    debug("DTLS_STATE_WAIT_CERTIFICATEVERIFY\n");
+
+    if (!check_client_certificate_verify(ctx, peer, data, data_length)) {
+      warn("certificate verify failed\n");
+      return 0;
+    }
+
     update_hs_hash(peer, data, data_length);
     peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
     break;
