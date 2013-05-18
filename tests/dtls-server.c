@@ -1,4 +1,7 @@
 
+/* This is needed for apple */
+#define __APPLE_USE_RFC_3542
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
