@@ -2836,16 +2836,16 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     debug("DTLS_STATE_WAIT_SERVERCERTIFICATE\n");
 
     if (check_server_certificate(ctx, peer, data, data_length)) {
-      peer->state = DTLS_STATE_SERVERHELLO;
+      peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
       /* update_hs_hash(peer, data, data_length); */
     }
     break;
 
-  case DTLS_STATE_SERVERHELLO:
+  case DTLS_STATE_WAIT_CLIENTKEYEXCHANGE:
     /* here we expect a ClientHello */
     /* handle ClientHello, update msg and msglen and goto next if not finished */
 
-    debug("DTLS_STATE_SERVERHELLO\n");
+    debug("DTLS_STATE_WAIT_CLIENTKEYEXCHANGE\n");
     if (!check_client_keyexchange(ctx, peer, data, data_length)) {
       warn("check_client_keyexchange failed (%d, %d)\n", data_length, data[0]);
       return 0;			/* drop it, whatever it is */
@@ -2901,7 +2901,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 	    ctx && ctx->h && ctx->h->verify_ecdsa_key)
           peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
         else
-          peer->state = DTLS_STATE_SERVERHELLO;
+          peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
       }
     
       /* after sending the ServerHelloDone, we expect the 
@@ -3187,7 +3187,7 @@ dtls_handle_message(dtls_context_t *ctx,
 	  ctx && ctx->h && ctx->h->verify_ecdsa_key)
         peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
       else
-        peer->state = DTLS_STATE_SERVERHELLO;
+        peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
     }
     
     /* after sending the ServerHelloDone, we expect the 
