@@ -1361,6 +1361,12 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   uint8 *p = buf, *q = ctx->sendbuf;
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
+  int ecdsa;
+  uint8 extension_size;
+
+  ecdsa = OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
+
+  extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
 
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
@@ -1371,8 +1377,8 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   /* Handshake header */
   p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO, 
 				peer,
-				DTLS_SH_LENGTH, 
-				0, DTLS_SH_LENGTH,
+				DTLS_SH_LENGTH + extension_size, 
+				0, DTLS_SH_LENGTH + extension_size,
 				buf);
 
   /* ServerHello */
@@ -1400,13 +1406,58 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
     /* selected compression method */
     if (OTHER_CONFIG(peer)->compression >= 0)
       *p++ = compression_methods[OTHER_CONFIG(peer)->compression];
-
-    /* FIXME: if key->psk.id != NULL we need the server key exchange */
-
-    /* update the finish hash 
-       (FIXME: better put this in generic record_send function) */
-    update_hs_hash(peer, buf, p - buf);
   }
+
+  if (extension_size) {
+    /* length of the extensions */
+    dtls_int_to_uint16(p, extension_size - 2);
+    p += sizeof(uint16);
+  }
+
+  if (ecdsa) {
+    /* client certificate type extension */
+    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERIFICATE_TYPE);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 1);
+    p += sizeof(uint16);
+
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    p += sizeof(uint8);
+
+    /* client certificate type extension */
+    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERIFICATE_TYPE);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 1);
+    p += sizeof(uint16);
+
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    p += sizeof(uint8);
+
+    /* elliptic_curves */
+    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 4);
+    p += sizeof(uint16);
+
+    /* length of the list */
+    dtls_int_to_uint16(p, 2);
+    p += sizeof(uint16);
+
+    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES_SECP256R1);
+    p += sizeof(uint16);
+  }
+
+  /* FIXME: if key->psk.id != NULL we need the server key exchange */
+
+  /* update the finish hash 
+     (FIXME: better put this in generic record_send function) */
+  update_hs_hash(peer, buf, p - buf);
 
   res = dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
 			    buf, p - buf,
