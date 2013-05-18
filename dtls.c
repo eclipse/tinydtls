@@ -2852,7 +2852,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     }
     
     update_hs_hash(peer, data, data_length);
-    peer->state = DTLS_STATE_KEYEXCHANGE;
+    peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
     break;
 
   case DTLS_STATE_WAIT_FINISHED:
@@ -2913,7 +2913,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     break;
     
   case DTLS_STATE_INIT:	      /* these states should not occur here */
-  case DTLS_STATE_KEYEXCHANGE:
+  case DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC:
   default:
     dsrv_log(LOG_CRIT, "unhandled state %d\n", peer->state);
     assert(0);
@@ -2932,7 +2932,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
    * by ourself, the security context is switched and the record
    * sequence number is reset. */
   
-  if (peer->state != DTLS_STATE_KEYEXCHANGE
+  if (peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC
       || !check_ccs(ctx, peer, record_header, data, data_length)) {
     /* signal error? */
     warn("expected ChangeCipherSpec during handshake\n");
