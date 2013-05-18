@@ -1813,14 +1813,11 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
 }
 
     
-int 
-dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer,
-	     dtls_security_parameters_t *config, int is_client) {
+int
+dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
+			      dtls_security_parameters_t *config) {
   uint8 *p = ctx->sendbuf;
   size_t size;
-  int ht = is_client 
-    ? DTLS_HT_CLIENT_KEY_EXCHANGE 
-    : DTLS_HT_SERVER_KEY_EXCHANGE;
 
   switch (config->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
@@ -1832,7 +1829,8 @@ dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer,
     }
 
     size = psk->id_length + sizeof(uint16);
-    p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
+    p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
+				  peer, size, 0, size, p);
 
     dtls_int_to_uint16(p, psk->id_length);
     memcpy(p + sizeof(uint16), psk->id, psk->id_length);
@@ -1846,7 +1844,8 @@ dtls_send_kx(dtls_context_t *ctx, dtls_peer_t *peer,
 
     size = DTLS_CKXEC_LENGTH;
 
-    p = dtls_set_handshake_header(ht, peer, size, 0, size, p);
+    p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
+				  peer, size, 0, size, p);
 
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
@@ -2417,7 +2416,7 @@ check_server_hellodone(dtls_context_t *ctx,
   update_hs_hash(peer, data, data_length);
 
   /* send ClientKeyExchange */
-  if (dtls_send_kx(ctx, peer, OTHER_CONFIG(peer), 1) < 0) {
+  if (dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer)) < 0) {
     debug("cannot send KeyExchange message\n");
     return 0;
   }
