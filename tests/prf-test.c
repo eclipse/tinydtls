@@ -42,7 +42,7 @@ main() {
 		    random2, sizeof(random2),
 		    buf, 100);
 
-  printf("PRF yields %lu bytes of random data:\n", result);
+  printf("PRF yields %zu bytes of random data:\n", result);
   hexdump(buf, result);
   printf("\n");
   return 0;

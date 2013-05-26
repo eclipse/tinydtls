@@ -610,7 +610,7 @@ calculate_key_block(dtls_context_t *ctx,
 						pre_master_secret);
 
 #ifndef NDEBUG
-    printf("psk: (%lu bytes):", psk->key_length);
+    printf("psk: (%zu bytes):", psk->key_length);
     hexdump(psk->key, psk->key_length);
     printf("\n");
 #endif /* NDEBUG */
@@ -644,7 +644,7 @@ calculate_key_block(dtls_context_t *ctx,
       printf(" %02x", server_random[i]);
     printf("\n");
 
-    printf("pre_master_secret: (%lu bytes):", pre_master_len);
+    printf("pre_master_secret: (%zu bytes):", pre_master_len);
     for (i = 0; i < pre_master_len; ++i)
       printf(" %02x", pre_master_secret[i]);
     printf("\n");
