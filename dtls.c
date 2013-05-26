@@ -758,15 +758,15 @@ init_cipher(dtls_security_parameters_t *config)
   return 0;
 }
 
-/* TODO: add a generic method which iterates over a list and searches for a specifc key */
-static int verifiy_ext_eliptic_curves(uint8 *data, size_t data_length) {
+/* TODO: add a generic method which iterates over a list and searches for a specific key */
+static int verify_ext_eliptic_curves(uint8 *data, size_t data_length) {
   int i, curve_name;
 
   /* length of curve list */
   i = dtls_uint16_to_int(data);
   data += sizeof(uint16);
   if (i + sizeof(uint16) != data_length) {
-    warn("the list of the supported eliptic curves should be tls extension length - 2\n");
+    warn("the list of the supported elliptic curves should be tls extension length - 2\n");
     return -1;
   }
 
@@ -779,11 +779,11 @@ static int verifiy_ext_eliptic_curves(uint8 *data, size_t data_length) {
       return 0;
   }
 
-  warn("no supported eliptic curve found\n");
+  warn("no supported elliptic curve found\n");
   return -2;
 }
 
-static int verifiy_ext_cert_type(uint8 *data, size_t data_length) {
+static int verify_ext_cert_type(uint8 *data, size_t data_length) {
   int i, cert_type;
 
   /* length of cert type list */
@@ -950,17 +950,17 @@ dtls_update_parameters(dtls_context_t *ctx,
     switch (i) {
       case TLS_EXT_ELLIPTIC_CURVES:
         ext_elliptic_curve = 1;
-        if (verifiy_ext_eliptic_curves(data, j))
+        if (verify_ext_eliptic_curves(data, j))
           goto error;
         break;
       case TLS_EXT_CLIENT_CERIFICATE_TYPE:
         ext_client_cert_type = 1;
-        if (verifiy_ext_cert_type(data, j))
+        if (verify_ext_cert_type(data, j))
           goto error;
         break;
       case TLS_EXT_SERVER_CERIFICATE_TYPE:
         ext_server_cert_type = 1;
-        if (verifiy_ext_cert_type(data, j))
+        if (verify_ext_cert_type(data, j))
           goto error;
         break;
       default:
