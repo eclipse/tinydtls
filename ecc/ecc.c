@@ -273,6 +273,14 @@ static void fieldModP(uint32_t *A, const uint32_t *B)
  * A: input value (max size * 4 bytes)
  * result: result of modulo calculation (max 36 bytes)
  * size: size of A
+ *
+ * This uses the Barrett modular reduction as described in the Handbook 
+ * of Applied Cryptography 14.42 Algorithm Barrett modular reduction, 
+ * see http://cacr.uwaterloo.ca/hac/about/chap14.pdf and 
+ * http://everything2.com/title/Barrett+Reduction
+ *
+ * b = 32 (bite size of the processor architecture)
+ * mu (ecc_order_mu) was precomputed in a java program
  */
 static void fieldModO(const uint32_t *A, uint32_t *result, uint8_t length) {
 	// This is used for value q1 and q3
@@ -534,7 +542,7 @@ void ecc_ec_mult(const uint32_t *px, const uint32_t *py, const uint32_t *secret,
  *  s: s value of the signature (36 bytes)
  *
  * return:
- *   0: everything when ok
+ *   0: everything is ok
  *  -1: can not create signature, try again with different k.
  */
 int ecc_ecdsa_sign(const uint32_t *d, const uint32_t *e, const uint32_t *k, uint32_t *r, uint32_t *s)
@@ -579,6 +587,23 @@ int ecc_ecdsa_sign(const uint32_t *d, const uint32_t *e, const uint32_t *k, uint
 	return 0;
 }
 
+/**
+ * Verifies a ecdsa signature.
+ *
+ * For a description of this algorithm see
+ * https://en.wikipedia.org/wiki/Elliptic_Curve_DSA#Signature_verification_algorithm
+ *
+ * input:
+ *  x: x coordinate of the public key (32 bytes)
+ *  y: y coordinate of the public key (32 bytes)
+ *  e: hash to verify the signature of (32 bytes)
+ *  r: r value of the signature (32 bytes)
+ *  s: s value of the signature (32 bytes)
+ *
+ * return:
+ *  1: signature is ok
+ *  0: signature check failed the signature is invalid
+ */
 int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, const uint32_t *r, const uint32_t *s)
 {
 	uint32_t w[8];
@@ -612,6 +637,7 @@ int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, 
 
 	// tmp3 = tmp1 + tmp2
 	ecc_ec_add(tmp1_x, tmp1_y, tmp2_x, tmp2_y, tmp3_x, tmp3_y);
+	// TODO: this u_1 * G + u_2 * Q_A  could be optimiced with Straus's algorithm.
 
 	return isSame(tmp3_x, r, arrayLength);
 }
