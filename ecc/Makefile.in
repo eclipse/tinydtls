@@ -35,11 +35,12 @@ abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
-SOURCES:= ecc.c
-HEADERS:= ecc.h
-OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
+SOURCES:= ecc.c testecc.c testfield.c test_helper.c
+HEADERS:= ecc.h test_helper.h
+OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) ecc_test.o
+PROGRAMS:= testecc testfield
 CPPFLAGS=@CPPFLAGS@
-CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@
+CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ -DTEST_INCLUDE
 LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) 
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
@@ -49,7 +50,14 @@ DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 .SUFFIXES:
 .SUFFIXES:      .c .o
 
-all:
+all: $(PROGRAMS)
+
+ecc_test.o:	ecc.c ecc.h
+	$(CC) $(CFLAGS) $(CPPFLAGS)  -c -o $@ $<
+
+testecc: ecc_test.o test_helper.o
+
+testfield: ecc_test.o test_helper.o
 
 check:	
 	echo DISTDIR: $(DISTDIR)

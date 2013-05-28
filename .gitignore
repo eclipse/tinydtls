@@ -14,3 +14,5 @@ tests/ccm-test
 tests/dtls-client
 tests/dtls-server
 tests/prf-test
+ecc/testecc
+ecc/testfield
