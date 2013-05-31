@@ -31,9 +31,15 @@ SHELL = /bin/sh
 MKDIR = mkdir
 ETAGS = @ETAGS@
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
 abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
+libdir = @libdir@
+includedir = @includedir@/@PACKAGE_NAME@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+
+install := cp -p
 
 # files and flags
 SOURCES:= dtls.c crypto.c ccm.c hmac.c debug.c netq.c
@@ -50,7 +56,7 @@ LDFLAGS:=@LIBS@
 ARFLAGS:=cru
 doc:=doc
 
-.PHONY: all dirs clean distclean .gitignore doc TAGS
+.PHONY: all dirs clean install dist distclean .gitignore doc TAGS
 
 .SUFFIXES:
 .SUFFIXES:      .c .o
@@ -91,6 +97,15 @@ dist:	$(FILES) $(SUBDIRS)
 		$(MAKE) -C $$dir dist; \
 	done
 	tar czf $(package).tar.gz $(DISTDIR)
+
+install:	$(LIB) $(HEADERS) $(SUBDIRS)
+	test -d $(libdir) || mkdir -p $(libdir)
+	test -d $(includedir) || mkdir -p $(includedir)
+	$(install) $(LIB) $(libdir)/
+	$(install) $(HEADERS) $(includedir)/
+	for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
+	done
 
 TAGS:	
 	$(ETAGS) -o $@.new $(SOURCES) 
