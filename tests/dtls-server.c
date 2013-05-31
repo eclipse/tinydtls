@@ -233,6 +233,8 @@ main(int argc, char **argv) {
     goto error;
   }
 
+  dtls_init();
+
   the_context = dtls_new_context(&fd);
 
   dtls_set_handler(the_context, &cb);
