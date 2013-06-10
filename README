@@ -22,5 +22,5 @@ After configuration, invoke make to build the library and associated
 test programs. To add tinydtls as Contiki application, drop it into
 the apps directory and add the following line to your Makefile:
 
-  APPS += tinydtls/aes tinydtls/sha2 tinydtls
+  APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
 
