@@ -1688,8 +1688,8 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   uint8 *key_params;
   uint8 *ephemeral_pub_x;
   uint8 *ephemeral_pub_y;
-  unsigned char *result_r;
-  unsigned char *result_s;
+  uint32_t point_r[9];
+  uint32_t point_s[9];
   dtls_security_parameters_t *config = OTHER_CONFIG(peer);
 
   /* ServerKeyExchange 
@@ -1729,6 +1729,14 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 			  ephemeral_pub_x, ephemeral_pub_y,
 			  DTLS_EC_KEY_SIZE);
 
+  /* sign the ephemeral and its paramaters */
+  dtls_ecdsa_create_sig(key->priv_key, DTLS_EC_KEY_SIZE,
+		       config->client_random, sizeof(config->client_random),
+		       config->server_random, sizeof(config->server_random),
+		       key_params,
+		       1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
+		       point_r, point_s);
+
   /* length of signature */
   dtls_int_to_uint16(p, 70);
   p += sizeof(uint16);
@@ -1748,7 +1756,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* store the pointer to the r component of the signature and make space */
-  result_r = p;
+  dtls_ec_key_from_uint32(point_r, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
 
   /* ASN.1 Integer s */
@@ -1759,16 +1767,8 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* store the pointer to the s component of the signature and make space */
-  result_s = p;
+  dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
-
-  /* sign the ephemeral and its paramaters */
-  dtls_ecdsa_create_sig(key->priv_key, DTLS_EC_KEY_SIZE,
-		       config->client_random, sizeof(config->client_random),
-		       config->server_random, sizeof(config->server_random),
-		       key_params,
-		       1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
-		       result_r, result_s);
 
   /* update the finish hash 
      (FIXME: better put this in generic record_send function) */
@@ -2006,8 +2006,8 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   uint8 buf[DTLS_HS_LENGTH + DTLS_CV_LENGTH];
   uint8 *p;
-  unsigned char *result_r;
-  unsigned char *result_s;
+  uint32_t point_r[9];
+  uint32_t point_s[9];
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
@@ -2028,6 +2028,15 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
   p += sizeof(uint8);
 
+  copy_hs_hash(peer, &hs_hash);
+
+  dtls_hash_finalize(sha256hash, &hs_hash);
+
+  /* sign the ephemeral and its paramaters */
+  dtls_ecdsa_create_sig_hash(key->priv_key, DTLS_EC_KEY_SIZE,
+			     sha256hash, sizeof(sha256hash),
+			     point_r, point_s);
+
   /* length of signature */
   dtls_int_to_uint16(p, 70);
   p += sizeof(uint16);
@@ -2047,7 +2056,7 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* store the pointer to the r component of the signature and make space */
-  result_r = p;
+  dtls_ec_key_from_uint32(point_r, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
 
   /* ASN.1 Integer s */
@@ -2058,17 +2067,8 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* store the pointer to the s component of the signature and make space */
-  result_s = p;
+  dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
-
-  copy_hs_hash(peer, &hs_hash);
-
-  dtls_hash_finalize(sha256hash, &hs_hash);
-
-  /* sign the ephemeral and its paramaters */
-  dtls_ecdsa_create_sig_hash(key->priv_key, DTLS_EC_KEY_SIZE,
-			     sha256hash, sizeof(sha256hash),
-			     result_r, result_s);
 
   /* update the finish hash 
      (FIXME: better put this in generic record_send function) */

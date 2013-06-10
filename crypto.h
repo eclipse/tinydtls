@@ -299,13 +299,13 @@ void dtls_ecdsa_generate_key(unsigned char *priv_key,
 
 void dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 				const unsigned char *sign_hash, size_t sign_hash_size,
-				unsigned char *result_r, unsigned char *result_s);
+				uint32_t point_r[9], uint32_t point_s[9]);
 
 void dtls_ecdsa_create_sig(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *client_random, size_t client_random_size,
 			   const unsigned char *server_random, size_t server_random_size,
 			   const unsigned char *keyx_params, size_t keyx_params_size,
-			   unsigned char *result_r, unsigned char *result_s);
+			   uint32_t point_r[9], uint32_t point_s[9]);
 
 int dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			       const unsigned char *pub_key_y, size_t key_size,
@@ -318,6 +318,9 @@ int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 			  const unsigned char *server_random, size_t server_random_size,
 			  const unsigned char *keyx_params, size_t keyx_params_size,
 			  unsigned char *result_r, unsigned char *result_s);
+
+void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
+			     unsigned char *result);
 
 /**
  * Creates a new dtls_cipher_context_t object for given @c cipher.

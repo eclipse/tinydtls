@@ -252,8 +252,8 @@ static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
   }
 }
 
-static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
-				    unsigned char *result) {
+void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
+			     unsigned char *result) {
   int i;
   uint32_t *result32 = (uint32_t *)result;
 
@@ -308,13 +308,11 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
 void
 dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
-			   unsigned char *result_r, unsigned char *result_s) {
+			   uint32_t point_r[9], uint32_t point_s[9]) {
   int ret;
   uint32_t priv[8];
   uint32_t hash[8];
   uint32_t rand[8];
-  uint32_t point_r[9];
-  uint32_t point_s[9];
   
   dtls_ec_key_to_uint32(priv_key, key_size, priv);
   dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
@@ -322,9 +320,6 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
     prng((unsigned char *)rand, key_size);
     ret = ecc_ecdsa_sign(priv, hash, rand, point_r, point_s);
   } while (ret);
-
-  dtls_ec_key_from_uint32(point_r, key_size, result_r);
-  dtls_ec_key_from_uint32(point_s, key_size, result_s);
 }
 
 void
@@ -332,7 +327,7 @@ dtls_ecdsa_create_sig(const unsigned char *priv_key, size_t key_size,
 		      const unsigned char *client_random, size_t client_random_size,
 		      const unsigned char *server_random, size_t server_random_size,
 		      const unsigned char *keyx_params, size_t keyx_params_size,
-		      unsigned char *result_r, unsigned char *result_s) {
+		      uint32_t point_r[9], uint32_t point_s[9]) {
   dtls_hash_ctx data;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
@@ -343,7 +338,7 @@ dtls_ecdsa_create_sig(const unsigned char *priv_key, size_t key_size,
   dtls_hash_finalize(sha256hash, &data);
   
   dtls_ecdsa_create_sig_hash(priv_key, key_size, sha256hash,
-			     sizeof(sha256hash), result_r, result_s);
+			     sizeof(sha256hash), point_r, point_s);
 }
 
 /* rfc4492#section-5.4 */
