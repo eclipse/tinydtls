@@ -1297,6 +1297,19 @@ dtls_prepare_record(dtls_peer_t *peer,
   return 1;
 }
 
+static int
+dtls_prepare_record_header(dtls_peer_t *peer,
+			   unsigned char type,
+			   uint8 header_type,
+			   uint8 *data, size_t data_length,
+			   uint8 *sendbuf, size_t *rlen) {
+  dtls_set_handshake_header(header_type, peer, data_length, 0, data_length,
+			    data);
+
+  update_hs_hash(peer, data, data_length);
+  return dtls_prepare_record(peer, type, data, data_length, sendbuf, rlen);
+}
+
 /** 
  * Returns true if the message @p Data is a handshake message that
  * must be included in the calculation of verify_data in the Finished
@@ -1550,11 +1563,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
   extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
 
   /* Handshake header */
-  p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO, 
-				peer,
-				DTLS_SH_LENGTH + extension_size, 
-				0, DTLS_SH_LENGTH + extension_size,
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
   /* ServerHello */
   dtls_int_to_uint16(p, DTLS_VERSION);
@@ -1628,13 +1637,12 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 
   /* FIXME: if key->psk.id != NULL we need the server key exchange */
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_SERVER_HELLO,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 static int
@@ -1648,11 +1656,7 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
   /* Certificate 
    *
    * Start message construction at beginning of buffer. */
-  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE, 
-				peer,
-				DTLS_CE_LENGTH,
-				0, DTLS_CE_LENGTH,
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
   dtls_int_to_uint24(p, 94);
   p += sizeof(uint24);
@@ -1669,13 +1673,12 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
   memcpy(p, key->pub_key_y, DTLS_EC_KEY_SIZE);
   p += DTLS_EC_KEY_SIZE;
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_CERTIFICATE,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 static int
@@ -1695,11 +1698,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   /* ServerKeyExchange 
    *
    * Start message construction at beginning of buffer. */
-  p = dtls_set_handshake_header(DTLS_HT_SERVER_KEY_EXCHANGE, 
-				peer,
-				DTLS_SKEXEC_LENGTH,
-				0, DTLS_SKEXEC_LENGTH,
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
   key_params = p;
   /* ECCurveType curve_type: named_curve */
@@ -1770,13 +1769,12 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			      buf, p - buf,
-			      q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_SERVER_KEY_EXCHANGE,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 static int
@@ -1789,11 +1787,7 @@ dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
-  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE_REQUEST, 
-				peer,
-				8, /* ServerHelloDone has no extra fields */
-				0, 8, /* ServerHelloDone has no extra fields */
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
   /* certificate_types */
   dtls_int_to_uint8(p, 1);
@@ -1819,13 +1813,12 @@ dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint16(p, 0);
   p += sizeof(uint16);
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_CERTIFICATE_REQUEST,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 static int
@@ -1838,19 +1831,14 @@ dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
-  p = dtls_set_handshake_header(DTLS_HT_SERVER_HELLO_DONE, 
-				peer,
-				0, /* ServerHelloDone has no extra fields */
-				0, 0, /* ServerHelloDone has no extra fields */
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_SERVER_HELLO_DONE,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 int
@@ -1949,8 +1937,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     }
 
     size = psk->id_length + sizeof(uint16);
-    p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
-				  peer, size, 0, size, buf);
+    p = buf + DTLS_HS_LENGTH;
 
     dtls_int_to_uint16(p, psk->id_length);
     memcpy(p + sizeof(uint16), psk->id, psk->id_length);
@@ -1964,8 +1951,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 
     size = DTLS_CKXEC_LENGTH;
 
-    p = dtls_set_handshake_header(DTLS_HT_CLIENT_KEY_EXCHANGE,
-				  peer, size, 0, size, buf);
+    p = buf + DTLS_HS_LENGTH;
 
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
@@ -1990,13 +1976,12 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     return -3;
   }
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_CLIENT_KEY_EXCHANGE,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 static int
@@ -2014,11 +1999,7 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   /* ServerKeyExchange 
    *
    * Start message construction at beginning of buffer. */
-  p = dtls_set_handshake_header(DTLS_HT_CERTIFICATE_VERIFY, 
-				peer,
-				DTLS_CV_LENGTH,
-				0, DTLS_CV_LENGTH,
-				buf);
+  p = buf + DTLS_HS_LENGTH;
 
   /* sha256 */
   dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
@@ -2070,13 +2051,12 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
   p += DTLS_EC_KEY_SIZE;
 
-  /* update the finish hash 
-     (FIXME: better put this in generic record_send function) */
-  update_hs_hash(peer, buf, p - buf);
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, 
-			     buf, p - buf,
-			     q, qlen);
+  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
+				    DTLS_HT_CERTIFICATE_VERIFY,
+				    buf, p - buf,
+				    q, qlen);
 }
 
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
