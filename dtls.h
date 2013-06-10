@@ -33,18 +33,17 @@
 #define _DTLS_H_
 
 #include <stdint.h>
-
-#include "t_list.h"
+#include "config.h"
 
 #ifndef WITH_CONTIKI
 #include "uthash.h"
+#include "t_list.h"
 #endif /* WITH_CONTIKI */
 
 #include "alert.h"
 #include "crypto.h"
 #include "hmac.h"
 
-#include "config.h"
 #include "global.h"
 #ifndef DTLSv12
 #define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
