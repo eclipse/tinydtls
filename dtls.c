@@ -1686,13 +1686,17 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 				   const dtls_ecdsa_key_t *key, uint8 *q,
 				   size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH];
+  /* The ASN.1 Integer representation of an 32 byte unsigned int could be
+   * 33 bytes long add space for that */
+  uint8 buf[DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH + 2];
   uint8 *p;
   uint8 *key_params;
   uint8 *ephemeral_pub_x;
   uint8 *ephemeral_pub_y;
   uint32_t point_r[9];
   uint32_t point_s[9];
+  int len_r;
+  int len_s;
   dtls_security_parameters_t *config = OTHER_CONFIG(peer);
 
   /* ServerKeyExchange 
@@ -1735,38 +1739,45 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 		       key_params, p - key_params,
 		       point_r, point_s);
 
+#define R_KEY_OFFSET (2 + 1 + 1 + 1 + 1)
+#define S_KEY_OFFSET(len_s) (R_KEY_OFFSET + (len_s) + 1 + 1)
+  /* store the pointer to the r component of the signature and make space */
+  len_r = dtls_ec_key_from_uint32_asn1(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
+  len_s = dtls_ec_key_from_uint32_asn1(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
+
+#undef R_KEY_OFFSET
+#undef S_KEY_OFFSET
+
   /* length of signature */
-  dtls_int_to_uint16(p, 70);
+  dtls_int_to_uint16(p, len_r + len_s + 2 + 2 + 2);
   p += sizeof(uint16);
 
   /* ASN.1 SEQUENCE */
   dtls_int_to_uint8(p, 48);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, 68);
+  dtls_int_to_uint8(p, len_r + len_s + 2 + 2);
   p += sizeof(uint8);
 
   /* ASN.1 Integer r */
   dtls_int_to_uint8(p, 2);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  dtls_int_to_uint8(p, len_r);
   p += sizeof(uint8);
 
-  /* store the pointer to the r component of the signature and make space */
-  dtls_ec_key_from_uint32(point_r, DTLS_EC_KEY_SIZE, p);
-  p += DTLS_EC_KEY_SIZE;
+  /* the pint r was added here */
+  p += len_r;
 
   /* ASN.1 Integer s */
   dtls_int_to_uint8(p, 2);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  dtls_int_to_uint8(p, len_s);
   p += sizeof(uint8);
 
-  /* store the pointer to the s component of the signature and make space */
-  dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
-  p += DTLS_EC_KEY_SIZE;
+  /* the pint s was added here */
+  p += len_s;
 
   assert(p - buf <= sizeof(buf));
 
@@ -1988,10 +1999,14 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 				   const dtls_ecdsa_key_t *key, uint8 *q,
 				   size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH + DTLS_CV_LENGTH];
+  /* The ASN.1 Integer representation of an 32 byte unsigned int could be
+   * 33 bytes long add space for that */
+  uint8 buf[DTLS_HS_LENGTH + DTLS_CV_LENGTH + 2];
   uint8 *p;
   uint32_t point_r[9];
   uint32_t point_s[9];
+  int len_r;
+  int len_s;
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
@@ -2017,38 +2032,45 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 			     sha256hash, sizeof(sha256hash),
 			     point_r, point_s);
 
+#define R_KEY_OFFSET (2 + 1 + 1 + 1 + 1)
+#define S_KEY_OFFSET(len_s) (R_KEY_OFFSET + (len_s) + 1 + 1)
+  /* store the pointer to the r component of the signature and make space */
+  len_r = dtls_ec_key_from_uint32_asn1(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
+  len_s = dtls_ec_key_from_uint32_asn1(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
+
+#undef R_KEY_OFFSET
+#undef S_KEY_OFFSET
+
   /* length of signature */
-  dtls_int_to_uint16(p, 70);
+  dtls_int_to_uint16(p, len_r + len_s + 2 + 2 + 2);
   p += sizeof(uint16);
 
   /* ASN.1 SEQUENCE */
   dtls_int_to_uint8(p, 48);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, 68);
+  dtls_int_to_uint8(p, len_r + len_s + 2 + 2);
   p += sizeof(uint8);
 
   /* ASN.1 Integer r */
   dtls_int_to_uint8(p, 2);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  dtls_int_to_uint8(p, len_r);
   p += sizeof(uint8);
 
-  /* store the pointer to the r component of the signature and make space */
-  dtls_ec_key_from_uint32(point_r, DTLS_EC_KEY_SIZE, p);
-  p += DTLS_EC_KEY_SIZE;
+  /* the pint r was added here */
+  p += len_r;
 
   /* ASN.1 Integer s */
   dtls_int_to_uint8(p, 2);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, DTLS_EC_KEY_SIZE);
+  dtls_int_to_uint8(p, len_s);
   p += sizeof(uint8);
 
-  /* store the pointer to the s component of the signature and make space */
-  dtls_ec_key_from_uint32(point_s, DTLS_EC_KEY_SIZE, p);
-  p += DTLS_EC_KEY_SIZE;
+  /* the pint s was added here */
+  p += len_s;
 
   assert(p - buf <= sizeof(buf));
 

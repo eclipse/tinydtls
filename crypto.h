@@ -319,8 +319,8 @@ int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 			  const unsigned char *keyx_params, size_t keyx_params_size,
 			  unsigned char *result_r, unsigned char *result_s);
 
-void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
-			     unsigned char *result);
+int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
+				 unsigned char *buf);
 
 /**
  * Creates a new dtls_cipher_context_t object for given @c cipher.
