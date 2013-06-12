@@ -1303,8 +1303,8 @@ dtls_prepare_record_header(dtls_peer_t *peer,
 			   uint8 header_type,
 			   uint8 *data, size_t data_length,
 			   uint8 *sendbuf, size_t *rlen) {
-  dtls_set_handshake_header(header_type, peer, data_length, 0, data_length,
-			    data);
+  dtls_set_handshake_header(header_type, peer, data_length - DTLS_HS_LENGTH, 0,
+			    data_length - DTLS_HS_LENGTH, data);
 
   update_hs_hash(peer, data, data_length);
   return dtls_prepare_record(peer, type, data, data_length, sendbuf, rlen);
