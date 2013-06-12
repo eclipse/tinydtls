@@ -1732,8 +1732,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_ecdsa_create_sig(key->priv_key, DTLS_EC_KEY_SIZE,
 		       config->client_random, sizeof(config->client_random),
 		       config->server_random, sizeof(config->server_random),
-		       key_params,
-		       1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
+		       key_params, p - key_params,
 		       point_r, point_s);
 
   /* length of signature */
