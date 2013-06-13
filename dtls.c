@@ -152,8 +152,17 @@ static const unsigned char prf_label_client[] = "client";
 static const unsigned char prf_label_server[] = "server";
 static const unsigned char prf_label_finished[] = " finished";
 
-/* first part of Raw public key */
-static const unsigned char cert_asn1_header[] = {0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04};
+/* first part of Raw public key, the is the start of the Subject Public Key */
+static const unsigned char cert_asn1_header[] = {
+  0x30, 0x59, /* SEQUENCE, length 89 bytes */
+    0x30, 0x13, /* SEQUENCE, length 19 bytes */
+      0x06, 0x07, /* OBJECT IDENTIFIER ecPublicKey (1 2 840 10045 2 1) */
+        0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01,
+      0x06, 0x08, /* OBJECT IDENTIFIER prime256v1 (1 2 840 10045 3 1 7) */
+        0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07,
+      0x03, 0x42, 0x00, /* BIT STRING, length 66 bytes, 0 bits unused */
+         0x04 /* uncompressed, followed by the r und s values of the public key */
+};
 
 extern void netq_init();
 extern void crypto_init();
@@ -2345,6 +2354,10 @@ check_server_certificate(dtls_context_t *ctx,
   }
   data += sizeof(uint24);
 
+  if (memcmp(data, cert_asn1_header, sizeof(cert_asn1_header))) {
+    dsrv_log(LOG_ALERT, "got an unexpected Subject public key format\n");
+    return 0;
+  }
   data += sizeof(cert_asn1_header);
 
   memcpy(config->ecdsa.other_pub_x, data,
