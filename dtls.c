@@ -1491,7 +1491,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   data += sizeof(uint16);
   data_length -= sizeof(uint16);
 
-  if (dtls_uint8_to_int(data) != 48) {
+  if (dtls_uint8_to_int(data) != 0x30) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected SEQUENCE\n");
     return 0;
   }
@@ -1505,7 +1505,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  if (dtls_uint8_to_int(data) != 2) {
+  if (dtls_uint8_to_int(data) != 0x02) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
     return 0;
   }
@@ -1522,7 +1522,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   data += i;
   data_length -= i;
 
-  if (dtls_uint8_to_int(data) != 2) {
+  if (dtls_uint8_to_int(data) != 0x02) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
     return 0;
   }
@@ -1710,14 +1710,14 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   p += sizeof(uint16);
 
   /* ASN.1 SEQUENCE */
-  dtls_int_to_uint8(p, 48);
+  dtls_int_to_uint8(p, 0x30);
   p += sizeof(uint8);
 
   dtls_int_to_uint8(p, len_r + len_s + 2 + 2);
   p += sizeof(uint8);
 
   /* ASN.1 Integer r */
-  dtls_int_to_uint8(p, 2);
+  dtls_int_to_uint8(p, 0x02);
   p += sizeof(uint8);
 
   dtls_int_to_uint8(p, len_r);
@@ -1727,7 +1727,7 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   p += len_r;
 
   /* ASN.1 Integer s */
-  dtls_int_to_uint8(p, 2);
+  dtls_int_to_uint8(p, 0x02);
   p += sizeof(uint8);
 
   dtls_int_to_uint8(p, len_s);
@@ -2449,7 +2449,7 @@ check_server_key_exchange(dtls_context_t *ctx,
   data += sizeof(uint16);
   data_length -= sizeof(uint16);
 
-  if (dtls_uint8_to_int(data) != 48) {
+  if (dtls_uint8_to_int(data) != 0x30) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected SEQUENCE\n");
     return 0;
   }
@@ -2463,7 +2463,7 @@ check_server_key_exchange(dtls_context_t *ctx,
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  if (dtls_uint8_to_int(data) != 2) {
+  if (dtls_uint8_to_int(data) != 0x02) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
     return 0;
   }
@@ -2480,7 +2480,7 @@ check_server_key_exchange(dtls_context_t *ctx,
   data += i;
   data_length -= i;
 
-  if (dtls_uint8_to_int(data) != 2) {
+  if (dtls_uint8_to_int(data) != 0x02) {
     dsrv_log(LOG_ALERT, "wrong ASN.1 struct, expected Integer\n");
     return 0;
   }
