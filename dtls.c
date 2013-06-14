@@ -1204,23 +1204,31 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 int
 dtls_prepare_record(dtls_peer_t *peer,
 		    unsigned char type,
-		    uint8 *data, size_t data_length,
+		    uint8 *data_array[], size_t data_len_array[],
+		    size_t data_array_len,
 		    uint8 *sendbuf, size_t *rlen) {
-  uint8 *p;
+  uint8 *p, *start;
   int res;
+  int i;
   
-  /* check the minimum that we need for packets that are not encrypted */
-  if (*rlen < DTLS_RH_LENGTH + data_length) {
-    debug("dtls_prepare_record: send buffer too small\n");
-    return -1;
-  }
-
   p = dtls_set_record_header(type, peer, sendbuf);
+  start = p;
 
   if (CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite */
-    memcpy(p, data, data_length);
-    res = data_length;
+
+    res = 0;
+    for (i = 0; i < data_array_len; i++) {
+      /* check the minimum that we need for packets that are not encrypted */
+      if (*rlen < (p - start) + data_len_array[i]) {
+        debug("dtls_prepare_record: send buffer too small\n");
+        return -1;
+      }
+
+      memcpy(p, data_array[i], data_len_array[i]);
+      p += data_len_array[i];
+      res += data_len_array[i];
+    }
   } else { /* TLS_PSK_WITH_AES_128_CCM_8 */   
     dtls_cipher_context_t *cipher_context;
 
@@ -1232,11 +1240,6 @@ dtls_prepare_record(dtls_peer_t *peer,
 #define A_DATA N
     unsigned char N[max(DTLS_CCM_BLOCKSIZE, A_DATA_LEN)];
     
-    if (*rlen < sizeof(dtls_record_header_t) + data_length + 8) {
-      warn("dtls_prepare_record(): send buffer too small\n");
-      return -1;
-    }
-
     debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
 
     /* set nonce       
@@ -1254,12 +1257,25 @@ dtls_prepare_record(dtls_peer_t *peer,
     */
 
     memcpy(p, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8);
-    memcpy(p + 8, data, data_length);
+    p += 8;
+    res = 8;
+
+    for (i = 0; i < data_array_len; i++) {
+      /* check the minimum that we need for packets that are not encrypted */
+      if (*rlen < res + data_len_array[i]) {
+        debug("dtls_prepare_record: send buffer too small\n");
+        return -1;
+      }
+
+      memcpy(p, data_array[i], data_len_array[i]);
+      p += data_len_array[i];
+      res += data_len_array[i];
+    }
 
     memset(N, 0, DTLS_CCM_BLOCKSIZE);
     memcpy(N, dtls_kb_local_iv(CURRENT_CONFIG(peer)), 
 	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer)), p, 8); /* epoch + seq_num */
+    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer)), start, 8); /* epoch + seq_num */
 
     cipher_context = CURRENT_CONFIG(peer)->write_cipher;
 
@@ -1284,16 +1300,16 @@ dtls_prepare_record(dtls_peer_t *peer,
      */
     memcpy(A_DATA, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8); /* epoch and seq_num */
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
-    dtls_int_to_uint16(A_DATA + 11, data_length); /* length */
+    dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
     
-    res = dtls_encrypt(cipher_context, p + 8, data_length, p + 8,
+    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8,
 		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
       return -1;
 
 #ifndef NDEBUG
-    dump(p, res + 8);
+    dump(start, res + 8);
     printf("\n");
 #endif
     res += 8;			/* increment res by size of nonce_explicit */
@@ -1312,12 +1328,27 @@ dtls_send_handshake_msg(dtls_peer_t *peer,
 			uint8 *data, size_t data_length,
 			uint8 *sendbuf, size_t *rlen)
 {
-  dtls_set_handshake_header(header_type, peer, data_length - DTLS_HS_LENGTH, 0,
-			    data_length - DTLS_HS_LENGTH, data);
+  uint8 buf[DTLS_HS_LENGTH];
+  uint8 *data_array[2];
+  size_t data_len_array[2];
+  int i = 0;
 
-  update_hs_hash(peer, data, data_length);
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data, data_length,
-			     sendbuf, rlen);
+  dtls_set_handshake_header(header_type, peer, data_length, 0,
+			    data_length, buf);
+
+  update_hs_hash(peer, buf, sizeof(buf));
+  data_array[i] = buf;
+  data_len_array[i] = sizeof(buf);
+  i++;
+
+  if (data != NULL) {
+    update_hs_hash(peer, data, data_length);
+    data_array[i] = data;
+    data_len_array[i] = data_length;
+    i++;
+  }
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data_array,
+			     data_len_array, i, sendbuf, rlen);
 }
 
 /** 
@@ -1371,7 +1402,7 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   size_t len = sizeof(sendbuf);
   int res;
 
-  res = dtls_prepare_record(peer, type, buf, buflen, sendbuf, &len);
+  res = dtls_prepare_record(peer, type, &buf, &buflen, 1, sendbuf, &len);
 
   if (res < 0)
     return res;
@@ -1563,7 +1594,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
    * encoding function, so we do not need to guess.) */
-  uint8 buf[DTLS_HS_LENGTH + DTLS_SH_LENGTH + 2 + 5 + 5 + 8];
+  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 8];
   uint8 *p;
   int ecdsa;
   uint8 extension_size;
@@ -1573,7 +1604,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
   extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
 
   /* Handshake header */
-  p = buf + DTLS_HS_LENGTH;
+  p = buf;
 
   /* ServerHello */
   dtls_int_to_uint16(p, DTLS_VERSION);
@@ -1659,13 +1690,13 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
 			    const dtls_ecdsa_key_t *key, uint8 *q,
 			    size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH + DTLS_CE_LENGTH];
+  uint8 buf[DTLS_CE_LENGTH];
   uint8 *p;
 
   /* Certificate 
    *
    * Start message construction at beginning of buffer. */
-  p = buf + DTLS_HS_LENGTH;
+  p = buf;
 
   dtls_int_to_uint24(p, 94);
   p += sizeof(uint24);
@@ -1745,7 +1776,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   /* The ASN.1 Integer representation of an 32 byte unsigned int could be
    * 33 bytes long add space for that */
-  uint8 buf[DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH + 2];
+  uint8 buf[DTLS_SKEXEC_LENGTH + 2];
   uint8 *p;
   uint8 *key_params;
   uint8 *ephemeral_pub_x;
@@ -1757,7 +1788,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   /* ServerKeyExchange 
    *
    * Start message construction at beginning of buffer. */
-  p = buf + DTLS_HS_LENGTH;
+  p = buf;
 
   key_params = p;
   /* ECCurveType curve_type: named_curve */
@@ -1807,13 +1838,13 @@ static int
 dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
 				     uint8 *q, size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH + 8];
+  uint8 buf[8];
   uint8 *p;
 
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
-  p = buf + DTLS_HS_LENGTH;
+  p = buf;
 
   /* certificate_types */
   dtls_int_to_uint8(p, 1);
@@ -1850,18 +1881,13 @@ static int
 dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 			    size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH];
-  uint8 *p;
 
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
-  p = buf + DTLS_HS_LENGTH;
-
-  assert(p - buf <= sizeof(buf));
 
   return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_HELLO_DONE,
-				 buf, p - buf,
+				 NULL, 0,
 				 q, qlen);
 }
 
@@ -1947,7 +1973,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 			      dtls_security_parameters_t *config, uint8 *q,
 			      size_t *qlen)
 {
-  uint8 buf[DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH];
+  uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
   size_t size;
 
@@ -1961,7 +1987,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     }
 
     size = psk->id_length + sizeof(uint16);
-    p = buf + DTLS_HS_LENGTH;
+    p = buf;
 
     dtls_int_to_uint16(p, psk->id_length);
     memcpy(p + sizeof(uint16), psk->id, psk->id_length);
@@ -1975,7 +2001,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 
     size = DTLS_CKXEC_LENGTH;
 
-    p = buf + DTLS_HS_LENGTH;
+    p = buf;
 
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
@@ -2014,7 +2040,7 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   /* The ASN.1 Integer representation of an 32 byte unsigned int could be
    * 33 bytes long add space for that */
-  uint8 buf[DTLS_HS_LENGTH + DTLS_CV_LENGTH + 2];
+  uint8 buf[DTLS_CV_LENGTH + 2];
   uint8 *p;
   uint32_t point_r[9];
   uint32_t point_s[9];
@@ -2024,7 +2050,7 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   /* ServerKeyExchange 
    *
    * Start message construction at beginning of buffer. */
-  p = buf + DTLS_HS_LENGTH;
+  p = buf;
 
   /* sha256 */
   dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
@@ -3508,7 +3534,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       debug("** retransmit packet\n");
       
       if (dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, 
-			      node->data, node->length, 
+			      (uint8 **)&(node->data), &(node->length), 1,
 			      sendbuf, &len) > 0) {
 	
 #ifndef NDEBUG
