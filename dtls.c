@@ -1099,7 +1099,7 @@ dtls_prepare_record(dtls_peer_t *peer,
   p = dtls_set_record_header(type, peer, sendbuf);
   start = p;
 
-  if (CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (!peer || CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite */
 
     res = 0;
@@ -1210,6 +1210,7 @@ dtls_prepare_record(dtls_peer_t *peer,
 static int
 dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 			     dtls_peer_t *peer,
+			     session_t *session,
 			     uint8 header_type,
 			     uint8 *data, size_t data_length,
 			     int add_hash)
@@ -1245,7 +1246,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     return i;
   }
 
-  return CALL(ctx, write, &peer->session, sendbuf, len);
+  return CALL(ctx, write, session, sendbuf, len);
 }
 
 static int
@@ -1254,8 +1255,8 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
 			uint8 header_type,
 			uint8 *data, size_t data_length)
 {
-  return dtls_send_handshake_msg_hash(ctx, peer, header_type, data,
-				      data_length, 1);
+  return dtls_send_handshake_msg_hash(ctx, peer, &peer->session,
+				      header_type, data, data_length, 1);
 }
 
 /** 
@@ -1405,12 +1406,14 @@ dtls_verify_peer(dtls_context_t *ctx,
 		 dtls_peer_t *peer, 
 		 session_t *session,
 		 uint8 *record, 
-		 uint8 *data, size_t data_length) {
-
+		 uint8 *data, size_t data_length)
+{
+  uint8 buf[DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH];
+  uint8 *p = buf;
   int len = DTLS_COOKIE_LENGTH;
-  uint8 *cookie, *p;
+  uint8 *cookie;
 #undef mycookie
-#define mycookie (ctx->sendbuf + HV_HDR_LENGTH)
+#define mycookie (buf + DTLS_HV_LENGTH)
 
   /* check if we can access at least all fields from the handshake header */
   if (record[0] == DTLS_CT_HANDSHAKE
@@ -1454,11 +1457,6 @@ dtls_verify_peer(dtls_context_t *ctx,
     /* ClientHello did not contain any valid cookie, hence we send a
      * HelloVerify request. */
 
-    p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST,
-				  peer, DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH,
-				  0, DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH, 
-				  ctx->sendbuf + DTLS_RH_LENGTH);
-
     dtls_int_to_uint16(p, DTLS_VERSION);
     p += sizeof(uint16);
 
@@ -1466,34 +1464,15 @@ dtls_verify_peer(dtls_context_t *ctx,
     p += sizeof(uint8);
 
     assert(p == mycookie);
-    
+
     p += DTLS_COOKIE_LENGTH;
 
-    if (!peer) {
-      /* It's an initial ClientHello, so we set the record header
-       * manually and send the HelloVerify request using the
-       * registered write callback. */
-
-      dtls_set_record_header(DTLS_CT_HANDSHAKE, NULL, ctx->sendbuf);
-      /* set packet length */
-      dtls_int_to_uint16(ctx->sendbuf + 11, 
-			 p - (ctx->sendbuf + DTLS_RH_LENGTH));
-
-      (void)CALL(ctx, write, session, ctx->sendbuf, p - ctx->sendbuf);
-    } else {
-      if (peer->epoch) {
-	debug("renegotiation, therefore we accept it anyway:");
-	return 1;
-      }
-
-      if (dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
-		    ctx->sendbuf + DTLS_RH_LENGTH, 
-		    p - (ctx->sendbuf + DTLS_RH_LENGTH)) < 0) {
-	warn("cannot send HelloVerify request\n");
-	return -1;
-      }
-  }
-
+    if (dtls_send_handshake_msg_hash(ctx, peer, session,
+				     DTLS_HT_HELLO_VERIFY_REQUEST,
+				     buf, p - buf, 0) < 0) {
+      warn("cannot send HelloVerify request\n");
+      return -1;
+    }
     return 0; /* HelloVerify is sent, now we cannot do anything but wait */
   }
 
@@ -2233,7 +2212,8 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg_hash(ctx, peer, DTLS_HT_CLIENT_HELLO,
+  return dtls_send_handshake_msg_hash(ctx, peer, &peer->session,
+				      DTLS_HT_CLIENT_HELLO,
 				      buf, p - buf, cookie_length != 0);
 }
 
