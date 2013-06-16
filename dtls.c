@@ -2061,18 +2061,22 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
    DTLS_BLK_LENGTH + 1) * DTLS_BLK_LENGTH)
 
 int
-dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
-
+dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
+		   const unsigned char *label, size_t labellen)
+{
   int length;
   uint8 hash[DTLS_HMAC_MAX];
   uint8 buf[DTLS_FIN_LENGTH];
+  dtls_hash_ctx hs_hash;
   uint8 *p = buf;
 
-  length = finalize_hs_hash(peer, hash);
+  copy_hs_hash(peer, &hs_hash);
+
+  length = dtls_hash_finalize(hash, &hs_hash);
 
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
-	   PRF_LABEL(server), PRF_LABEL_SIZE(server), 
+	   label, labellen,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished), 
 	   hash, length,
 	   p, DTLS_FIN_LENGTH);
@@ -2688,47 +2692,8 @@ check_server_hellodone(dtls_context_t *ctx,
 #endif
 
   /* Client Finished */
-  {
-    debug ("send Finished\n");
-    int length;
-    uint8 buf[DTLS_HMAC_MAX];
-    uint8 *p = ctx->sendbuf;
-
-    unsigned char statebuf[DTLS_HASH_CTX_SIZE];
-
-    /* FIXME: adjust message overhead calculation */
-    assert(msg_overhead(peer, DTLS_HS_LENGTH + DTLS_FIN_LENGTH) 
-	   < sizeof(ctx->sendbuf));
-
-    p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
-				  peer, DTLS_FIN_LENGTH, 
-				  0, DTLS_FIN_LENGTH, p);
-  
-    /* temporarily store hash status for roll-back after finalize */
-    memcpy(statebuf, &peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
-
-    length = finalize_hs_hash(peer, buf);
-
-    /* restore hash status */
-    memcpy(&peer->hs_state.hs_hash, statebuf, DTLS_HASH_CTX_SIZE);
-
-    dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
-	     DTLS_MASTER_SECRET_LENGTH,
-	     PRF_LABEL(client), PRF_LABEL_SIZE(client),
-	     PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
-	     buf, length,
-	     p, DTLS_FIN_LENGTH);
-  
-    p += DTLS_FIN_LENGTH;
-
-    update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
-    if (dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
-		  ctx->sendbuf, p - ctx->sendbuf) < 0) {
-      dsrv_log(LOG_ALERT, "cannot send Finished message\n");
-      return 0;
-    }
-  }
-  return 1;
+  debug ("send Finished\n");
+  return dtls_send_finished(ctx, peer, PRF_LABEL(client), PRF_LABEL_SIZE(client));
 }
 
 int
@@ -2953,7 +2918,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       /* send ServerFinished */
       update_hs_hash(peer, data, data_length);
 
-      if (dtls_send_server_finished(ctx, peer) > 0) {
+      if (dtls_send_finished(ctx, peer, PRF_LABEL(server),
+			     PRF_LABEL_SIZE(server)) > 0) {
 	peer->state = DTLS_STATE_CONNECTED;
       } else {
 	warn("sending server Finished failed\n");
