@@ -79,6 +79,7 @@
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
+#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + 32 + 20
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + 32 + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
@@ -1323,10 +1324,11 @@ dtls_prepare_record(dtls_peer_t *peer,
 }
 
 static int
-dtls_send_handshake_msg(dtls_context_t *ctx,
-			dtls_peer_t *peer,
-			uint8 header_type,
-			uint8 *data, size_t data_length)
+dtls_send_handshake_msg_hash(dtls_context_t *ctx,
+			     dtls_peer_t *peer,
+			     uint8 header_type,
+			     uint8 *data, size_t data_length,
+			     int add_hash)
 {
   uint8 buf[DTLS_HS_LENGTH];
   uint8 *data_array[2];
@@ -1335,16 +1337,20 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
   uint8 sendbuf[DTLS_MAX_BUF];
   size_t len = sizeof(sendbuf);
 
-  dtls_set_handshake_header(header_type, peer, data_length, 0,
+  dtls_set_handshake_header(header_type, (add_hash) ? peer : NULL, data_length, 0,
 			    data_length, buf);
 
-  update_hs_hash(peer, buf, sizeof(buf));
+  if (add_hash) {
+    update_hs_hash(peer, buf, sizeof(buf));
+  }
   data_array[i] = buf;
   data_len_array[i] = sizeof(buf);
   i++;
 
   if (data != NULL) {
-    update_hs_hash(peer, data, data_length);
+    if (add_hash) {
+      update_hs_hash(peer, data, data_length);
+    }
     data_array[i] = data;
     data_len_array[i] = data_length;
     i++;
@@ -1356,6 +1362,16 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
   }
 
   return CALL(ctx, write, &peer->session, sendbuf, len);
+}
+
+static int
+dtls_send_handshake_msg(dtls_context_t *ctx,
+			dtls_peer_t *peer,
+			uint8 header_type,
+			uint8 *data, size_t data_length)
+{
+  return dtls_send_handshake_msg_hash(ctx, peer, header_type, data,
+				      data_length, 1);
 }
 
 /** 
@@ -2098,8 +2114,8 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 static int
 dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
                        uint8 cookie[], size_t cookie_length) {
-  uint8 *p = ctx->sendbuf;
-  size_t size;
+  uint8 buf[DTLS_CH_LENGTH_MAX];
+  uint8 *p = buf;
   uint8_t cipher_size;
   uint8_t extension_size;
   int psk;
@@ -2114,21 +2130,6 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   if (cipher_size == 0) {
     dsrv_log(LOG_CRIT, "no cipher callbacks implemented\n");
   }
-
-  /* add to size:
-   *   1. length of session id (including length field)
-   *   2. length of cookie (including length field)
-   *   3. cypher suites
-   *   4. compression methods
-   *   5. extensions
-   */
-  size = DTLS_CH_LENGTH + 4 + cipher_size + extension_size + cookie_length;
-
-  /* force sending 0 as handshake message sequence number by setting
-   * peer to NULL */
-  p = dtls_set_handshake_header(DTLS_HT_CLIENT_HELLO,
-				(cookie_length == 0) ? NULL : peer,
-				size, 0, size, p);
 
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
@@ -2230,12 +2231,10 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     p += sizeof(uint16);
   }
 
-  if (cookie_length != 0) {
-    update_hs_hash(peer, ctx->sendbuf, p - ctx->sendbuf);
-  }
+  assert(p - buf <= sizeof(buf));
 
-  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, ctx->sendbuf,
-                   p - ctx->sendbuf);
+  return dtls_send_handshake_msg_hash(ctx, peer, DTLS_HT_CLIENT_HELLO,
+				      buf, p - buf, cookie_length != 0);
 }
 
 static int
