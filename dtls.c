@@ -2064,23 +2064,17 @@ int
 dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   int length;
-  uint8 buf[DTLS_HMAC_MAX];
-  uint8 *p = ctx->sendbuf;
+  uint8 hash[DTLS_HMAC_MAX];
+  uint8 buf[DTLS_FIN_LENGTH];
+  uint8 *p = buf;
 
-  /* FIXME: adjust message overhead calculation */
-  assert(msg_overhead(peer, DTLS_HS_LENGTH + DTLS_FIN_LENGTH) 
-	 < sizeof(ctx->sendbuf));
-
-  p = dtls_set_handshake_header(DTLS_HT_FINISHED, 
-                                peer, DTLS_FIN_LENGTH, 0, DTLS_FIN_LENGTH, p);
-  
-  length = finalize_hs_hash(peer, buf);
+  length = finalize_hs_hash(peer, hash);
 
   dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH,
 	   PRF_LABEL(server), PRF_LABEL_SIZE(server), 
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished), 
-	   buf, length,
+	   hash, length,
 	   p, DTLS_FIN_LENGTH);
 
 #ifndef NDEBUG
@@ -2091,8 +2085,10 @@ dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   p += DTLS_FIN_LENGTH;
 
-  return dtls_send(ctx, peer, DTLS_CT_HANDSHAKE, 
-		   ctx->sendbuf, p - ctx->sendbuf);
+  assert(p - buf <= sizeof(buf));
+
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_FINISHED,
+				 buf, p - buf);
 }
 
 static int
