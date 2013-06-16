@@ -1323,15 +1323,17 @@ dtls_prepare_record(dtls_peer_t *peer,
 }
 
 static int
-dtls_send_handshake_msg(dtls_peer_t *peer,
+dtls_send_handshake_msg(dtls_context_t *ctx,
+			dtls_peer_t *peer,
 			uint8 header_type,
-			uint8 *data, size_t data_length,
-			uint8 *sendbuf, size_t *rlen)
+			uint8 *data, size_t data_length)
 {
   uint8 buf[DTLS_HS_LENGTH];
   uint8 *data_array[2];
   size_t data_len_array[2];
   int i = 0;
+  uint8 sendbuf[DTLS_MAX_BUF];
+  size_t len = sizeof(sendbuf);
 
   dtls_set_handshake_header(header_type, peer, data_length, 0,
 			    data_length, buf);
@@ -1347,8 +1349,13 @@ dtls_send_handshake_msg(dtls_peer_t *peer,
     data_len_array[i] = data_length;
     i++;
   }
-  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data_array,
-			     data_len_array, i, sendbuf, rlen);
+  i = dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data_array, data_len_array,
+			  i, sendbuf, &len);
+  if (i < 0) {
+    return i;
+  }
+
+  return CALL(ctx, write, &peer->session, sendbuf, len);
 }
 
 /** 
@@ -1588,8 +1595,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
 }
 
 static int
-dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
-		       size_t *qlen)
+dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
@@ -1680,15 +1686,13 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_HELLO,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_HELLO,
+				 buf, p - buf);
 }
 
 static int
 dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
-			    const dtls_ecdsa_key_t *key, uint8 *q,
-			    size_t *qlen)
+			    const dtls_ecdsa_key_t *key)
 {
   uint8 buf[DTLS_CE_LENGTH];
   uint8 *p;
@@ -1715,9 +1719,8 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE,
+				 buf, p - buf);
 }
 
 static uint8 *
@@ -1771,8 +1774,7 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
 
 static int
 dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
-				   const dtls_ecdsa_key_t *key, uint8 *q,
-				   size_t *qlen)
+				   const dtls_ecdsa_key_t *key)
 {
   /* The ASN.1 Integer representation of an 32 byte unsigned int could be
    * 33 bytes long add space for that */
@@ -1829,14 +1831,12 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_KEY_EXCHANGE,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_KEY_EXCHANGE,
+				 buf, p - buf);
 }
 
 static int
-dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
-				     uint8 *q, size_t *qlen)
+dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   uint8 buf[8];
   uint8 *p;
@@ -1872,41 +1872,33 @@ dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE_REQUEST,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE_REQUEST,
+				 buf, p - buf);
 }
 
 static int
-dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
-			    size_t *qlen)
+dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer)
 {
 
   /* ServerHelloDone 
    *
    * Start message construction at beginning of buffer. */
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_HELLO_DONE,
-				 NULL, 0,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_HELLO_DONE,
+				 NULL, 0);
 }
 
 int
 dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 {
-  uint8 *q = ctx->sendbuf;
-  size_t qlen = sizeof(ctx->sendbuf);
   int res;
 
-  res = dtls_send_server_hello(ctx, peer, q, &qlen);
+  res = dtls_send_server_hello(ctx, peer);
 
   if (res < 0) {
     debug("dtls_server_hello: cannot prepare ServerHello record\n");
     return res;
   }
-
-  q += qlen;
-  qlen = sizeof(ctx->sendbuf) - qlen;
 
   if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
     const dtls_ecdsa_key_t *ecdsa_key;
@@ -1916,49 +1908,38 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       return -1;
     }
 
-    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key, q, &qlen);
+    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Certificate record\n");
       return res;
     }
 
-    q += qlen;
-    qlen = sizeof(ctx->sendbuf) - qlen;
-
-    res = dtls_send_server_key_exchange_ecdh(ctx, peer, ecdsa_key, q, &qlen);
+    res = dtls_send_server_key_exchange_ecdh(ctx, peer, ecdsa_key);
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Server Key Exchange record\n");
       return res;
     }
 
-    q += qlen;
-    qlen = sizeof(ctx->sendbuf) - qlen;
-
     if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key) {
-      res = dtls_send_server_certificate_request(ctx, peer, q, &qlen);
+      res = dtls_send_server_certificate_request(ctx, peer);
 
       if (res < 0) {
         debug("dtls_server_hello: cannot prepare certificate Request record\n");
         return res;
       }
-
-      q += qlen;
-      qlen = sizeof(ctx->sendbuf) - qlen;
     }
   }
 
-  res = dtls_send_server_hello_done(ctx, peer, q, &qlen);
+  res = dtls_send_server_hello_done(ctx, peer);
 
   if (res < 0) {
     debug("dtls_server_hello: cannot prepare ServerHelloDone record\n");
     return res;
   }
-
-  return CALL(ctx, write, &peer->session,
-		  ctx->sendbuf, (q + qlen) - ctx->sendbuf);
+  return 0;
 }
 
 static inline int 
@@ -1970,8 +1951,7 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
     
 int
 dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
-			      dtls_security_parameters_t *config, uint8 *q,
-			      size_t *qlen)
+			      dtls_security_parameters_t *config)
 {
   uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
@@ -2028,15 +2008,13 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_CLIENT_KEY_EXCHANGE,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CLIENT_KEY_EXCHANGE,
+				 buf, p - buf);
 }
 
 static int
 dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
-				   const dtls_ecdsa_key_t *key, uint8 *q,
-				   size_t *qlen)
+				   const dtls_ecdsa_key_t *key)
 {
   /* The ASN.1 Integer representation of an 32 byte unsigned int could be
    * 33 bytes long add space for that */
@@ -2073,9 +2051,8 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE_VERIFY,
-				 buf, p - buf,
-				 q, qlen);
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE_VERIFY,
+				 buf, p - buf);
 }
 
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
@@ -2616,8 +2593,6 @@ check_server_hellodone(dtls_context_t *ctx,
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length)
 {
-  uint8 *q = ctx->sendbuf;
-  size_t qlen = sizeof(ctx->sendbuf);
   int res;
   const dtls_ecdsa_key_t *ecdsa_key;
 
@@ -2634,19 +2609,16 @@ check_server_hellodone(dtls_context_t *ctx,
       return -1;
     }
 
-    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key, q, &qlen);
+    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Certificate record\n");
       return 0;
     }
-
-    q += qlen;
-    qlen = sizeof(ctx->sendbuf) - qlen;
   }
 
   /* send ClientKeyExchange */
-  res = dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer), q, &qlen);
+  res = dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer));
 
   if (res < 0) {
     debug("cannot send KeyExchange message\n");
@@ -2655,23 +2627,12 @@ check_server_hellodone(dtls_context_t *ctx,
 
   if (OTHER_CONFIG(peer)->do_client_auth) {
 
-    q += qlen;
-    qlen = sizeof(ctx->sendbuf) - qlen;
-
-    res = dtls_send_certificate_verify_ecdh(ctx, peer, ecdsa_key, q, &qlen);
+    res = dtls_send_certificate_verify_ecdh(ctx, peer, ecdsa_key);
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Certificate record\n");
       return 0;
     }
-  }
-
-  res = CALL(ctx, write, &peer->session,
-	     ctx->sendbuf, (q + qlen) - ctx->sendbuf);
-
-  if (res < 0) {
-    debug("cannot send messages\n");
-    return 0;
   }
 
   if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
@@ -3315,7 +3276,7 @@ dtls_handle_message(dtls_context_t *ctx,
     /* update finish MAC */
     update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
  
-    if (dtls_send_server_hello_msgs(ctx, peer) > 0) {
+    if (!dtls_send_server_hello_msgs(ctx, peer)) {
       if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
 	  ctx && ctx->h && ctx->h->verify_ecdsa_key)
         peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
