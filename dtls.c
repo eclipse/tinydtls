@@ -320,12 +320,16 @@ dtls_create_cookie(dtls_context_t *ctx,
      session id */
   e = sizeof(dtls_client_hello_t);
   e += (*(msg + DTLS_HS_LENGTH + e) & 0xff) + sizeof(uint8);
+  if (e + DTLS_HS_LENGTH > msglen)
+    return -1;
 
   dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
   
   /* skip cookie bytes and length byte */
   e += *(uint8 *)(msg + DTLS_HS_LENGTH + e) & 0xff;
   e += sizeof(uint8);
+  if (e + DTLS_HS_LENGTH > msglen)
+    return -1;
 
   dtls_hmac_update(&hmac_context, 
 		   msg + DTLS_HS_LENGTH + e,
