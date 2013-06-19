@@ -3119,32 +3119,20 @@ dtls_handle_message(dtls_context_t *ctx,
   size_t data_length;		/* length of decrypted payload 
 				   (without MAC and padding) */
 
-  /* check if we have DTLS state for addr/port/ifindex */
-#ifndef WITH_CONTIKI
-  HASH_FIND_PEER(ctx->peers, session, peer);
-  {
-    dtls_peer_t *p = NULL;
-    HASH_FIND_PEER(ctx->peers, session, p);
+  peer = dtls_get_peer(ctx, session);
 #ifndef NDEBUG
-    if (!p) {
-      printf("dtls_handle_message: PEER NOT FOUND\n");
-      {
-	unsigned char addrbuf[72];
-	dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-	printf("  %s\n", addrbuf);
-	dump((unsigned char *)session, sizeof(session_t));
-	printf("\n");
-      }
-    } else 
-      printf("dtls_handle_message: FOUND PEER\n");
-#endif /* NDEBUG */
+  if (!peer) {
+    unsigned char addrbuf[72];
+
+    printf("dtls_handle_message: PEER NOT FOUND\n");
+    dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
+    printf("  %s\n", addrbuf);
+    dump((unsigned char *)session, sizeof(session_t));
+    printf("\n");
+  } else {
+    printf("dtls_handle_message: FOUND PEER\n");
   }
-#else /* WITH_CONTIKI */
-  for (peer = list_head(ctx->peers); 
-       peer && !dtls_session_equals(&peer->session, session);
-       peer = list_item_next(peer))
-    ;
-#endif /* WITH_CONTIKI */
+#endif /* NDEBUG */
 
   if (!peer) {			
 
@@ -3382,14 +3370,7 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   dtls_peer_t *peer;
   int res;
 
-  /* check if we have DTLS state for addr/port/ifindex */
-#ifndef WITH_CONTIKI
-  HASH_FIND_PEER(ctx->peers, dst, peer);
-#else /* WITH_CONTIKI */
-  for (peer = list_head(ctx->peers); peer; peer = list_item_next(peer))
-    if (dtls_session_equals(&peer->session, dst))
-      break;
-#endif /* WITH_CONTIKI */
+  peer = dtls_get_peer(ctx, dst);
   
   if (peer) {
     debug("found peer, try to re-connect\n");
