@@ -1307,16 +1307,17 @@ dtls_prepare_record(dtls_peer_t *peer,
 }
 
 static int
-dtls_prepare_record_header(dtls_peer_t *peer,
-			   unsigned char type,
-			   uint8 header_type,
-			   uint8 *data, size_t data_length,
-			   uint8 *sendbuf, size_t *rlen) {
+dtls_send_handshake_msg(dtls_peer_t *peer,
+			uint8 header_type,
+			uint8 *data, size_t data_length,
+			uint8 *sendbuf, size_t *rlen)
+{
   dtls_set_handshake_header(header_type, peer, data_length - DTLS_HS_LENGTH, 0,
 			    data_length - DTLS_HS_LENGTH, data);
 
   update_hs_hash(peer, data, data_length);
-  return dtls_prepare_record(peer, type, data, data_length, sendbuf, rlen);
+  return dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data, data_length,
+			     sendbuf, rlen);
 }
 
 /** 
@@ -1648,10 +1649,9 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_SERVER_HELLO,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_HELLO,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 static int
@@ -1684,10 +1684,9 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_CERTIFICATE,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 static uint8 *
@@ -1799,10 +1798,9 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_SERVER_KEY_EXCHANGE,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_KEY_EXCHANGE,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 static int
@@ -1843,10 +1841,9 @@ dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_CERTIFICATE_REQUEST,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE_REQUEST,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 static int
@@ -1863,10 +1860,9 @@ dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *q,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_SERVER_HELLO_DONE,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_SERVER_HELLO_DONE,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 int
@@ -2006,10 +2002,9 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_CLIENT_KEY_EXCHANGE,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_CLIENT_KEY_EXCHANGE,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 static int
@@ -2052,10 +2047,9 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
-  return dtls_prepare_record_header(peer, DTLS_CT_HANDSHAKE,
-				    DTLS_HT_CERTIFICATE_VERIFY,
-				    buf, p - buf,
-				    q, qlen);
+  return dtls_send_handshake_msg(peer, DTLS_HT_CERTIFICATE_VERIFY,
+				 buf, p - buf,
+				 q, qlen);
 }
 
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
