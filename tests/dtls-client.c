@@ -126,8 +126,6 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
-extern void dump(unsigned char *buf, size_t len);
-
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;

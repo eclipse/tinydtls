@@ -10,32 +10,6 @@
 #include "md5/md5.h"
 #include "sha1/sha.h"
 
-/** dumps packets in usual hexdump format */
-void hexdump(const unsigned char *packet, int length) {
-  int n = 0;
-
-  while (length--) { 
-    if (n % 16 == 0)
-      printf("%08X ",n);
-
-    printf("%02X ", *packet++);
-    
-    n++;
-    if (n % 8 == 0) {
-      if (n % 16 == 0)
-	printf("\n");
-      else
-	printf(" ");
-    }
-  }
-}
-
-/** dump as narrow string of hex digits */
-void dump(unsigned char *buf, size_t len) {
-  while (len--) 
-    printf("%02x", *buf++);
-}
-
 #define TRANSPORT_HEADER_SIZE (14+20+8) /* Ethernet + IP + UDP */
 
 /* the pre_master_secret is generated from the PSK at startup */

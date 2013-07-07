@@ -74,10 +74,6 @@ void crypto_init() {
 #endif /* WITH_CONTIKI */
 }
 
-#ifndef NDEBUG
-extern void dump(unsigned char *, size_t);
-#endif
-
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 

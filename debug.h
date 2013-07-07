@@ -27,6 +27,7 @@
 #define _DEBUG_H_
 
 #include "config.h"
+#include <stdlib.h>
 
 /** Pre-defined log levels akin to what is used in \b syslog. */
 typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
@@ -46,6 +47,12 @@ void set_log_level(log_t level);
  * set_log_level(). */
 void dsrv_log(log_t level, char *format, ...);
 
+/** dumps packets in usual hexdump format */
+void hexdump(const unsigned char *packet, int length);
+
+/** dump as narrow string of hex digits */
+void dump(unsigned char *buf, size_t len);
+
 #else /* NDEBUG */
 
 static inline log_t get_log_level()
@@ -57,6 +64,12 @@ static inline void set_log_level(log_t level)
 {}
 
 static inline void dsrv_log(log_t level, char *format, ...)
+{}
+
+static inline void hexdump(const unsigned char *packet, int length)
+{}
+
+static inline void dump(unsigned char *buf, size_t len)
 {}
 
 #endif /* NDEBUG */

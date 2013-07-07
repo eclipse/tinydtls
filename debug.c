@@ -252,3 +252,31 @@ dsrv_log(log_t level, char *format, ...) {
   va_end(ap);
 }
 #endif /* WITH_CONTIKI */
+
+#ifndef NDEBUG
+/** dumps packets in usual hexdump format */
+void hexdump(const unsigned char *packet, int length) {
+  int n = 0;
+
+  while (length--) { 
+    if (n % 16 == 0)
+      printf("%08X ",n);
+
+    printf("%02X ", *packet++);
+    
+    n++;
+    if (n % 8 == 0) {
+      if (n % 16 == 0)
+	printf("\n");
+      else
+	printf(" ");
+    }
+  }
+}
+
+/** dump as narrow string of hex digits */
+void dump(unsigned char *buf, size_t len) {
+  while (len--) 
+    printf("%02x", *buf++);
+}
+#endif /* NDEBUG */
