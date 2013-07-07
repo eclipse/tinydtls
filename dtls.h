@@ -272,7 +272,6 @@ typedef struct dtls_context_t {
   dtls_handler_t *h;		/**< callback handlers */
 
   unsigned char readbuf[DTLS_MAX_BUF];
-  unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
 
 /** 
