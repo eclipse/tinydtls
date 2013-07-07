@@ -23,8 +23,6 @@
 #define DEFAULT_PORT 20220
 #define PRINTF(...) printf(__VA_ARGS__)
 
-extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
-
 static char buf[200];
 static size_t len = 0;
 

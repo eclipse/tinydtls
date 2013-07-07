@@ -934,10 +934,6 @@ check_ccs(dtls_context_t *ctx,
   return 1;
 }
 
-#ifndef NDEBUG
-extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
-#endif
-
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
 	      const session_t *session) {

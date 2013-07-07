@@ -29,6 +29,8 @@
 #include "config.h"
 #include <stdlib.h>
 
+struct __session_t;
+
 /** Pre-defined log levels akin to what is used in \b syslog. */
 typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
        LOG_NOTICE, LOG_INFO, LOG_DEBUG
@@ -53,6 +55,8 @@ void hexdump(const unsigned char *packet, int length);
 /** dump as narrow string of hex digits */
 void dump(unsigned char *buf, size_t len);
 
+size_t dsrv_print_addr(const struct __session_t *addr, unsigned char *buf, size_t len);
+
 #else /* NDEBUG */
 
 static inline log_t get_log_level()
@@ -71,6 +75,11 @@ static inline void hexdump(const unsigned char *packet, int length)
 
 static inline void dump(unsigned char *buf, size_t len)
 {}
+
+static inline size_t dsrv_print_addr(const struct __session_t *addr, unsigned char *buf, size_t len)
+{
+  return 0;
+}
 
 #endif /* NDEBUG */
 
