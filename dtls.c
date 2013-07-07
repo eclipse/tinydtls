@@ -1939,8 +1939,10 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 
 static inline int 
 dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
-  ctx->sendbuf[0] = 1;
-  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, ctx->sendbuf, 1);
+  uint8 buf[1];
+  buf[0] = 1;
+
+  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, buf, 1);
 }
 
     
