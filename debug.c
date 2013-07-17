@@ -221,12 +221,12 @@ dsrv_log(log_t level, char *format, ...) {
     fprintf(log_fd, "%s ", timebuf);
 
   if (level >= 0 && level <= LOG_DEBUG) 
-    printf("%s ", loglevels[level]);
+    fprintf(log_fd, "%s ", loglevels[level]);
 
   va_start(ap, format);
-  vprintf(format, ap);
+  vfprintf(log_fd, format, ap);
   va_end(ap);
-  fflush(stdout);
+  fflush(log_fd);
 }
 #else /* WITH_CONTIKI */
 void 
