@@ -480,6 +480,34 @@ known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
 	 (ecdsa && code == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
 }
 
+static void dtls_debug_keyblock(dtls_security_parameters_t *config)
+{
+  dsrv_log(LOG_DEBUG, "key_block (%d bytes):\n", dtls_kb_size(config));
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_MAC_secret",
+			dtls_kb_client_mac_secret(config),
+			dtls_kb_mac_secret_size(config), 0);
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_MAC_secret",
+			dtls_kb_server_mac_secret(config),
+			dtls_kb_mac_secret_size(config), 0);
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_write_key",
+			dtls_kb_client_write_key(config), 
+			dtls_kb_key_size(config), 0);
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_write_key",
+			dtls_kb_server_write_key(config), 
+			dtls_kb_key_size(config), 0);
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_IV",
+			dtls_kb_client_iv(config), 
+			dtls_kb_iv_size(config), 0);
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_IV",
+			dtls_kb_server_iv(config), 
+			dtls_kb_iv_size(config), 0);
+}
+
 int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_security_parameters_t *config,
@@ -569,42 +597,7 @@ calculate_key_block(dtls_context_t *ctx,
 	   config->key_block,
 	   dtls_kb_size(config));
 
-#ifndef NDEBUG
-  {
-      printf("key_block (%d bytes):\n", dtls_kb_size(config));
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(config), 
-	   dtls_kb_mac_secret_size(config));
-      printf("\n");
-
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(config), 
-	   dtls_kb_mac_secret_size(config));
-      printf("\n");
-
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(config), 
-	   dtls_kb_key_size(config));
-      printf("\n");
-
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(config), 
-	   dtls_kb_key_size(config));
-      printf("\n");
-
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(config), 
-	   dtls_kb_iv_size(config));
-      printf("\n");
-      
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(config), 
-	   dtls_kb_iv_size(config));
-      printf("\n");
-      
-
-  }
-#endif
+  dtls_debug_keyblock(config);
   return 1;
 }
 
@@ -2622,42 +2615,8 @@ check_server_hellodone(dtls_context_t *ctx,
   SWITCH_CONFIG(peer);
   inc_uint(uint16, peer->epoch);
   memset(peer->rseq, 0, sizeof(peer->rseq));
-#ifndef NDEBUG
-  {
-      printf("key_block:\n");
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
 
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-      
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-      
-
-  }
-#endif
+  dtls_debug_keyblock(CURRENT_CONFIG(peer));
 
   /* Client Finished */
   debug ("send Finished\n");
@@ -2986,42 +2945,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
-#ifndef NDEBUG
-  {
-      printf("key_block:\n");
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-      
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
-      
-
-  }
-#endif
+  dtls_debug_keyblock(CURRENT_CONFIG(peer));
 
   return 1;
 }  
