@@ -502,11 +502,7 @@ calculate_key_block(dtls_context_t *ctx,
     pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
 						pre_master_secret);
 
-#ifndef NDEBUG
-    printf("psk: (%zu bytes):", psk->key_length);
-    hexdump(psk->key, psk->key_length);
-    printf("\n");
-#endif /* NDEBUG */
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "psk", psk->key, psk->key_length);
 
     break;
   }
@@ -1312,14 +1308,10 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* if (peer && MUST_HASH(peer, type, buf, buflen)) */
   /*   update_hs_hash(peer, buf, buflen); */
-  
-#ifndef NDEBUG
-  debug("send %d bytes\n", buflen);
-  hexdump(sendbuf, sizeof(dtls_record_header_t));
-  printf("\n");
-  hexdump(buf, buflen);
-  printf("\n");
-#endif
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "send header", sendbuf,
+			sizeof(dtls_record_header_t));
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "send unencrypted", buf, buflen);
 
   if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
@@ -3245,12 +3237,9 @@ dtls_handle_message(dtls_context_t *ctx,
       goto next;
     }
 
-#ifndef NDEBUG
-    hexdump(msg, sizeof(dtls_record_header_t));
-    printf("\n");
-    hexdump(data, data_length);
-    printf("\n");
-#endif
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive header", msg,
+			  sizeof(dtls_record_header_t));
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive unencrypted", data, data_length);
 
     /* Handle received record according to the first byte of the
      * message, i.e. the subprotocol. We currently do not support
@@ -3416,15 +3405,12 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       if (dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, 
 			      (uint8 **)&(node->data), &(node->length), 1,
 			      sendbuf, &len) > 0) {
-	
-#ifndef NDEBUG
-	debug("retransmit %d bytes\n", len);
-	hexdump(sendbuf, sizeof(dtls_record_header_t));
-	printf("\n");
-	hexdump(node->data, node->length);
-	printf("\n");
-#endif
-	
+
+	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit header", sendbuf,
+			      sizeof(dtls_record_header_t));
+	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit unencrypted", node->data,
+			      node->length);
+
 	(void)CALL(context, write, &node->peer->session, sendbuf, len);
       }
       return;

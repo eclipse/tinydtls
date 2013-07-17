@@ -279,4 +279,78 @@ void dump(unsigned char *buf, size_t len) {
   while (len--) 
     printf("%02x", *buf++);
 }
+
+#ifndef WITH_CONTIKI
+void 
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length) {
+  static char timebuf[32];
+  FILE *log_fd;
+  int n = 0;
+
+  if (maxlog < level)
+    return;
+
+  log_fd = level <= LOG_CRIT ? stderr : stdout;
+
+  if (print_timestamp(timebuf, sizeof(timebuf), time(NULL)))
+    fprintf(log_fd, "%s ", timebuf);
+
+  if (level >= 0 && level <= LOG_DEBUG) 
+    fprintf(log_fd, "%s ", loglevels[level]);
+
+  fprintf(log_fd, "%s: (%zu bytes): \n", name, length);
+
+  while (length--) {
+    if (n % 16 == 0)
+      fprintf(log_fd, "%08X ", n);
+
+    fprintf(log_fd, "%02X ", *buf++);
+
+    n++;
+    if (n % 8 == 0) {
+      if (n % 16 == 0)
+	fprintf(log_fd, "\n");
+      else
+	fprintf(log_fd, " ");
+    }
+  }
+  fprintf(log_fd, "\n");
+
+  fflush(log_fd);
+}
+#else /* WITH_CONTIKI */
+void 
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length) {
+  static char timebuf[32];
+  va_list ap;
+
+  if (maxlog < level)
+    return;
+
+  if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
+    PRINTF("%s ", timebuf);
+
+  if (level >= 0 && level <= LOG_DEBUG) 
+    PRINTF("%s ", loglevels[level]);
+
+  PRINTF("%s: (%zu bytes): \n", name, length);
+
+  while (length--) {
+    if (n % 16 == 0)
+      PRINTF("%08X ", n);
+
+    PRINTF("%02X ", *buf++);
+
+    n++;
+    if (n % 8 == 0) {
+      if (n % 16 == 0)
+	PRINTF("\n");
+      else
+	PRINTF(" ");
+    }
+  }
+  PRINTF("\n");
+}
+#endif /* WITH_CONTIKI */
+
 #endif /* NDEBUG */
