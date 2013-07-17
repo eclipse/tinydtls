@@ -502,7 +502,7 @@ calculate_key_block(dtls_context_t *ctx,
     pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
 						pre_master_secret);
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "psk", psk->key, psk->key_length);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "psk", psk->key, psk->key_length, 1);
 
     break;
   }
@@ -1310,8 +1310,8 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   /*   update_hs_hash(peer, buf, buflen); */
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "send header", sendbuf,
-			sizeof(dtls_record_header_t));
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "send unencrypted", buf, buflen);
+			sizeof(dtls_record_header_t), 1);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "send unencrypted", buf, buflen, 1);
 
   if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
@@ -3238,8 +3238,8 @@ dtls_handle_message(dtls_context_t *ctx,
     }
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "receive header", msg,
-			  sizeof(dtls_record_header_t));
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive unencrypted", data, data_length);
+			  sizeof(dtls_record_header_t), 1);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive unencrypted", data, data_length, 1);
 
     /* Handle received record according to the first byte of the
      * message, i.e. the subprotocol. We currently do not support
@@ -3407,9 +3407,9 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 			      sendbuf, &len) > 0) {
 
 	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit header", sendbuf,
-			      sizeof(dtls_record_header_t));
+			      sizeof(dtls_record_header_t), 1);
 	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit unencrypted", node->data,
-			      node->length);
+			      node->length, 1);
 
 	(void)CALL(context, write, &node->peer->session, sendbuf, len);
       }

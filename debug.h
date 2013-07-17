@@ -57,7 +57,7 @@ void dump(unsigned char *buf, size_t len);
 
 size_t dsrv_print_addr(const struct __session_t *addr, unsigned char *buf, size_t len);
 
-void dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length);
+void dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend);
 
 #else /* NDEBUG */
 
@@ -84,7 +84,7 @@ static inline size_t dsrv_print_addr(const struct __session_t *addr, unsigned ch
 }
 
 static inline void
-dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length)
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend)
 {}
 
 #endif /* NDEBUG */

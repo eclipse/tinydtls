@@ -282,7 +282,7 @@ void dump(unsigned char *buf, size_t len) {
 
 #ifndef WITH_CONTIKI
 void 
-dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length) {
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
   static char timebuf[32];
   FILE *log_fd;
   int n = 0;
@@ -298,21 +298,27 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (level >= 0 && level <= LOG_DEBUG) 
     fprintf(log_fd, "%s ", loglevels[level]);
 
-  fprintf(log_fd, "%s: (%zu bytes): \n", name, length);
+  if (extend) {
+    fprintf(log_fd, "%s: (%zu bytes):\n", name, length);
 
-  while (length--) {
-    if (n % 16 == 0)
-      fprintf(log_fd, "%08X ", n);
-
-    fprintf(log_fd, "%02X ", *buf++);
-
-    n++;
-    if (n % 8 == 0) {
+    while (length--) {
       if (n % 16 == 0)
-	fprintf(log_fd, "\n");
-      else
-	fprintf(log_fd, " ");
+	fprintf(log_fd, "%08X ", n);
+
+      fprintf(log_fd, "%02X ", *buf++);
+
+      n++;
+      if (n % 8 == 0) {
+	if (n % 16 == 0)
+	  fprintf(log_fd, "\n");
+	else
+	  fprintf(log_fd, " ");
+      }
     }
+  } else {
+    fprintf(log_fd, "%s: (%zu bytes): ", name, length);
+    while (length--) 
+      fprintf(log_fd, "%02X", *buf++);
   }
   fprintf(log_fd, "\n");
 
@@ -320,7 +326,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 }
 #else /* WITH_CONTIKI */
 void 
-dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length) {
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
   static char timebuf[32];
   va_list ap;
 
@@ -333,21 +339,27 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (level >= 0 && level <= LOG_DEBUG) 
     PRINTF("%s ", loglevels[level]);
 
-  PRINTF("%s: (%zu bytes): \n", name, length);
+  if (extend) {
+    PRINTF("%s: (%zu bytes):\n", name, length);
 
-  while (length--) {
-    if (n % 16 == 0)
-      PRINTF("%08X ", n);
-
-    PRINTF("%02X ", *buf++);
-
-    n++;
-    if (n % 8 == 0) {
+    while (length--) {
       if (n % 16 == 0)
-	PRINTF("\n");
-      else
-	PRINTF(" ");
+	PRINTF("%08X ", n);
+
+      PRINTF("%02X ", *buf++);
+
+      n++;
+      if (n % 8 == 0) {
+	if (n % 16 == 0)
+	  PRINTF("\n");
+	else
+	  PRINTF(" ");
+      }
     }
+  } else {
+    PRINTF("%s: (%zu bytes): ", name, length);
+    while (length--) 
+      PRINTF("%02X", *buf++);
   }
   PRINTF("\n");
 }
