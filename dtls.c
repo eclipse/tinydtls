@@ -958,11 +958,7 @@ dtls_new_peer(dtls_context_t *ctx,
 
 static inline void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
-#ifndef NDEBUG
-  printf("add MAC data: ");
-  dump(data, length);
-  printf("\n");
-#endif
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "add MAC data", data, length, 0);
   dtls_hash_update(&peer->hs_state.hs_hash, data, length);
 }
 
@@ -1039,11 +1035,9 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
 	   buf, digest_length,
 	   b.verify_data, sizeof(b.verify_data));
-  
-#ifndef NDEBUG
-  printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(b.verify_data)); printf("\n");
-  printf("v:\t"); dump(b.verify_data, sizeof(b.verify_data)); printf("\n");
-#endif
+
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "d:", data + DTLS_HS_LENGTH, sizeof(b.verify_data), 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "v:", b.verify_data, sizeof(b.verify_data), 0);
   return 
     memcmp(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data)) == 0;
 }
@@ -1152,14 +1146,12 @@ dtls_prepare_record(dtls_peer_t *peer,
       warn("no write_cipher available!\n");
       return -1;
     }
-#ifndef NDEBUG
-    printf("nonce:\t");
-    dump(N, DTLS_CCM_BLOCKSIZE);
-    printf("\nkey:\t");
-    dump(dtls_kb_local_write_key(CURRENT_CONFIG(peer)), 
-	 dtls_kb_key_size(CURRENT_CONFIG(peer)));
-    printf("\n");
-#endif
+
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", N, DTLS_CCM_BLOCKSIZE, 0);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
+			  dtls_kb_local_write_key(CURRENT_CONFIG(peer)),
+			  dtls_kb_key_size(CURRENT_CONFIG(peer)), 0);
+
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
     
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
@@ -1177,11 +1169,8 @@ dtls_prepare_record(dtls_peer_t *peer,
     if (res < 0)
       return -1;
 
-#ifndef NDEBUG
-    dump(start, res + 8);
-    printf("\n");
-#endif
     res += 8;			/* increment res by size of nonce_explicit */
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "message:", start, res, 0);
   }
 
   /* fix length of fragment in sendbuf */
@@ -1404,36 +1393,28 @@ dtls_verify_peer(dtls_context_t *ctx,
     if (dtls_create_cookie(ctx, session, data, data_length,
 			   mycookie, &len) < 0)
       return -1;
-#ifndef NDEBUG
-    debug("create cookie: ");
-    dump(mycookie, len);
-    printf("\n");
-#endif
+
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "create cookie", mycookie, len, 0);
+
     assert(len == DTLS_COOKIE_LENGTH);
     
     /* Perform cookie check. */
     len = dtls_get_cookie(data, data_length, &cookie);
 
-#ifndef NDEBUG
-    debug("compare with cookie: ");
-    dump(cookie, len);
-    printf("\n");
-#endif
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "compare with cookie", cookie, len, 0);
 
     /* check if cookies match */
     if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
     debug("found matching cookie\n");
       return 1;      
     }
-#ifndef NDEBUG
+
     if (len > 0) {
-      debug("invalid cookie:");
-      dump(cookie, len);
-      printf("\n");
+      dtls_dsrv_hexdump_log(LOG_DEBUG, "invalid cookie", cookie, len, 0);
     } else {
       debug("cookie len is 0!\n");
     }
-#endif
+
     /* ClientHello did not contain any valid cookie, hence we send a
      * HelloVerify request. */
 
@@ -2058,11 +2039,7 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	   hash, length,
 	   p, DTLS_FIN_LENGTH);
 
-#ifndef NDEBUG
-  printf("server finished MAC:\t");
-  dump(p, DTLS_FIN_LENGTH);
-  printf("\n");
-#endif
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "server finished MAC", p, DTLS_FIN_LENGTH, 0);
 
   p += DTLS_FIN_LENGTH;
 
@@ -2665,17 +2642,12 @@ decrypt_verify(dtls_peer_t *peer,
       warn("no read_cipher available!\n");
       return 0;
     }
-      
-#ifndef NDEBUG
-    printf("nonce:\t");
-    dump(N, DTLS_CCM_BLOCKSIZE);
-    printf("\nkey:\t");
-    dump(dtls_kb_remote_write_key(CURRENT_CONFIG(peer)), 
-	 dtls_kb_key_size(CURRENT_CONFIG(peer)));
-    printf("\nciphertext:\n");
-    dump(*cleartext, *clen);
-    printf("\n");
-#endif
+
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", N, DTLS_CCM_BLOCKSIZE, 0);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "key",
+			  dtls_kb_remote_write_key(CURRENT_CONFIG(peer)),
+			  dtls_kb_key_size(CURRENT_CONFIG(peer)), 0);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "ciphertext", *cleartext, *clen, 0);
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
 
@@ -2700,11 +2672,7 @@ decrypt_verify(dtls_peer_t *peer,
 #endif
       *clen = len;
     }
-#ifndef NDEBUG
-    printf("\ncleartext:\n");
-    dump(*cleartext, *clen);
-    printf("\n");
-#endif
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "cleartext", *cleartext, *clen, 0);
   }
 
   return ok;
