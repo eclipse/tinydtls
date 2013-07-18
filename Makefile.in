@@ -39,7 +39,7 @@ libdir = @libdir@
 includedir = @includedir@/@PACKAGE_NAME@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
-install := cp -p
+install := cp
 
 # files and flags
 SOURCES:= dtls.c crypto.c ccm.c hmac.c debug.c netq.c
