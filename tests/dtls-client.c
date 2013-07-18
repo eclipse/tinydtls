@@ -82,7 +82,9 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
+#ifndef NDEBUG
 extern void dump(unsigned char *buf, size_t len);
+#endif
 
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
@@ -106,6 +108,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
+#ifndef NDEBUG
     unsigned char addrbuf[72];
     dsrv_print_addr(&session, addrbuf, sizeof(addrbuf));
     dsrv_log(LOG_DEBUG, "got %d bytes from %s\n", len, (char *)addrbuf);
@@ -113,6 +116,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     PRINTF("\n");
     dump(buf, len);
     PRINTF("\n");
+#endif
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
