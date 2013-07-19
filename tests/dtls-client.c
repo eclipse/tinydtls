@@ -233,7 +233,7 @@ main(int argc, char **argv) {
     }
   }
 
-  set_log_level(log_level);
+  dtls_set_log_level(log_level);
   
   if (argc <= optind) {
     usage(argv[0], PACKAGE_VERSION);

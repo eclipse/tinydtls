@@ -56,12 +56,12 @@
 static int maxlog = LOG_WARN;	/* default maximum log level */
 
 log_t 
-get_log_level() {
+dtls_get_log_level() {
   return maxlog;
 }
 
 void
-set_log_level(log_t level) {
+dtls_set_log_level(log_t level) {
   maxlog = level;
 }
 
