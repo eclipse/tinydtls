@@ -24,18 +24,12 @@
  */
 
 #include "config.h"
+#include "dtls_time.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_ASSERT_H
 #include <assert.h>
-#endif
-#ifdef HAVE_TIME_H
-#include <time.h>
-#define clock_time() (time(NULL))
-#ifndef CLOCK_SECOND
-# define CLOCK_SECOND 1024
-#endif
 #endif
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
@@ -142,6 +136,7 @@ dtls_context_t the_dtls_context;
 
 void
 dtls_init() {
+  dtls_clock_init();
   netq_init();
   crypto_init();
   peer_init();
@@ -1109,7 +1104,9 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
     /* copy handshake messages other than HelloVerify into retransmit buffer */
     netq_t *n = netq_node_new();
     if (n) {
-      n->t = clock_time() + 2 * CLOCK_SECOND;
+      dtls_tick_t now;
+      dtls_ticks(&now);
+      n->t = now + 2 * CLOCK_SECOND;
       n->retransmit_cnt = 0;
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
@@ -1125,6 +1122,8 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 	PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
 	etimer_set(&ctx->retransmit_timer, n->timeout);
 	PROCESS_CONTEXT_END(&dtls_retransmit_process);
+#else /* WITH_CONTIKI */
+	debug("copied to sendqueue\n");
 #endif /* WITH_CONTIKI */
       }
     } else 
@@ -1173,6 +1172,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
   size_t qlen = sizeof(ctx->sendbuf);
   int res;
   const dtls_key_t *key;
+  dtls_tick_t now;
 
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
@@ -1198,7 +1198,8 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer) {
 
   /* Set server random: First 4 bytes are the server's Unix timestamp,
    * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(p, clock_time());
+  dtls_ticks(&now);
+  dtls_int_to_uint32(p, now / CLOCK_SECOND);
   prng(p + 4, 28);
 
   if (!calculate_key_block(ctx, OTHER_CONFIG(peer), key, 
@@ -2168,8 +2169,30 @@ dtls_handle_message(dtls_context_t *ctx,
 dtls_context_t *
 dtls_new_context(void *app_data) {
   dtls_context_t *c;
+  dtls_tick_t now;
+#ifndef WITH_CONTIKI
+  FILE *urandom = fopen("/dev/urandom", "r");
+  unsigned char buf[sizeof(unsigned long)];
+#endif /* WITH_CONTIKI */
 
-  prng_init(clock_time()); /* FIXME: need something better to init PRNG here */
+  dtls_ticks(&now);
+#ifdef WITH_CONTIKI
+  /* FIXME: need something better to init PRNG here */
+  prng_init(now);
+#else /* WITH_CONTIKI */
+  if (!urandom) {
+    dsrv_log(LOG_EMERG, "cannot initialize PRNG\n");
+    return NULL;
+  }
+
+  if (fread(buf, 1, sizeof(buf), urandom) != sizeof(buf)) {
+    dsrv_log(LOG_EMERG, "cannot initialize PRNG\n");
+    return NULL;
+  }
+
+  fclose(urandom);
+  prng_init((unsigned long)*buf);
+#endif /* WITH_CONTIKI */
 
   c = &the_dtls_context;
 
@@ -2190,7 +2213,7 @@ dtls_new_context(void *app_data) {
 #endif /* WITH_CONTIKI */
 
   if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
-    c->cookie_secret_age = clock_time();
+    c->cookie_secret_age = now;
   else 
     goto error;
   
@@ -2230,6 +2253,7 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   uint8 *p = ctx->sendbuf;
   size_t size;
   int res;
+  dtls_tick_t now;
 
   assert(peer);
   if (!peer)
@@ -2267,9 +2291,11 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
 
+  dtls_ticks(&now);
   /* Set client random: First 4 bytes are the client's Unix timestamp,
    * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
+  dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, 
+		     now / DTLS_TICKS_PER_SECOND);
   prng(OTHER_CONFIG(peer)->client_random + sizeof(uint32),
        sizeof(OTHER_CONFIG(peer)->client_random) - sizeof(uint32));
   memcpy(p, OTHER_CONFIG(peer)->client_random, 
@@ -2380,6 +2406,28 @@ dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer) {
     } else
       node = list_item_next(node);    
   }
+}
+
+void
+dtls_check_retransmit(dtls_context_t *context, clock_time_t *next) {
+  dtls_tick_t now;
+  netq_t *node = netq_head((netq_t **)context->sendqueue);
+
+  dtls_ticks(&now);
+  if (!node)
+    printf("retransmit queue is empty!\n");
+  else 
+    printf("node-t is %u (now is %u)\n", node->t, now);
+  
+  while (node && node->t <= now) {
+    netq_pop_first((netq_t **)context->sendqueue);
+    printf("call retransmit\n");
+    dtls_retransmit(context, node);
+    node = netq_head((netq_t **)context->sendqueue);
+  }
+
+  if (next && node)
+    *next = node->t;
 }
 
 #ifdef WITH_CONTIKI

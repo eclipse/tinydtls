@@ -47,6 +47,8 @@
 
 #include "config.h"
 #include "global.h"
+#include "dtls_time.h"
+
 #ifndef DTLSv12
 #define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
 #else
@@ -247,6 +249,17 @@ int dtls_close(dtls_context_t *ctx, const session_t *remote);
  */
 int dtls_write(struct dtls_context_t *ctx, session_t *session, 
 	       uint8 *buf, size_t len);
+
+/**
+ * Checks sendqueue of given DTLS context object for any outstanding
+ * packets to be transmitted. 
+ *
+ * @param context The DTLS context object to use.
+ * @param next    If not NULL, @p next is filled with the timestamp
+ *  of the next scheduled retransmission, or @c 0 when no packets are
+ *  waiting.
+ */
+void dtls_check_retransmit(dtls_context_t *context, clock_time_t *next);
 
 #define DTLS_COOKIE_LENGTH 16
 

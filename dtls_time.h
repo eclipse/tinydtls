@@ -1,6 +1,6 @@
-/* debug.h -- debug utilities
+/* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,31 +23,52 @@
  * SOFTWARE.
  */
 
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+/**
+ * @file dtls_time.h
+ * @brief Clock Handling
+ */
+
+#ifndef _DTLS_TIME_H_
+#define _DTLS_TIME_H_
 
 #include "config.h"
 
-/** Pre-defined log levels akin to what is used in \b syslog. */
-typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
-       LOG_NOTICE, LOG_INFO, LOG_DEBUG
-} log_t;
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 
-/** Returns the current log level. */
-log_t get_log_level();
+/**
+ * @defgroup clock Clock Handling
+ * Default implementation of internal clock. You should redefine this if
+ * you do not have time() and gettimeofday().
+ * @{
+ */
 
-/** Sets the log level to the specified value. */
-void set_log_level(log_t level);
+#ifdef WITH_CONTIKI
+#include "clock.h"
 
-/** 
- * Writes the given text to \c stdout. The text is output only when \p
- * level is below or equal to the log level that set by
- * set_log_level(). */
-void dsrv_log(log_t level, char *format, ...);
+typedef clock_time_t dtls_tick_t;
+#else /* WITH_CONTIKI */
 
-/* A set of convenience macros for common log levels. */
-#define info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
-#define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
-#define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
 
-#endif /* _DEBUG_H_ */
+#ifndef CLOCK_SECOND
+# define CLOCK_SECOND 1000
+#endif
+
+typedef unsigned int dtls_tick_t; 
+
+#endif /* WITH_CONTIKI */
+
+#ifndef DTLS_TICKS_PER_SECOND
+#define DTLS_TICKS_PER_SECOND CLOCK_SECOND
+#endif /* DTLS_TICKS_PER_SECOND */
+
+void dtls_clock_init(void);
+void dtls_ticks(dtls_tick_t *t);
+
+/** @} */
+
+#endif /* _DTLS_TIME_H_ */

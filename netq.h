@@ -65,6 +65,19 @@ void netq_delete_all(netq_t *queue);
 /** Creates a new node suitable for adding to a netq_t queue. */
 netq_t *netq_node_new();
 
+/**
+ * Returns a pointer to the first item in given queue or NULL if
+ * empty. 
+ */
+netq_t *netq_head(netq_t **queue);
+
+/**
+ * Removes the first item in given queue and returns a pointer to the
+ * removed element. If queue is empty when netq_pop_first() is called,
+ * this function returns NULL.
+ */
+netq_t *netq_pop_first(netq_t **queue);
+
 /**@}*/
 
 #endif /* _NETQ_H_ */

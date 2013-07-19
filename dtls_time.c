@@ -1,6 +1,6 @@
-/* debug.h -- debug utilities
+/* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,31 +23,56 @@
  * SOFTWARE.
  */
 
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+/**
+ * @file dtls_time.c
+ * @brief Clock Handling
+ */
 
-#include "config.h"
+#include "dtls_time.h"
 
-/** Pre-defined log levels akin to what is used in \b syslog. */
-typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
-       LOG_NOTICE, LOG_INFO, LOG_DEBUG
-} log_t;
+#ifdef WITH_CONTIKI
+clock_time_t dtls_clock_offset;
 
-/** Returns the current log level. */
-log_t get_log_level();
+void
+dtls_clock_init(void) {
+  clock_init();
+  dtls_clock_offset = clock_time();
+}
 
-/** Sets the log level to the specified value. */
-void set_log_level(log_t level);
+void
+dtls_ticks(dtls_tick_t *t) {
+  *t = clock_time();
+}
 
-/** 
- * Writes the given text to \c stdout. The text is output only when \p
- * level is below or equal to the log level that set by
- * set_log_level(). */
-void dsrv_log(log_t level, char *format, ...);
+#else /* WITH_CONTIKI */
 
-/* A set of convenience macros for common log levels. */
-#define info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
-#define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
-#define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
+time_t dtls_clock_offset;
 
-#endif /* _DEBUG_H_ */
+void
+dtls_clock_init(void) {
+#ifdef HAVE_TIME_H
+  dtls_clock_offset = time(NULL);
+#else
+#  ifdef __GNUC__
+  /* Issue a warning when using gcc. Other prepropressors do 
+   *  not seem to have a similar feature. */ 
+#   warning "cannot initialize clock"
+#  endif
+  dtls_clock_offset = 0;
+#endif
+}
+
+void dtls_ticks(dtls_tick_t *t) {
+#ifdef HAVE_SYS_TIME_H
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  *t = (tv.tv_sec - dtls_clock_offset) * DTLS_TICKS_PER_SECOND 
+    + (tv.tv_usec * DTLS_TICKS_PER_SECOND / 1000000);
+#else
+#error "clock not implemented"
+#endif
+}
+
+#endif /* WITH_CONTIKI */
+
+
