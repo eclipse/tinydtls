@@ -116,11 +116,6 @@
     P += dtls_ ## T ## _to_int(P) + sizeof(T);				\
   }
 
-#define CURRENT_CONFIG(Peer) (&(Peer)->security_params[(Peer)->config])
-#define OTHER_CONFIG(Peer) (&(Peer)->security_params[!((Peer)->config & 0x01)])
-
-#define SWITCH_CONFIG(Peer) ((Peer)->config = !((Peer)->config & 0x01))
-
 uint8 _clear[DTLS_MAX_BUF]; /* target buffer message decryption */
 uint8 _buf[DTLS_MAX_BUF]; /* target buffer for several crypto operations */
 
@@ -141,43 +136,15 @@ static const unsigned char prf_label_finished[] = " finished";
 
 extern void netq_init();
 extern void crypto_init();
+extern void peer_init();
 
 dtls_context_t the_dtls_context;
-
-#ifndef WITH_CONTIKI
-static inline dtls_peer_t *
-dtls_malloc_peer() {
-  return (dtls_peer_t *)malloc(sizeof(dtls_peer_t));
-}
-
-static inline void
-dtls_free_peer(dtls_peer_t *peer) {
-  free(peer);
-}
-#else /* WITH_CONTIKI */
-PROCESS(dtls_retransmit_process, "DTLS retransmit process");
-
-#include "memb.h"
-MEMB(peer_storage, dtls_peer_t, DTLS_PEER_MAX);
-
-static inline dtls_peer_t *
-dtls_malloc_peer() {
-  return memb_alloc(&peer_storage);
-}
-static inline void
-dtls_free_peer(dtls_peer_t *peer) {
-  memb_free(&peer_storage, peer);
-}
-#endif /* WITH_CONTIKI */
 
 void
 dtls_init() {
   netq_init();
   crypto_init();
-
-#ifdef WITH_CONTIKI
-  memb_init(&peer_storage);
-#endif /* WITH_CONTIKI */
+  peer_init();
 }
 
 /* Calls cb_alert() with given arguments if defined, otherwise an
@@ -212,7 +179,7 @@ int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 void dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer);
 
 dtls_peer_t *
-dtls_get_peer(struct dtls_context_t *ctx, const session_t *session) {
+dtls_get_peer(const dtls_context_t *ctx, const session_t *session) {
   dtls_peer_t *p = NULL;
 
 #ifndef WITH_CONTIKI
@@ -224,6 +191,15 @@ dtls_get_peer(struct dtls_context_t *ctx, const session_t *session) {
 #endif /* WITH_CONTIKI */
   
   return p;
+}
+
+void
+dtls_add_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
+#ifndef WITH_CONTIKI
+  HASH_ADD_PEER(ctx->peers, session, peer);
+#else /* WITH_CONTIKI */
+  list_add(ctx->peers, peer);
+#endif /* WITH_CONTIKI */
 }
 
 int
@@ -847,39 +823,6 @@ check_ccs(dtls_context_t *ctx,
 #ifndef NDEBUG
 extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
 #endif
-
-dtls_peer_t *
-dtls_new_peer(dtls_context_t *ctx, 
-	      const session_t *session) {
-  dtls_peer_t *peer;
-
-  peer = dtls_malloc_peer();
-  if (peer) {
-    memset(peer, 0, sizeof(dtls_peer_t));
-    memcpy(&peer->session, session, sizeof(session_t));
-
-#ifndef NDEBUG
-    {
-      unsigned char addrbuf[72];
-      dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-      printf("dtls_new_peer: %s\n", addrbuf);
-      dump((unsigned char *)session, sizeof(session_t));
-      printf("\n");
-    }
-#endif
-    /* initially allow the NULL cipher */
-    CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
-
-    /* initialize the handshake hash wrt. the hard-coded DTLS version */
-    debug("DTLSv12: initialize HASH_SHA256\n");
-    /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
-    /* FIXME: we use the default SHA256 here, might need to support other 
-              hash functions as well */
-    dtls_hash_init(&peer->hs_state.hs_hash);
-  }
-  
-  return peer;
-}
 
 static inline void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
@@ -2045,31 +1988,16 @@ dtls_handle_message(dtls_context_t *ctx,
 				   (without MAC and padding) */
 
   /* check if we have DTLS state for addr/port/ifindex */
-#ifndef WITH_CONTIKI
-  HASH_FIND_PEER(ctx->peers, session, peer);
-  {
-    dtls_peer_t *p = NULL;
-    HASH_FIND_PEER(ctx->peers, session, p);
+  peer = dtls_get_peer(ctx, session);
+
 #ifndef NDEBUG
-    if (!p) {
-      printf("dtls_handle_message: PEER NOT FOUND\n");
-      {
-	unsigned char addrbuf[72];
-	dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-	printf("  %s\n", addrbuf);
-	dump((unsigned char *)session, sizeof(session_t));
-	printf("\n");
-      }
-    } else 
-      printf("dtls_handle_message: FOUND PEER\n");
-#endif /* NDEBUG */
+  if (peer) {
+    unsigned char addrbuf[72];
+
+    dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
+    debug("found peer %s\n", addrbuf);
   }
-#else /* WITH_CONTIKI */
-  for (peer = list_head(ctx->peers); 
-       peer && !dtls_session_equals(&peer->session, session);
-       peer = list_item_next(peer))
-    ;
-#endif /* WITH_CONTIKI */
+#endif /* NDEBUG */
 
   if (!peer) {			
 
@@ -2110,7 +2038,7 @@ dtls_handle_message(dtls_context_t *ctx,
        safely create the server state machine and continue with
        the handshake. */
 
-    peer = dtls_new_peer(ctx, session);
+    peer = dtls_new_peer(session);
     if (!peer) {
       dsrv_log(LOG_ALERT, "cannot create peer");
       /* FIXME: signal internal error */
@@ -2298,44 +2226,28 @@ void dtls_free_context(dtls_context_t *ctx) {
 }
 
 int
-dtls_connect(dtls_context_t *ctx, const session_t *dst) {
-  dtls_peer_t *peer;
+dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   uint8 *p = ctx->sendbuf;
   size_t size;
   int res;
 
-  /* check if we have DTLS state for addr/port/ifindex */
-#ifndef WITH_CONTIKI
-  HASH_FIND_PEER(ctx->peers, dst, peer);
-#else /* WITH_CONTIKI */
-  for (peer = list_head(ctx->peers); peer; peer = list_item_next(peer))
-    if (dtls_session_equals(&peer->session, dst))
-      break;
-#endif /* WITH_CONTIKI */
-  
-  if (peer) {
+  assert(peer);
+  if (!peer)
+    return -1;
+
+  /* check if the same peer is already in our list */
+  if (peer == dtls_get_peer(ctx, &peer->session)) {
     debug("found peer, try to re-connect\n");
     /* FIXME: send HelloRequest if we are server, 
        ClientHello with good cookie if client */
     return 0;
-  }
-
-  peer = dtls_new_peer(ctx, dst);
-
-  if (!peer) {
-    dsrv_log(LOG_CRIT, "cannot create new peer\n");
-    return -1;
   }
     
   /* set peer role to server: */
   OTHER_CONFIG(peer)->role = DTLS_SERVER;
   CURRENT_CONFIG(peer)->role = DTLS_SERVER;
 
-#ifndef WITH_CONTIKI
-  HASH_ADD_PEER(ctx->peers, session, peer);
-#else /* WITH_CONTIKI */
-  list_add(ctx->peers, peer);
-#endif /* WITH_CONTIKI */
+  dtls_add_peer(ctx, peer);
 
   /* send ClientHello with some Cookie */
 
@@ -2393,6 +2305,23 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
     peer->state = DTLS_STATE_CLIENTHELLO;
 
   return res;
+}
+
+int
+dtls_connect(dtls_context_t *ctx, const session_t *dst) {
+  dtls_peer_t *peer;
+
+  peer = dtls_get_peer(ctx, dst);
+  
+  if (!peer)
+    peer = dtls_new_peer(dst);
+
+  if (!peer) {
+    dsrv_log(LOG_CRIT, "cannot create new peer\n");
+    return -1;
+  }
+
+  return dtls_connect_peer(ctx, peer);
 }
 
 void

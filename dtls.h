@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -34,6 +34,8 @@
 #include <stdint.h>
 
 #include "t_list.h"
+#include "state.h"
+#include "peer.h"
 
 #ifndef WITH_CONTIKI
 #include "uthash.h"
@@ -57,51 +59,6 @@
  */
 #define TLS_COMP_NULL      0x00	/* NULL compression */
  
-typedef enum { 
-  DTLS_STATE_INIT = 0, DTLS_STATE_SERVERHELLO, DTLS_STATE_KEYEXCHANGE, 
-  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED, 
-  /* client states */
-  DTLS_STATE_CLIENTHELLO, DTLS_STATE_WAIT_SERVERHELLODONE,
-  DTLS_STATE_WAIT_SERVERFINISHED, 
-
-  DTLS_STATE_CONNECTED,
-  DTLS_STATE_CLOSING,
-  DTLS_STATE_CLOSED,
-} dtls_state_t;
-
-typedef struct {
-  uint24 mseq;		     /**< handshake message sequence number counter */
-
-  /** pending config that is updated during handshake */
-  /* FIXME: dtls_security_parameters_t pending_config; */
-
-  /* temporary storage for the final handshake hash */
-  dtls_hash_ctx hs_hash;
-} dtls_hs_state_t;
-
-/** 
- * Holds security parameters, local state and the transport address
- * for each peer. */
-typedef struct dtls_peer_t {
-#ifndef WITH_CONTIKI
-  UT_hash_handle hh;
-#else /* WITH_CONTIKI */
-  struct dtls_peer_t *next;
-#endif /* WITH_CONTIKI */
-
-  session_t session;	     /**< peer address and local interface */
-
-  dtls_state_t state;        /**< DTLS engine state */
-  uint16 epoch;		     /**< counter for cipher state changes*/
-  uint48 rseq;		     /**< sequence number of last record sent */
-
-  dtls_hs_state_t hs_state;  /**< handshake protocol status */
-
-  dtls_security_parameters_t security_params[2]; 
-  int config;	             /**< denotes which security params are in effect 
-			      FIXME: check if we can use epoch for this */
-} dtls_peer_t;
-
 typedef enum {
   DTLS_KEY_INVALID=0, DTLS_KEY_PSK=1, DTLS_KEY_RPK=2
 } dtls_key_type_t;
@@ -260,6 +217,18 @@ static inline void dtls_set_handler(dtls_context_t *ctx, dtls_handler_t *h) {
 int dtls_connect(dtls_context_t *ctx, const session_t *dst);
 
 /**
+ * Establishes a DTLS channel with the specified remote peer.
+ * This function returns @c 0 if that channel already exists, a value
+ * greater than zero when a new ClientHello message was sent, and
+ * a value less than zero on error.
+ *
+ * @param ctx    The DTLS context to use.
+ * @param peer   The peer object that describes the session.
+ * @return A value less than zero on error, greater or equal otherwise.
+ */
+int dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
+
+/**
  * Closes the DTLS connection associated with @p remote. This function
  * returns zero on success, and a value less than zero on error.
  */
@@ -373,6 +342,19 @@ int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
  */
 int dtls_handle_message(dtls_context_t *ctx, session_t *session,
 			uint8 *msg, int msglen);
+
+/**
+ * Check if @p session is associated with a peer object in @p context.
+ * This function returns a pointer to the peer if found, NULL otherwise.
+ *
+ * @param context  The DTLS context to search.
+ * @param session  The remote address and local interface
+ * @return A pointer to the peer associated with @p session or NULL if
+ *  none exists.
+ */
+dtls_peer_t *dtls_get_peer(const dtls_context_t *context,
+			   const session_t *session);
+
 
 #endif /* _DTLS_H_ */
 
