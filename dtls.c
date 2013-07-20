@@ -547,26 +547,10 @@ calculate_key_block(dtls_context_t *ctx,
     return 0;
   }
 
-#ifndef NDEBUG
-  {
-    int i;
-
-    printf("client_random:");
-    for (i = 0; i < 32; ++i)
-      printf(" %02x", client_random[i]);
-    printf("\n");
-
-    printf("server_random:");
-    for (i = 0; i < 32; ++i)
-      printf(" %02x", server_random[i]);
-    printf("\n");
-
-    printf("pre_master_secret: (%zu bytes):", pre_master_len);
-    for (i = 0; i < pre_master_len; ++i)
-      printf(" %02x", pre_master_secret[i]);
-    printf("\n");
-  }
-#endif /* NDEBUG */
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", client_random, 32, 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", server_random, 32, 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "pre_master_secret", pre_master_secret,
+			pre_master_len, 0);
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
@@ -575,15 +559,8 @@ calculate_key_block(dtls_context_t *ctx,
 	   config->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH);
 
-#ifndef NDEBUG
-  {
-    int i;
-    printf("master_secret (%d bytes):", DTLS_MASTER_SECRET_LENGTH);
-    for (i = 0; i < DTLS_MASTER_SECRET_LENGTH; ++i)
-      printf(" %02x", config->master_secret[i]);
-    printf("\n");
-  }
-#endif /* NDEBUG */
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", config->master_secret,
+			DTLS_MASTER_SECRET_LENGTH, 0);
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
