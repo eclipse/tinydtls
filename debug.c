@@ -280,6 +280,13 @@ void dump(unsigned char *buf, size_t len) {
     printf("%02x", *buf++);
 }
 
+void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
+{
+  unsigned char addrbuf[72];
+  dsrv_print_addr(addr, addrbuf, sizeof(addrbuf));
+  dsrv_log(level, "%s: %s\n", name, addrbuf);
+}
+
 #ifndef WITH_CONTIKI
 void 
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {

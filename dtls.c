@@ -933,15 +933,7 @@ dtls_new_peer(dtls_context_t *ctx,
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
-#ifndef NDEBUG
-    {
-      unsigned char addrbuf[72];
-      dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-      printf("dtls_new_peer: %s\n", addrbuf);
-      dump((unsigned char *)session, sizeof(session_t));
-      printf("\n");
-    }
-#endif
+    dtls_dsrv_log_addr(LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
 
@@ -2995,19 +2987,13 @@ dtls_handle_message(dtls_context_t *ctx,
 				   (without MAC and padding) */
 
   peer = dtls_get_peer(ctx, session);
-#ifndef NDEBUG
-  if (!peer) {
-    unsigned char addrbuf[72];
 
-    printf("dtls_handle_message: PEER NOT FOUND\n");
-    dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-    printf("  %s\n", addrbuf);
-    dump((unsigned char *)session, sizeof(session_t));
-    printf("\n");
+  if (!peer) {
+    debug("dtls_handle_message: PEER NOT FOUND\n");
+    dtls_dsrv_log_addr(LOG_DEBUG, "peer addr", session);
   } else {
-    printf("dtls_handle_message: FOUND PEER\n");
+    debug("dtls_handle_message: FOUND PEER\n");
   }
-#endif /* NDEBUG */
 
   if (!peer) {			
 
