@@ -33,6 +33,7 @@ typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN,
        LOG_NOTICE, LOG_INFO, LOG_DEBUG
 } log_t;
 
+#ifndef NDEBUG
 /** Returns the current log level. */
 log_t get_log_level();
 
@@ -45,15 +46,24 @@ void set_log_level(log_t level);
  * set_log_level(). */
 void dsrv_log(log_t level, char *format, ...);
 
-#ifndef NDEBUG
+#else /* NDEBUG */
+
+static inline log_t get_log_level()
+{
+  return LOG_EMERG;
+}
+
+static inline void set_log_level(log_t level)
+{}
+
+static inline void dsrv_log(log_t level, char *format, ...)
+{}
+
+#endif /* NDEBUG */
+
 /* A set of convenience macros for common log levels. */
 #define info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
 #define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
 #define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
-#else
-#define info(...)
-#define warn(...)
-#define debug(...)
-#endif
 
 #endif /* _DEBUG_H_ */

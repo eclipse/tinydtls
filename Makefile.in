@@ -36,7 +36,10 @@ top_builddir = @top_builddir@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
 # files and flags
-SOURCES:= dtls.c crypto.c ccm.c hmac.c debug.c netq.c
+SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c
+ifneq ("@NDEBUG@", "1")
+SOURCES += debug.c
+endif
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o ecc/ecc.o @OPT_OBJS@
 HEADERS:=dtls.h hmac.h debug.h config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h t_list.h alert.h utlist.h prng.h
