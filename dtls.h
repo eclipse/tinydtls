@@ -81,6 +81,8 @@ typedef struct {
   dtls_hash_ctx hs_hash;
 } dtls_hs_state_t;
 
+typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
+
 /** 
  * Holds security parameters, local state and the transport address
  * for each peer. */
@@ -93,6 +95,7 @@ typedef struct dtls_peer_t {
 
   session_t session;	     /**< peer address and local interface */
 
+  dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
   dtls_state_t state;        /**< DTLS engine state */
   uint16 epoch;		     /**< counter for cipher state changes*/
   uint48 rseq;		     /**< sequence number of last record sent */

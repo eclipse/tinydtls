@@ -482,30 +482,30 @@ known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
 
 static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 {
-  dsrv_log(LOG_DEBUG, "key_block (%d bytes):\n", dtls_kb_size(config));
+  dsrv_log(LOG_DEBUG, "key_block (%d bytes):\n", dtls_kb_size(config, peer->role));
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_MAC_secret",
-			dtls_kb_client_mac_secret(config),
-			dtls_kb_mac_secret_size(config), 0);
+			dtls_kb_client_mac_secret(config, peer->role),
+			dtls_kb_mac_secret_size(config, peer->role), 0);
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_MAC_secret",
-			dtls_kb_server_mac_secret(config),
-			dtls_kb_mac_secret_size(config), 0);
+			dtls_kb_server_mac_secret(config, peer->role),
+			dtls_kb_mac_secret_size(config, peer->role), 0);
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_write_key",
-			dtls_kb_client_write_key(config), 
-			dtls_kb_key_size(config), 0);
+			dtls_kb_client_write_key(config, peer->role),
+			dtls_kb_key_size(config, peer->role), 0);
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_write_key",
-			dtls_kb_server_write_key(config), 
-			dtls_kb_key_size(config), 0);
+			dtls_kb_server_write_key(config, peer->role),
+			dtls_kb_key_size(config, peer->role), 0);
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_IV",
-			dtls_kb_client_iv(config), 
-			dtls_kb_iv_size(config), 0);
+			dtls_kb_client_iv(config, peer->role),
+			dtls_kb_iv_size(config, peer->role), 0);
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_IV",
-			dtls_kb_server_iv(config), 
-			dtls_kb_iv_size(config), 0);
+			dtls_kb_server_iv(config, peer->role),
+			dtls_kb_iv_size(config, peer->role), 0);
 }
 
 int
@@ -574,22 +574,22 @@ calculate_key_block(dtls_context_t *ctx,
 	   server_random, 32,
 	   client_random, 32,
 	   config->key_block,
-	   dtls_kb_size(config));
+	   dtls_kb_size(config, peer->role));
 
   dtls_debug_keyblock(config);
   return 0;
 }
 
 int
-init_cipher(dtls_security_parameters_t *config)
+init_cipher(dtls_security_parameters_t *config, dtls_peer_type role)
 {
   /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
   dtls_cipher_free(config->read_cipher);
 
   assert(config->cipher != TLS_NULL_WITH_NULL_NULL);
   config->read_cipher = dtls_cipher_new(config->cipher,
-					dtls_kb_remote_write_key(config),
-					dtls_kb_key_size(config));
+					dtls_kb_remote_write_key(config, role),
+					dtls_kb_key_size(config, role));
 
   if (!config->read_cipher) {
     warn("cannot create read cipher\n");
@@ -597,15 +597,15 @@ init_cipher(dtls_security_parameters_t *config)
   }
 
   dtls_cipher_set_iv(config->read_cipher,
-		     dtls_kb_remote_iv(config),
-		     dtls_kb_iv_size(config));
+		     dtls_kb_remote_iv(config, role),
+		     dtls_kb_iv_size(config, role));
 
 
   dtls_cipher_free(config->write_cipher);
   
   config->write_cipher = dtls_cipher_new(config->cipher,
-					 dtls_kb_local_write_key(config),
-					 dtls_kb_key_size(config));
+					 dtls_kb_local_write_key(config, role),
+					 dtls_kb_key_size(config, role));
 
   if (!config->write_cipher) {
     dtls_cipher_free(config->read_cipher);
@@ -614,8 +614,8 @@ init_cipher(dtls_security_parameters_t *config)
   }
 
   dtls_cipher_set_iv(config->write_cipher,
-		     dtls_kb_local_iv(config),
-		     dtls_kb_iv_size(config));
+		     dtls_kb_local_iv(config, role),
+		     dtls_kb_iv_size(config, role));
   return 0;
 }
 
@@ -992,7 +992,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   /* restore hash status */
   memcpy(&peer->hs_state.hs_hash, b.statebuf, DTLS_HASH_CTX_SIZE);
 
-  if (CURRENT_CONFIG(peer)->role == DTLS_SERVER) {
+  if (peer->role == DTLS_CLIENT) {
     label = PRF_LABEL(server);
     label_size = PRF_LABEL_SIZE(server);
   } else { /* client */
@@ -1106,9 +1106,9 @@ dtls_prepare_record(dtls_peer_t *peer,
     }
 
     memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_local_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer)), start, 8); /* epoch + seq_num */
+    memcpy(N, dtls_kb_local_iv(CURRENT_CONFIG(peer), peer->role),
+	   dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role));
+    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role), start, 8); /* epoch + seq_num */
 
     cipher_context = CURRENT_CONFIG(peer)->write_cipher;
 
@@ -1119,8 +1119,8 @@ dtls_prepare_record(dtls_peer_t *peer,
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", N, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
-			  dtls_kb_local_write_key(CURRENT_CONFIG(peer)),
-			  dtls_kb_key_size(CURRENT_CONFIG(peer)), 0);
+			  dtls_kb_local_write_key(CURRENT_CONFIG(peer), peer->role),
+			  dtls_kb_key_size(CURRENT_CONFIG(peer), peer->role), 0);
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
     
@@ -1987,8 +1987,8 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 }
 
 #define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
-  ((Length + dtls_kb_iv_size(CURRENT_CONFIG(Peer)) + \
-    dtls_kb_digest_size(CURRENT_CONFIG(Peer))) /     \
+  ((Length + dtls_kb_iv_size(CURRENT_CONFIG(Peer), (Peer)->role) + \
+    dtls_kb_digest_size(CURRENT_CONFIG(Peer), (Peer)->role)) /     \
    DTLS_BLK_LENGTH + 1) * DTLS_BLK_LENGTH)
 
 int
@@ -2556,7 +2556,7 @@ check_server_hellodone(dtls_context_t *ctx,
     return res;
   }
 
-  res = init_cipher(OTHER_CONFIG(peer));
+  res = init_cipher(OTHER_CONFIG(peer), peer->role);
   if (res < 0) {
     return res;
   }
@@ -2607,11 +2607,11 @@ decrypt_verify(dtls_peer_t *peer,
       return -1;
 
     memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_remote_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
+    memcpy(N, dtls_kb_remote_iv(CURRENT_CONFIG(peer), peer->role),
+	   dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role));
 
     /* read epoch and seq_num from message */
-    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer)), *cleartext, 8);
+    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role), *cleartext, 8);
     *cleartext += 8;
     *clen -= 8;
 
@@ -2624,8 +2624,8 @@ decrypt_verify(dtls_peer_t *peer,
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", N, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key",
-			  dtls_kb_remote_write_key(CURRENT_CONFIG(peer)),
-			  dtls_kb_key_size(CURRENT_CONFIG(peer)), 0);
+			  dtls_kb_remote_write_key(CURRENT_CONFIG(peer), peer->role),
+			  dtls_kb_key_size(CURRENT_CONFIG(peer), peer->role), 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "ciphertext", *cleartext, *clen, 0);
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
@@ -2910,7 +2910,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     return err;
   }
 
-  if (init_cipher(OTHER_CONFIG(peer))) {
+  if (init_cipher(OTHER_CONFIG(peer), peer->role)) {
     return -1;
   }
 
@@ -3062,6 +3062,7 @@ dtls_handle_message(dtls_context_t *ctx,
       /* FIXME: signal internal error */
       return -1;
     }
+    peer->role = DTLS_SERVER;
 
     /* Initialize record sequence number to 1 for new peers. The first
      * record with sequence number 0 is a stateless Hello Verify Request.
@@ -3275,8 +3276,7 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   }
     
   /* set peer role to server: */
-  OTHER_CONFIG(peer)->role = DTLS_SERVER;
-  CURRENT_CONFIG(peer)->role = DTLS_SERVER;
+  peer->role = DTLS_CLIENT;
 
 #ifndef WITH_CONTIKI
   HASH_ADD_PEER(ctx->peers, session, peer);

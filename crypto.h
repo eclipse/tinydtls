@@ -80,8 +80,6 @@ typedef struct dtls_cipher_context_t {
   aes128_ccm_t data;		/**< The crypto context */
 } dtls_cipher_context_t;
 
-typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
-
 typedef struct {
   uint8 own_eph_priv[32];
   uint8 other_eph_pub_x[32];
@@ -94,7 +92,6 @@ typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
   uint8  server_random[32];	/**< server random gmt and bytes */
 
-  dtls_peer_type role; /**< denotes if the remote peer is DTLS_CLIENT or DTLS_SERVER */
   unsigned char compression;		/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
@@ -120,51 +117,51 @@ typedef struct {
 /* The following macros provide access to the components of the
  * key_block in the security parameters. */
 
-#define dtls_kb_client_mac_secret(Param) ((Param)->key_block)
-#define dtls_kb_server_mac_secret(Param)				\
-  (dtls_kb_client_mac_secret(Param) + DTLS_MAC_KEY_LENGTH)
-#define dtls_kb_remote_mac_secret(Param)				\
-  ((Param)->role == DTLS_CLIENT						\
-   ? dtls_kb_client_mac_secret(Param)					\
-   : dtls_kb_server_mac_secret(Param))
-#define dtls_kb_local_mac_secret(Param)					\
-  ((Param)->role == DTLS_SERVER						\
-   ? dtls_kb_client_mac_secret(Param)					\
-   : dtls_kb_server_mac_secret(Param))
-#define dtls_kb_mac_secret_size(Param) DTLS_MAC_KEY_LENGTH
-#define dtls_kb_client_write_key(Param)					\
-  (dtls_kb_server_mac_secret(Param) + DTLS_MAC_KEY_LENGTH)
-#define dtls_kb_server_write_key(Param)					\
-  (dtls_kb_client_write_key(Param) + DTLS_KEY_LENGTH)
-#define dtls_kb_remote_write_key(Param)				\
-  ((Param)->role == DTLS_CLIENT					\
-   ? dtls_kb_client_write_key(Param)				\
-   : dtls_kb_server_write_key(Param))
-#define dtls_kb_local_write_key(Param)				\
-  ((Param)->role == DTLS_SERVER					\
-   ? dtls_kb_client_write_key(Param)				\
-   : dtls_kb_server_write_key(Param))
-#define dtls_kb_key_size(Param) DTLS_KEY_LENGTH
-#define dtls_kb_client_iv(Param)					\
-  (dtls_kb_server_write_key(Param) + DTLS_KEY_LENGTH)
-#define dtls_kb_server_iv(Param)					\
-  (dtls_kb_client_iv(Param) + DTLS_IV_LENGTH)
-#define dtls_kb_remote_iv(Param)				\
-  ((Param)->role == DTLS_CLIENT					\
-   ? dtls_kb_client_iv(Param)					\
-   : dtls_kb_server_iv(Param))
-#define dtls_kb_local_iv(Param)					\
-  ((Param)->role == DTLS_SERVER					\
-   ? dtls_kb_client_iv(Param)					\
-   : dtls_kb_server_iv(Param))
-#define dtls_kb_iv_size(Param) DTLS_IV_LENGTH
+#define dtls_kb_client_mac_secret(Param, Role) ((Param)->key_block)
+#define dtls_kb_server_mac_secret(Param, Role)				\
+  (dtls_kb_client_mac_secret(Param, Role) + DTLS_MAC_KEY_LENGTH)
+#define dtls_kb_remote_mac_secret(Param, Role)				\
+  ((Role) == DTLS_SERVER						\
+   ? dtls_kb_client_mac_secret(Param, Role)				\
+   : dtls_kb_server_mac_secret(Param, Role))
+#define dtls_kb_local_mac_secret(Param, Role)				\
+  ((Role) == DTLS_CLIENT						\
+   ? dtls_kb_client_mac_secret(Param, Role)				\
+   : dtls_kb_server_mac_secret(Param, Role))
+#define dtls_kb_mac_secret_size(Param, Role) DTLS_MAC_KEY_LENGTH
+#define dtls_kb_client_write_key(Param, Role)				\
+  (dtls_kb_server_mac_secret(Param, Role) + DTLS_MAC_KEY_LENGTH)
+#define dtls_kb_server_write_key(Param, Role)				\
+  (dtls_kb_client_write_key(Param, Role) + DTLS_KEY_LENGTH)
+#define dtls_kb_remote_write_key(Param, Role)				\
+  ((Role) == DTLS_SERVER						\
+   ? dtls_kb_client_write_key(Param, Role)				\
+   : dtls_kb_server_write_key(Param, Role))
+#define dtls_kb_local_write_key(Param, Role)				\
+  ((Role) == DTLS_CLIENT						\
+   ? dtls_kb_client_write_key(Param, Role)				\
+   : dtls_kb_server_write_key(Param, Role))
+#define dtls_kb_key_size(Param, Role) DTLS_KEY_LENGTH
+#define dtls_kb_client_iv(Param, Role)					\
+  (dtls_kb_server_write_key(Param, Role) + DTLS_KEY_LENGTH)
+#define dtls_kb_server_iv(Param, Role)					\
+  (dtls_kb_client_iv(Param, Role) + DTLS_IV_LENGTH)
+#define dtls_kb_remote_iv(Param, Role)					\
+  ((Role) == DTLS_SERVER						\
+   ? dtls_kb_client_iv(Param, Role)					\
+   : dtls_kb_server_iv(Param, Role))
+#define dtls_kb_local_iv(Param, Role)					\
+  ((Role) == DTLS_CLIENT						\
+   ? dtls_kb_client_iv(Param, Role)					\
+   : dtls_kb_server_iv(Param, Role))
+#define dtls_kb_iv_size(Param, Role) DTLS_IV_LENGTH
 
-#define dtls_kb_size(Param)					\
-  (2 * (dtls_kb_mac_secret_size(Param) +			\
-	dtls_kb_key_size(Param) + dtls_kb_iv_size(Param)))
+#define dtls_kb_size(Param, Role)					\
+  (2 * (dtls_kb_mac_secret_size(Param, Role) +				\
+	dtls_kb_key_size(Param, Role) + dtls_kb_iv_size(Param, Role)))
 
 /* just for consistency */
-#define dtls_kb_digest_size(Param) DTLS_MAC_LENGTH
+#define dtls_kb_digest_size(Param, Role) DTLS_MAC_LENGTH
 
 /** 
  * Expands the secret and key to a block of DTLS_HMAC_MAX 
