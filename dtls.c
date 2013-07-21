@@ -2885,24 +2885,24 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
       || !check_ccs(ctx, peer, record_header, data, data_length)) {
     /* signal error? */
     warn("expected ChangeCipherSpec during handshake\n");
-    return 0;
+    return -1;
 
   }
 
   if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
 			   OTHER_CONFIG(peer)->client_random,
 			   OTHER_CONFIG(peer)->server_random)) {
-    return 0;
+    return -1;
   }
 
   if (init_cipher(OTHER_CONFIG(peer))) {
-    return 0;
+    return -1;
   }
 
   /* send change cipher spec message and switch to new configuration */
   if (dtls_send_ccs(ctx, peer) < 0) {
     warn("cannot send CCS message");
-    return 0;
+    return -1;
   } 
   
   SWITCH_CONFIG(peer);
@@ -2913,7 +2913,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 
   dtls_debug_keyblock(CURRENT_CONFIG(peer));
 
-  return 1;
+  return 0;
 }  
 
 /** 
@@ -2923,10 +2923,10 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 int
 handle_alert(dtls_context_t *ctx, dtls_peer_t *peer, 
 	     uint8 *record_header, uint8 *data, size_t data_length) {
-  int free_peer = 0;		/* indicates whether to free peer */
+  int free_peer = -1;		/* indicates whether to free peer */
 
   if (data_length < 2)
-    return 0;
+    return -1;
 
   info("** Alert: level %d, description %d\n", data[0], data[1]);
 
@@ -2951,7 +2951,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 #endif
 #endif /* WITH_CONTIKI */
 
-    free_peer = 1;
+    free_peer = 0;
 
   }
 
@@ -2991,6 +2991,7 @@ dtls_handle_message(dtls_context_t *ctx,
   uint8 *data; 			/* (decrypted) payload */
   size_t data_length;		/* length of decrypted payload 
 				   (without MAC and padding) */
+  int err;
 
   peer = dtls_get_peer(ctx, session);
 
@@ -3014,7 +3015,7 @@ dtls_handle_message(dtls_context_t *ctx,
       else
 	debug("dropped invalid message (less than four bytes)\n");
 #endif
-      return 0;
+      return -1;
     }
 
     /* is_record() ensures that msg contains at least a record header */
@@ -3133,18 +3134,25 @@ dtls_handle_message(dtls_context_t *ctx,
     switch (msg[0]) {
 
     case DTLS_CT_CHANGE_CIPHER_SPEC:
-      handle_ccs(ctx, peer, msg, data, data_length);
+      err = handle_ccs(ctx, peer, msg, data, data_length);
+      if (err < 0) {
+        return err;
+      }
       break;
 
     case DTLS_CT_ALERT:
-      if (handle_alert(ctx, peer, msg, data, data_length)) {
+      err = handle_alert(ctx, peer, msg, data, data_length);
+      if (err < 0) {
 	/* handle alert has invalidated peer */
 	peer = NULL;
-	return 0;
+	return err;
       }
 
     case DTLS_CT_HANDSHAKE:
-      handle_handshake(ctx, peer, msg, data, data_length);
+      err = handle_handshake(ctx, peer, msg, data, data_length);
+      if (err < 0) {
+        return err;
+      }
       if (peer->state == DTLS_STATE_CONNECTED) {
 	/* stop retransmissions */
 	dtls_stop_retransmission(ctx, peer);
