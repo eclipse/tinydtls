@@ -2152,10 +2152,8 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 static int
 check_server_hello(dtls_context_t *ctx, 
 		      dtls_peer_t *peer,
-		      uint8 *data, size_t data_length) {
-  dtls_hello_verify_t *hv;
-  int res;
-
+		      uint8 *data, size_t data_length)
+{
   /* This function is called when we expect a ServerHello (i.e. we
    * have sent a ClientHello).  We might instead receive a HelloVerify
    * request containing a cookie. If so, we must repeat the
@@ -2180,7 +2178,7 @@ check_server_hello(dtls_context_t *ctx,
     
     if (dtls_uint16_to_int(data) != DTLS_VERSION) {
       dsrv_log(LOG_ALERT, "unknown DTLS version\n");
-      goto error;
+      return -1;
     }
 
     data += sizeof(uint16);	      /* skip version field */
@@ -2202,7 +2200,7 @@ check_server_hello(dtls_context_t *ctx,
     if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher, 1)) {
       dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n", 
 	       data[0], data[1]);
-      goto error;
+      return -1;
     }
     data += sizeof(uint16);
     data_length -= sizeof(uint16);
@@ -2210,13 +2208,25 @@ check_server_hello(dtls_context_t *ctx,
     /* Check if NULL compression was selected. We do not know any other. */
     if (dtls_uint8_to_int(data) != TLS_COMP_NULL) {
       dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
-      goto error;
+      return -1;
     }
 
     /* FIXME: check PSK hint */
 
     return 0;
   }
+
+error:
+  return -1;
+}
+
+static int
+check_server_hello_verify_request(dtls_context_t *ctx,
+				  dtls_peer_t *peer,
+				  uint8 *data, size_t data_length)
+{
+  dtls_hello_verify_t *hv;
+  int res;
 
   if (!IS_HELLOVERIFY(data, data_length)) {
     debug("no HelloVerify\n");
@@ -2230,8 +2240,7 @@ check_server_hello(dtls_context_t *ctx,
   if (res < 0)
     warn("cannot send ClientHello\n");
 
- error: 
-  return -1;
+  return res;
 }
 
 static int
@@ -2663,21 +2672,43 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 		 uint8 *record_header, uint8 *data, size_t data_length) {
 
   int err = 0;
+  const dtls_state_t state = peer->state;
+  const dtls_peer_type role = peer->role;
 
+  if (data_length < DTLS_HS_LENGTH) {
+    warn("handshake message to short");
+    return -1;
+  }
   /* The following switch construct handles the given message with
    * respect to the current internal state for this peer. In case of
    * error, it is left with return 0. */
 
-  switch (peer->state) {
+  switch (data[0]) {
 
   /************************************************************************
    * Client states
    ************************************************************************/
+  case DTLS_HT_HELLO_VERIFY_REQUEST:
 
-  case DTLS_STATE_CLIENTHELLO:
-    /* here we expect a HelloVerify or ServerHello */
+    debug("DTLS_HT_HELLO_VERIFY_REQUEST\n");
+    if (state != DTLS_STATE_CLIENTHELLO) {
+      return -1;
+    }
 
-    debug("DTLS_STATE_CLIENTHELLO\n");
+    err = check_server_hello_verify_request(ctx, peer, data, data_length);
+    if (err < 0) {
+      warn("error in check_server_hello_verify_request err: %i\n", err);
+      return err;
+    }
+
+    break;
+  case DTLS_HT_SERVER_HELLO:
+
+    debug("DTLS_HT_SERVER_HELLO\n");
+    if (state != DTLS_STATE_CLIENTHELLO) {
+      return -1;
+    }
+
     err = check_server_hello(ctx, peer, data, data_length);
     if (err < 0) {
       warn("error in check_server_hello err: %i\n", err);
@@ -2691,26 +2722,33 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 
     break;
 
-  case DTLS_STATE_WAIT_SERVERCERTIFICATE:
-    /* expect a Certificate */
+  case DTLS_HT_CERTIFICATE:
+    debug("DTLS_HT_CERTIFICATE\n");
 
-    debug("DTLS_STATE_WAIT_SERVERCERTIFICATE\n");
-
+    if ((role == DTLS_CLIENT && state != DTLS_STATE_WAIT_SERVERCERTIFICATE) ||
+        (role == DTLS_SERVER && state != DTLS_STATE_WAIT_CLIENTCERTIFICATE)) {
+      return -1;
+    }
     err = check_server_certificate(ctx, peer, data, data_length);
     if (err < 0) {
       warn("error in check_server_certificate err: %i\n", err);
       return err;
     }
-    peer->state = DTLS_STATE_WAIT_SERVERKEYEXCHANGE;
+    if (role == DTLS_CLIENT) {
+      peer->state = DTLS_STATE_WAIT_SERVERKEYEXCHANGE;
+    } else if (role == DTLS_SERVER){
+      peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
+    }
     /* update_hs_hash(peer, data, data_length); */
 
     break;
 
-  case DTLS_STATE_WAIT_SERVERKEYEXCHANGE:
-    /* expect a ServerKeyExchange */
+  case DTLS_HT_SERVER_KEY_EXCHANGE:
 
-    debug("DTLS_STATE_WAIT_SERVERKEYEXCHANGE\n");
-
+    debug("DTLS_HT_SERVER_KEY_EXCHANGE\n");
+    if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
+      return -1;
+    }
     err = check_server_key_exchange(ctx, peer, data, data_length);
     if (err < 0) {
       warn("error in check_server_key_exchange err: %i\n", err);
@@ -2720,64 +2758,82 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     /* update_hs_hash(peer, data, data_length); */
 
     break;
-  case DTLS_STATE_WAIT_SERVERHELLODONE:
-    /* expect a ServerHelloDone */
 
-    debug("DTLS_STATE_WAIT_SERVERHELLODONE\n");
+  case DTLS_HT_SERVER_HELLO_DONE:
 
-    /* TODO: use the hadnshae type in state machine */
-    if (IS_CERTIFICATEREQUEST(data, data_length)) {
-      err = check_certificate_request(ctx, peer, data, data_length);
-      if (err < 0) {
-        warn("error in check_certificate_request err: %i\n", err);
-        return err;
-      }
-    } else {
-      err = check_server_hellodone(ctx, peer, data, data_length);
-      if (err < 0) {
-        warn("error in check_server_hellodone err: %i\n", err);
-        return err;
-      }
-      peer->state = DTLS_STATE_WAIT_SERVERFINISHED;
-      /* update_hs_hash(peer, data, data_length); */
+    debug("DTLS_HT_SERVER_HELLO_DONE\n");
+    if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+      return -1;
+    }
+
+    err = check_server_hellodone(ctx, peer, data, data_length);
+    if (err < 0) {
+      warn("error in check_server_hellodone err: %i\n", err);
+      return err;
+    }
+    peer->state = DTLS_STATE_WAIT_SERVERFINISHED;
+    /* update_hs_hash(peer, data, data_length); */
+
+    break;
+
+  case DTLS_HT_CERTIFICATE_REQUEST:
+
+    debug("DTLS_HT_CERTIFICATE_REQUEST\n");
+    if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+      return -1;
+    }
+
+    err = check_certificate_request(ctx, peer, data, data_length);
+    if (err < 0) {
+      warn("error in check_certificate_request err: %i\n", err);
+      return err;
     }
 
     break;
 
-  case DTLS_STATE_WAIT_SERVERFINISHED:
+  case DTLS_HT_FINISHED:
     /* expect a Finished message from server */
 
-    debug("DTLS_STATE_WAIT_SERVERFINISHED\n");
+    debug("DTLS_HT_FINISHED\n");
+    if ((role == DTLS_CLIENT && state != DTLS_STATE_WAIT_SERVERFINISHED) ||
+        (role == DTLS_SERVER && state != DTLS_STATE_WAIT_FINISHED)) {
+      return -1;
+    }
+
     err = check_finished(ctx, peer, record_header, data, data_length);
     if (err < 0) {
       warn("error in check_finished err: %i\n", err);
       return err;
     }
-    peer->state = DTLS_STATE_CONNECTED;
+    if (role == DTLS_SERVER) {
+      /* send ServerFinished */
+      update_hs_hash(peer, data, data_length);
+
+      if (dtls_send_finished(ctx, peer, PRF_LABEL(server),
+			     PRF_LABEL_SIZE(server)) > 0) {
+        peer->state = DTLS_STATE_CONNECTED;
+      } else  if (role == DTLS_CLIENT) {
+        warn("sending server Finished failed\n");
+      }
+    } else {
+      peer->state = DTLS_STATE_CONNECTED;
+    }
 
     break;
 
   /************************************************************************
    * Server states
    ************************************************************************/
-  case DTLS_STATE_WAIT_CLIENTCERTIFICATE:
-    /* expect a Certificate */
 
-    debug("DTLS_STATE_WAIT_SERVERCERTIFICATE\n");
-    err = check_server_certificate(ctx, peer, data, data_length);
-    if (err < 0) {
-      warn("error in check_server_certificate err: %i\n", err);
-      return err;
-    }
-    peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
-    /* update_hs_hash(peer, data, data_length); */
-    break;
-
-  case DTLS_STATE_WAIT_CLIENTKEYEXCHANGE:
-    /* here we expect a ClientHello */
+  case DTLS_HT_CLIENT_KEY_EXCHANGE:
     /* handle ClientHello, update msg and msglen and goto next if not finished */
 
-    debug("DTLS_STATE_WAIT_CLIENTKEYEXCHANGE\n");
+    debug("DTLS_HT_CLIENT_KEY_EXCHANGE\n");
+
+    if (state != DTLS_STATE_WAIT_CLIENTKEYEXCHANGE) {
+      return -1;
+    }
+
     err = check_client_keyexchange(ctx, peer, data, data_length);
     if (err < 0) {
       warn("error in check_client_keyexchange err: %i\n", err);
@@ -2792,10 +2848,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
       peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
     break;
 
-  case DTLS_STATE_WAIT_CERTIFICATEVERIFY:
-    /* expect a Certificate */
+  case DTLS_HT_CERTIFICATE_VERIFY:
 
-    debug("DTLS_STATE_WAIT_CERTIFICATEVERIFY\n");
+    debug("DTLS_HT_CERTIFICATE_VERIFY\n");
+    if (state != DTLS_STATE_WAIT_CERTIFICATEVERIFY) {
+      return -1;
+    }
 
     err = check_client_certificate_verify(ctx, peer, data, data_length);
     if (err < 0) {
@@ -2807,33 +2865,14 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
     break;
 
-  case DTLS_STATE_WAIT_FINISHED:
-    debug("DTLS_STATE_WAIT_FINISHED\n");
-    err = check_finished(ctx, peer, record_header, data, data_length);
-
-    if (err < 0) {
-      warn("error in check_finished err: %i\n", err);
-      return err;
-    }
-
-    debug("finished!\n");
-	
-    /* send ServerFinished */
-    update_hs_hash(peer, data, data_length);
-
-    if (dtls_send_finished(ctx, peer, PRF_LABEL(server),
-			   PRF_LABEL_SIZE(server)) > 0) {
-      peer->state = DTLS_STATE_CONNECTED;
-    } else {
-      warn("sending server Finished failed\n");
-    }
-    break;
-      
-  case DTLS_STATE_CONNECTED:
+  case DTLS_HT_CLIENT_HELLO:
     /* At this point, we have a good relationship with this peer. This
      * state is left for re-negotiation of key material. */
     
-    debug("DTLS_STATE_CONNECTED\n");
+    debug("DTLS_HT_CLIENT_HELLO\n");
+    if (state != DTLS_STATE_CONNECTED) {
+      return -1;
+    }
 
     /* renegotiation */
     err = dtls_verify_peer(ctx, peer, &peer->session, record_header, data,
@@ -2857,13 +2896,15 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
     /* update finish MAC */
     update_hs_hash(peer, data, data_length);
 
-    if (dtls_send_server_hello_msgs(ctx, peer) > 0) {
-      if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
-	  ctx && ctx->h && ctx->h->verify_ecdsa_key)
-        peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
-      else
-        peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
+    err = dtls_send_server_hello_msgs(ctx, peer);
+    if (err < 0) {
+      return err;
     }
+    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+	ctx && ctx->h && ctx->h->verify_ecdsa_key)
+      peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
+    else
+      peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
 
     /* after sending the ServerHelloDone, we expect the
      * ClientKeyExchange (possibly containing the PSK id),
@@ -2871,11 +2912,10 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
      */
 
     break;
-    
-  case DTLS_STATE_INIT:	      /* these states should not occur here */
-  case DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC:
+
+  case DTLS_HT_HELLO_REQUEST:
   default:
-    dsrv_log(LOG_CRIT, "unhandled state %d\n", peer->state);
+    dsrv_log(LOG_CRIT, "unhandled message %d\n", data[0]);
     err = -1;
     assert(0);
   }
@@ -3160,6 +3200,7 @@ dtls_handle_message(dtls_context_t *ctx,
     case DTLS_CT_ALERT:
       err = handle_alert(ctx, peer, msg, data, data_length);
       if (err < 0) {
+        warn("received wrong package\n");
 	/* handle alert has invalidated peer */
 	peer = NULL;
 	return err;
@@ -3168,6 +3209,7 @@ dtls_handle_message(dtls_context_t *ctx,
     case DTLS_CT_HANDSHAKE:
       err = handle_handshake(ctx, peer, msg, data, data_length);
       if (err < 0) {
+        warn("received wrong package\n");
         return err;
       }
       if (peer->state == DTLS_STATE_CONNECTED) {
