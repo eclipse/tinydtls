@@ -1377,7 +1377,7 @@ dtls_verify_peer(dtls_context_t *ctx,
     /* check if cookies match */
     if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
       debug("found matching cookie\n");
-      return 1;      
+      return 0;
     }
 
     if (len > 0) {
@@ -1406,7 +1406,7 @@ dtls_verify_peer(dtls_context_t *ctx,
       warn("cannot send HelloVerify request\n");
       return err;
     }
-    return 0; /* HelloVerify is sent, now we cannot do anything but wait */
+    return err; /* HelloVerify is sent, now we cannot do anything but wait */
   }
 
   return -1;			/* not a ClientHello, signal error */
@@ -2668,15 +2668,19 @@ decrypt_verify(dtls_peer_t *peer,
 
 
 int
-handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, 
+handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
+		 const dtls_peer_type role, const dtls_state_t state,
 		 uint8 *record_header, uint8 *data, size_t data_length) {
 
   int err = 0;
-  const dtls_state_t state = peer->state;
-  const dtls_peer_type role = peer->role;
 
   if (data_length < DTLS_HS_LENGTH) {
     warn("handshake message to short");
+    return -1;
+  }
+
+  if (!peer && data[0] != DTLS_HT_CLIENT_HELLO) {
+    warn("If there is no peer only ClientHello is allowed");
     return -1;
   }
   /* The following switch construct handles the given message with
@@ -2870,20 +2874,65 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
      * state is left for re-negotiation of key material. */
     
     debug("DTLS_HT_CLIENT_HELLO\n");
-    if (state != DTLS_STATE_CONNECTED) {
+    if ((peer && state != DTLS_STATE_CONNECTED) ||
+	(!peer && state != DTLS_STATE_WAIT_CLIENTHELLO)) {
       return -1;
     }
 
-    /* renegotiation */
-    err = dtls_verify_peer(ctx, peer, &peer->session, record_header, data,
+    /* When no DTLS state exists for this peer, we only allow a
+       Client Hello message with
+
+       a) a valid cookie, or
+       b) no cookie.
+
+       Anything else will be rejected. Fragementation is not allowed
+       here as it would require peer state as well.
+    */
+    err = dtls_verify_peer(ctx, peer, session, record_header, data,
 			   data_length);
     if (err < 0) {
       warn("error in dtls_verify_peer err: %i\n", err);
       return err;
     }
 
+    if (err > 0) {
+      debug("server hello verify was sent\n");
+      return err;
+    }
+
+    if (!peer) {
+
+      /* msg contains a Client Hello with a valid cookie, so we can
+       * safely create the server state machine and continue with
+       * the handshake. */
+      peer = dtls_new_peer(ctx, session);
+      if (!peer) {
+        dsrv_log(LOG_ALERT, "cannot create peer");
+        /* FIXME: signal internal error */
+        return -1;
+      }
+      peer->role = DTLS_SERVER;
+
+      /* Initialize record sequence number to 1 for new peers. The first
+       * record with sequence number 0 is a stateless Hello Verify Request.
+       */
+      peer->rseq[5] = 1;
+
+#ifndef WITH_CONTIKI
+      HASH_ADD_PEER(ctx->peers, session, peer);
+#else /* WITH_CONTIKI */
+      list_add(ctx->peers, peer);
+#endif /* WITH_CONTIKI */
+    }
+
     clear_hs_hash(peer);
 
+    /* First negotiation step: check for PSK
+     *
+     * Note that we already have checked that msg is a Handshake
+     * message containing a ClientHello. dtls_get_cipher() therefore
+     * does not check again.
+     */
     err = dtls_update_parameters(ctx, peer, data, data_length);
     if (err < 0) {
 
@@ -3057,126 +3106,37 @@ dtls_handle_message(dtls_context_t *ctx,
     debug("dtls_handle_message: FOUND PEER\n");
   }
 
-  if (!peer) {			
-
-    /* get first record from client message */
-    rlen = is_record(msg, msglen);
-    assert(rlen <= msglen);
-
-    if (!rlen) {
-#ifndef NDEBUG
-      if (msglen > 3) 
-	debug("dropped invalid message %02x%02x%02x%02x\n", msg[0], msg[1], msg[2], msg[3]);
-      else
-	debug("dropped invalid message (less than four bytes)\n");
-#endif
-      return -1;
-    }
-
-    /* is_record() ensures that msg contains at least a record header */
-    data = msg + DTLS_RH_LENGTH;
-    data_length = rlen - DTLS_RH_LENGTH;
-
-    /* When no DTLS state exists for this peer, we only allow a
-       Client Hello message with 
-        
-       a) a valid cookie, or 
-       b) no cookie.
-
-       Anything else will be rejected. Fragementation is not allowed
-       here as it would require peer state as well.
-    */
-
-    if (dtls_verify_peer(ctx, NULL, session, msg, data, data_length) <= 0) {
-      warn("cannot verify peer\n");
-      return -1;
-    }
-    
-    /* msg contains a Client Hello with a valid cookie, so we can
-       safely create the server state machine and continue with
-       the handshake. */
-
-    peer = dtls_new_peer(ctx, session);
-    if (!peer) {
-      dsrv_log(LOG_ALERT, "cannot create peer");
-      /* FIXME: signal internal error */
-      return -1;
-    }
-    peer->role = DTLS_SERVER;
-
-    /* Initialize record sequence number to 1 for new peers. The first
-     * record with sequence number 0 is a stateless Hello Verify Request.
-     */
-    peer->rseq[5] = 1;
-
-    /* First negotiation step: check for PSK
-     *
-     * Note that we already have checked that msg is a Handshake
-     * message containing a ClientHello. dtls_get_cipher() therefore
-     * does not check again.
-     */
-    err = dtls_update_parameters(ctx, peer, msg + DTLS_RH_LENGTH,
-				 rlen - DTLS_RH_LENGTH);
-    if (err < 0) {
-
-      warn("error updating security parameters\n");
-      /* FIXME: send handshake failure Alert */
-      dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, 
-		 DTLS_ALERT_HANDSHAKE_FAILURE);
-      dtls_free_peer(peer);
-      return err;
-    }
-
-#ifndef WITH_CONTIKI
-    HASH_ADD_PEER(ctx->peers, session, peer);
-#else /* WITH_CONTIKI */
-    list_add(ctx->peers, peer);
-#endif /* WITH_CONTIKI */
-    
-    /* update finish MAC */
-    update_hs_hash(peer, msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH); 
- 
-    if (!dtls_send_server_hello_msgs(ctx, peer)) {
-      if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
-	  ctx && ctx->h && ctx->h->verify_ecdsa_key)
-        peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
-      else
-        peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
-    }
-    
-    /* after sending the ServerHelloDone, we expect the 
-     * ClientKeyExchange (possibly containing the PSK id),
-     * followed by a ChangeCipherSpec and an encrypted Finished.
-     */
-
-    msg += rlen;
-    msglen -= rlen;
-  } else {
-    debug("found peer\n");
-  }
-
-  /* At this point peer contains a state machine to handle the
-     received message. */
-
-  assert(peer);
-
   /* FIXME: check sequence number of record and drop message if the
    * number is not exactly the last number that we have responded to + 1. 
    * Otherwise, stop retransmissions for this specific peer and 
    * continue processing. */
-  dtls_stop_retransmission(ctx, peer);
+  if (peer) {
+    dtls_stop_retransmission(ctx, peer);
+  }
 
   while ((rlen = is_record(msg,msglen))) {
+    dtls_peer_type role;
+    dtls_state_t state;
 
     debug("got packet %d (%d bytes)\n", msg[0], rlen);
-    /* skip packet if it is from a different epoch */
-    if (memcmp(DTLS_RECORD_HEADER(msg)->epoch, 
-	       peer->epoch, sizeof(uint16)) != 0)
-      goto next;
+    if (peer) {
+      /* skip packet if it is from a different epoch */
+      if (memcmp(DTLS_RECORD_HEADER(msg)->epoch,
+		 peer->epoch, sizeof(uint16)) != 0)
+        goto next;
 
-    if (!decrypt_verify(peer, msg, rlen, &data, &data_length)) {
-      info("decrypt_verify() failed\n");
-      goto next;
+      if (!decrypt_verify(peer, msg, rlen, &data, &data_length)) {
+        info("decrypt_verify() failed\n");
+        goto next;
+      }
+      role = peer->role;
+      state = peer->state;
+    } else {
+      /* is_record() ensures that msg contains at least a record header */
+      data = msg + DTLS_RH_LENGTH;
+      data_length = rlen - DTLS_RH_LENGTH;
+      state = DTLS_STATE_WAIT_CLIENTHELLO;
+      role = DTLS_SERVER;
     }
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "receive header", msg,
@@ -3207,12 +3167,12 @@ dtls_handle_message(dtls_context_t *ctx,
       }
 
     case DTLS_CT_HANDSHAKE:
-      err = handle_handshake(ctx, peer, msg, data, data_length);
+      err = handle_handshake(ctx, peer, session, role, state, msg, data, data_length);
       if (err < 0) {
         warn("received wrong package\n");
         return err;
       }
-      if (peer->state == DTLS_STATE_CONNECTED) {
+      if (peer && peer->state == DTLS_STATE_CONNECTED) {
 	/* stop retransmissions */
 	dtls_stop_retransmission(ctx, peer);
 	CALL(ctx, event, &peer->session, 0, DTLS_EVENT_CONNECTED);
