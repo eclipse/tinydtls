@@ -338,7 +338,7 @@ dtls_create_cookie(dtls_context_t *ctx,
   }
   
   memcpy(cookie, buf, *clen);
-  return 1;
+  return 0;
 }
 
 #ifdef DTLS_CHECK_CONTENTTYPE
@@ -517,14 +517,16 @@ calculate_key_block(dtls_context_t *ctx,
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
   pre_master_secret = config->key_block;
+  int err;
 
   switch (config->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
-    if (CALL(ctx, get_psk_key, session, NULL, 0, &psk) < 0) {
+    err = CALL(ctx, get_psk_key, session, NULL, 0, &psk);
+    if (err < 0) {
       dsrv_log(LOG_CRIT, "no psk key for session available\n");
-      return 0;
+      return err;
     }
   /* Temporarily use the key_block storage space for the pre master secret. */
     pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
@@ -544,7 +546,7 @@ calculate_key_block(dtls_context_t *ctx,
   }
   default:
     dsrv_log(LOG_CRIT, "calculate_key_block: unknown cipher\n");
-    return 0;
+    return -1;
   }
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", client_random, 32, 0);
@@ -575,7 +577,7 @@ calculate_key_block(dtls_context_t *ctx,
 	   dtls_kb_size(config));
 
   dtls_debug_keyblock(config);
-  return 1;
+  return 0;
 }
 
 int
@@ -721,7 +723,7 @@ dtls_update_parameters(dtls_context_t *ctx,
     config->cipher = CURRENT_CONFIG(peer)->cipher;
     config->compression = CURRENT_CONFIG(peer)->compression;
 
-    return 1;
+    return 0;
   }
 
   data += sizeof(uint16);
@@ -741,13 +743,13 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (!ok) {
     /* reset config cipher to a well-defined value */
     config->cipher = TLS_NULL_WITH_NULL_NULL;
-    return 0;
+    return -1;
   }
 
   if (data_length < sizeof(uint8)) { 
     /* no compression specified, take the current compression method */
     config->compression = CURRENT_CONFIG(peer)->compression;
-    return 1;
+    return -1;
   }
 
   i = dtls_uint8_to_int(data);
@@ -771,9 +773,9 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (data_length < sizeof(uint16)) { 
     /* no tls extensions specified */
     if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-      return 0;
+      return -1;
     }
-    return 1;
+    return 0;
   }
 
   /* get the length of the tls extension list */
@@ -832,14 +834,14 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
     if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type) {
       warn("not all required tls extensions found in client hello\n");
-      return 0;
+      return -1;
     }
   }
 
-  return ok;
+  return !ok;
  error:
   warn("ClientHello too short (%d bytes)\n", data_length);
-  return 0;
+  return -1;
 }
 
 static inline int
@@ -1135,7 +1137,7 @@ dtls_prepare_record(dtls_peer_t *peer,
 		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
-      return -1;
+      return res;
 
     res += 8;			/* increment res by size of nonce_explicit */
     dtls_dsrv_hexdump_log(LOG_DEBUG, "message:", start, res, 0);
@@ -1349,6 +1351,7 @@ dtls_verify_peer(dtls_context_t *ctx,
   uint8 *p = buf;
   int len = DTLS_COOKIE_LENGTH;
   uint8 *cookie;
+  int err;
 #undef mycookie
 #define mycookie (buf + DTLS_HV_LENGTH)
 
@@ -1358,9 +1361,9 @@ dtls_verify_peer(dtls_context_t *ctx,
       && data[0] == DTLS_HT_CLIENT_HELLO) {
 
     /* Store cookie where we can reuse it for the HelloVerify request. */
-    if (dtls_create_cookie(ctx, session, data, data_length,
-			   mycookie, &len) < 0)
-      return -1;
+    err = dtls_create_cookie(ctx, session, data, data_length, mycookie, &len);
+    if (err < 0)
+      return err;
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "create cookie", mycookie, len, 0);
 
@@ -1396,11 +1399,12 @@ dtls_verify_peer(dtls_context_t *ctx,
 
     p += DTLS_COOKIE_LENGTH;
 
-    if (dtls_send_handshake_msg_hash(ctx, peer, session,
-				     DTLS_HT_HELLO_VERIFY_REQUEST,
-				     buf, p - buf, 0) < 0) {
+    err = dtls_send_handshake_msg_hash(ctx, peer, session,
+				       DTLS_HT_HELLO_VERIFY_REQUEST,
+				       buf, p - buf, 0);
+    if (err < 0) {
       warn("cannot send HelloVerify request\n");
-      return -1;
+      return err;
     }
     return 0; /* HelloVerify is sent, now we cannot do anything but wait */
   }
@@ -1511,9 +1515,9 @@ check_client_certificate_verify(dtls_context_t *ctx,
 			    sha256hash, sizeof(sha256hash),
 			    result_r, result_s);
 
-  if (!i) {
+  if (i < 0) {
     dsrv_log(LOG_ALERT, "wrong signature\n");
-    return -1;
+    return i;
   }
   return 0;
 }
@@ -1827,9 +1831,10 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
   if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
     const dtls_ecdsa_key_t *ecdsa_key;
 
-    if (CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key) < 0) {
+    res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
+    if (res < 0) {
       dsrv_log(LOG_CRIT, "no ecdsa certificate to send in certificate\n");
-      return -1;
+      return res;
     }
 
     res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
@@ -2234,6 +2239,7 @@ check_server_certificate(dtls_context_t *ctx,
 			 dtls_peer_t *peer,
 			 uint8 *data, size_t data_length)
 {
+  int err;
   dtls_security_parameters_t *config = OTHER_CONFIG(peer);
 
   if (!IS_CERTIFICATE(data, data_length))
@@ -2271,12 +2277,13 @@ check_server_certificate(dtls_context_t *ctx,
 	 sizeof(config->ecdsa.other_pub_y));
   data += sizeof(config->ecdsa.other_pub_y);
 
-  if (CALL(ctx, verify_ecdsa_key, &peer->session,
-	   config->ecdsa.other_pub_x,
-	   config->ecdsa.other_pub_y,
-	   sizeof(config->ecdsa.other_pub_x)) < 0) {
+  err = CALL(ctx, verify_ecdsa_key, &peer->session,
+	     config->ecdsa.other_pub_x,
+	     config->ecdsa.other_pub_y,
+	     sizeof(config->ecdsa.other_pub_x));
+  if (err < 0) {
     warn("The certificate was not accepted\n");
-    return -1;
+    return err;
   }
 
   return 0;
@@ -2408,9 +2415,9 @@ check_server_key_exchange(dtls_context_t *ctx,
 			    1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
 			    result_r, result_s);
 
-  if (!i) {
+  if (i < 0) {
     dsrv_log(LOG_ALERT, "wrong signature\n");
-    return -1;
+    return i;
   }
   return 0;
 }
@@ -2510,16 +2517,17 @@ check_server_hellodone(dtls_context_t *ctx,
 
   if (OTHER_CONFIG(peer)->do_client_auth) {
 
-    if (CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key) < 0) {
+    res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
+    if (res < 0) {
       dsrv_log(LOG_CRIT, "no ecdsa certificate to send in certificate\n");
-      return -1;
+      return res;
     }
 
     res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Certificate record\n");
-      return -1;
+      return res;
     }
   }
 
@@ -2528,7 +2536,7 @@ check_server_hellodone(dtls_context_t *ctx,
 
   if (res < 0) {
     debug("cannot send KeyExchange message\n");
-    return -1;
+    return res;
   }
 
   if (OTHER_CONFIG(peer)->do_client_auth) {
@@ -2537,24 +2545,27 @@ check_server_hellodone(dtls_context_t *ctx,
 
     if (res < 0) {
       debug("dtls_server_hello: cannot prepare Certificate record\n");
-      return -1;
+      return res;
     }
   }
 
-  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
-			   OTHER_CONFIG(peer)->client_random,
-			   OTHER_CONFIG(peer)->server_random)) {
-    return -1;
+  res = calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
+			    OTHER_CONFIG(peer)->client_random,
+			    OTHER_CONFIG(peer)->server_random);
+  if (res < 0) {
+    return res;
   }
 
-  if (init_cipher(OTHER_CONFIG(peer))) {
-    return -1;
+  res = init_cipher(OTHER_CONFIG(peer));
+  if (res < 0) {
+    return res;
   }
 
   /* and switch cipher suite */
-  if (dtls_send_ccs(ctx, peer) < 0) {
+  res = dtls_send_ccs(ctx, peer);
+  if (res < 0) {
     debug("cannot send CCS message\n");
-    return -1;
+    return res;
   }
 
   SWITCH_CONFIG(peer);
@@ -2834,12 +2845,13 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 
     clear_hs_hash(peer);
 
-    if (!dtls_update_parameters(ctx, peer, data, data_length)) {
+    err = dtls_update_parameters(ctx, peer, data, data_length);
+    if (err < 0) {
 
       warn("error updating security parameters\n");
       dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
 		 DTLS_ALERT_NO_RENEGOTIATION);
-      return 0;
+      return err;
     }
 
     /* update finish MAC */
@@ -2873,7 +2885,9 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer,
 
 int
 handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer, 
-	   uint8 *record_header, uint8 *data, size_t data_length) {
+	   uint8 *record_header, uint8 *data, size_t data_length)
+{
+  int err;
 
   /* A CCS message is handled after a KeyExchange message was
    * received from the client. When security parameters have been
@@ -2889,10 +2903,11 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 
   }
 
-  if (!calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
-			   OTHER_CONFIG(peer)->client_random,
-			   OTHER_CONFIG(peer)->server_random)) {
-    return -1;
+  err = calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
+			    OTHER_CONFIG(peer)->client_random,
+			    OTHER_CONFIG(peer)->server_random);
+  if (err < 0) {
+    return err;
   }
 
   if (init_cipher(OTHER_CONFIG(peer))) {
@@ -3059,15 +3074,16 @@ dtls_handle_message(dtls_context_t *ctx,
      * message containing a ClientHello. dtls_get_cipher() therefore
      * does not check again.
      */
-    if (!dtls_update_parameters(ctx, peer, 
-			msg + DTLS_RH_LENGTH, rlen - DTLS_RH_LENGTH)) {
+    err = dtls_update_parameters(ctx, peer, msg + DTLS_RH_LENGTH,
+				 rlen - DTLS_RH_LENGTH);
+    if (err < 0) {
 
       warn("error updating security parameters\n");
       /* FIXME: send handshake failure Alert */
       dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, 
 		 DTLS_ALERT_HANDSHAKE_FAILURE);
       dtls_free_peer(peer);
-      return -1;
+      return err;
     }
 
 #ifndef WITH_CONTIKI
