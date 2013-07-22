@@ -26,6 +26,13 @@
 #include "peer.h"
 #include "debug.h"
 
+#ifndef NDEBUG
+#include <stdio.h>
+
+extern size_t dsrv_print_addr(const session_t *addr, unsigned char *buf, 
+			      size_t len);
+#endif /* NDEBUG */
+
 #ifndef WITH_CONTIKI
 void peer_init()
 {
@@ -72,12 +79,10 @@ dtls_new_peer(const session_t *session) {
     memcpy(&peer->session, session, sizeof(session_t));
 
 #ifndef NDEBUG
-    {
+    if (dtls_get_log_level() >= LOG_DEBUG) {
       unsigned char addrbuf[72];
       dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
       printf("dtls_new_peer: %s\n", addrbuf);
-      dump((unsigned char *)session, sizeof(session_t));
-      printf("\n");
     }
 #endif
     /* initially allow the NULL cipher */

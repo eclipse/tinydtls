@@ -441,36 +441,34 @@ dtls_verify_peer(dtls_context_t *ctx,
     if (dtls_create_cookie(ctx, session, data, data_length,
 			   mycookie, &len) < 0)
       return -1;
-#ifndef NDEBUG
-    debug("create cookie: ");
-    dump(mycookie, len);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     debug("create cookie: "); */
+/*     dump(mycookie, len); */
+/*     printf("\n"); */
+/* #endif */
     assert(len == DTLS_COOKIE_LENGTH);
     
     /* Perform cookie check. */
     len = dtls_get_cookie(data, data_length, &cookie);
 
-#ifndef NDEBUG
-    debug("compare with cookie: ");
-    dump(cookie, len);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     debug("compare with cookie: "); */
+/*     dump(cookie, len); */
+/*     printf("\n"); */
+/* #endif */
 
     /* check if cookies match */
     if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
     debug("found matching cookie\n");
       return 1;      
     }
-#ifndef NDEBUG
     if (len > 0) {
-      debug("invalid cookie:");
+      debug("invalid cookie");
+#ifndef NDEBUG
       dump(cookie, len);
       printf("\n");
-    } else {
-      debug("cookie len is 0!\n");
-    }
 #endif
+    }
     /* ClientHello did not contain any valid cookie, hence we send a
      * HelloVerify request. */
 
@@ -562,30 +560,30 @@ calculate_key_block(dtls_context_t *ctx,
     return 0;
   }
 
-#ifndef NDEBUG
-  {
-    int i;
+/* #ifndef NDEBUG */
+/*   { */
+/*     int i; */
 
-    printf("client_random:");
-    for (i = 0; i < 32; ++i)
-      printf(" %02x", client_random[i]);
-    printf("\n");
+/*     printf("client_random:"); */
+/*     for (i = 0; i < 32; ++i) */
+/*       printf(" %02x", client_random[i]); */
+/*     printf("\n"); */
 
-    printf("server_random:");
-    for (i = 0; i < 32; ++i)
-      printf(" %02x", server_random[i]);
-    printf("\n");
+/*     printf("server_random:"); */
+/*     for (i = 0; i < 32; ++i) */
+/*       printf(" %02x", server_random[i]); */
+/*     printf("\n"); */
 
-    printf("psk: (%lu bytes):", key->key.psk.key_length);
-    hexdump(key->key.psk.key, key->key.psk.key_length);
-    printf("\n");
+/*     printf("psk: (%lu bytes):", key->key.psk.key_length); */
+/*     hexdump(key->key.psk.key, key->key.psk.key_length); */
+/*     printf("\n"); */
 
-    printf("pre_master_secret: (%lu bytes):", pre_master_len);
-    for (i = 0; i < pre_master_len; ++i)
-      printf(" %02x", pre_master_secret[i]);
-    printf("\n");
-  }
-#endif /* NDEBUG */
+/*     printf("pre_master_secret: (%lu bytes):", pre_master_len); */
+/*     for (i = 0; i < pre_master_len; ++i) */
+/*       printf(" %02x", pre_master_secret[i]); */
+/*     printf("\n"); */
+/*   } */
+/* #endif /\* NDEBUG *\/ */
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
@@ -594,15 +592,15 @@ calculate_key_block(dtls_context_t *ctx,
 	   config->master_secret, 
 	   DTLS_MASTER_SECRET_LENGTH);
 
-#ifndef NDEBUG
-  {
-    int i;
-    printf("master_secret (%d bytes):", DTLS_MASTER_SECRET_LENGTH);
-    for (i = 0; i < DTLS_MASTER_SECRET_LENGTH; ++i)
-      printf(" %02x", config->master_secret[i]);
-    printf("\n");
-  }
-#endif /* NDEBUG */
+/* #ifndef NDEBUG */
+/*   { */
+/*     int i; */
+/*     printf("master_secret (%d bytes):", DTLS_MASTER_SECRET_LENGTH); */
+/*     for (i = 0; i < DTLS_MASTER_SECRET_LENGTH; ++i) */
+/*       printf(" %02x", config->master_secret[i]); */
+/*     printf("\n"); */
+/*   } */
+/* #endif /\* NDEBUG *\/ */
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
@@ -616,42 +614,42 @@ calculate_key_block(dtls_context_t *ctx,
 	   config->key_block,
 	   dtls_kb_size(config));
 
-#ifndef NDEBUG
-  {
-      printf("key_block (%d bytes):\n", dtls_kb_size(config));
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(config), 
-	   dtls_kb_mac_secret_size(config));
-      printf("\n");
+/* #ifndef NDEBUG */
+/*   { */
+/*       printf("key_block (%d bytes):\n", dtls_kb_size(config)); */
+/*       printf("  client_MAC_secret:\t");   */
+/*       dump(dtls_kb_client_mac_secret(config),  */
+/* 	   dtls_kb_mac_secret_size(config)); */
+/*       printf("\n"); */
 
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(config), 
-	   dtls_kb_mac_secret_size(config));
-      printf("\n");
+/*       printf("  server_MAC_secret:\t");   */
+/*       dump(dtls_kb_server_mac_secret(config),  */
+/* 	   dtls_kb_mac_secret_size(config)); */
+/*       printf("\n"); */
 
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(config), 
-	   dtls_kb_key_size(config));
-      printf("\n");
+/*       printf("  client_write_key:\t");   */
+/*       dump(dtls_kb_client_write_key(config),  */
+/* 	   dtls_kb_key_size(config)); */
+/*       printf("\n"); */
 
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(config), 
-	   dtls_kb_key_size(config));
-      printf("\n");
+/*       printf("  server_write_key:\t");   */
+/*       dump(dtls_kb_server_write_key(config),  */
+/* 	   dtls_kb_key_size(config)); */
+/*       printf("\n"); */
 
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(config), 
-	   dtls_kb_iv_size(config));
-      printf("\n");
+/*       printf("  client_IV:\t\t");   */
+/*       dump(dtls_kb_client_iv(config),  */
+/* 	   dtls_kb_iv_size(config)); */
+/*       printf("\n"); */
       
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(config), 
-	   dtls_kb_iv_size(config));
-      printf("\n");
+/*       printf("  server_IV:\t\t");   */
+/*       dump(dtls_kb_server_iv(config),  */
+/* 	   dtls_kb_iv_size(config)); */
+/*       printf("\n"); */
       
 
-  }
-#endif
+/*   } */
+/* #endif */
   return 1;
 }
 
@@ -821,11 +819,11 @@ extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
 
 static inline void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
-#ifndef NDEBUG
-  printf("add MAC data: ");
-  dump(data, length);
-  printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*   printf("add MAC data: "); */
+/*   dump(data, length); */
+/*   printf("\n"); */
+/* #endif */
   dtls_hash_update(&peer->hs_state.hs_hash, data, length);
 }
 
@@ -898,10 +896,10 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	   buf, digest_length,
 	   b.verify_data, sizeof(b.verify_data));
   
-#ifndef NDEBUG
-  printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(b.verify_data)); printf("\n");
-  printf("v:\t"); dump(b.verify_data, sizeof(b.verify_data)); printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*   printf("d:\t"); dump(data + DTLS_HS_LENGTH, sizeof(b.verify_data)); printf("\n"); */
+/*   printf("v:\t"); dump(b.verify_data, sizeof(b.verify_data)); printf("\n"); */
+/* #endif */
   return 
     memcmp(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data)) == 0;
 }
@@ -994,14 +992,14 @@ dtls_prepare_record(dtls_peer_t *peer,
       warn("no write_cipher available!\n");
       return -1;
     }
-#ifndef NDEBUG
-    printf("nonce:\t");
-    dump(N, DTLS_CCM_BLOCKSIZE);
-    printf("\nkey:\t");
-    dump(dtls_kb_local_write_key(CURRENT_CONFIG(peer)), 
-	 dtls_kb_key_size(CURRENT_CONFIG(peer)));
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     printf("nonce:\t"); */
+/*     dump(N, DTLS_CCM_BLOCKSIZE); */
+/*     printf("\nkey:\t"); */
+/*     dump(dtls_kb_local_write_key(CURRENT_CONFIG(peer)),  */
+/* 	 dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*     printf("\n"); */
+/* #endif */
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
     
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
@@ -1019,10 +1017,10 @@ dtls_prepare_record(dtls_peer_t *peer,
     if (res < 0)
       return -1;
 
-#ifndef NDEBUG
-    dump(p, res + 8);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     dump(p, res + 8); */
+/*     printf("\n"); */
+/* #endif */
     res += 8;			/* increment res by size of nonce_explicit */
   }
 
@@ -1092,13 +1090,13 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   /* if (peer && MUST_HASH(peer, type, buf, buflen)) */
   /*   update_hs_hash(peer, buf, buflen); */
   
-#ifndef NDEBUG
-  debug("send %d bytes\n", buflen);
-  hexdump(sendbuf, sizeof(dtls_record_header_t));
-  printf("\n");
-  hexdump(buf, buflen);
-  printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*   debug("send %d bytes\n", buflen); */
+/*   hexdump(sendbuf, sizeof(dtls_record_header_t)); */
+/*   printf("\n"); */
+/*   hexdump(buf, buflen); */
+/*   printf("\n"); */
+/* #endif */
 
   if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
@@ -1339,11 +1337,11 @@ dtls_send_server_finished(dtls_context_t *ctx, dtls_peer_t *peer) {
 	   buf, length,
 	   p, DTLS_FIN_LENGTH);
 
-#ifndef NDEBUG
-  printf("server finished MAC:\t");
-  dump(p, DTLS_FIN_LENGTH);
-  printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*   printf("server finished MAC:\t"); */
+/*   dump(p, DTLS_FIN_LENGTH); */
+/*   printf("\n"); */
+/* #endif */
 
   p += DTLS_FIN_LENGTH;
 
@@ -1545,42 +1543,42 @@ check_server_hellodone(dtls_context_t *ctx,
   SWITCH_CONFIG(peer);
   inc_uint(uint16, peer->epoch);
   memset(peer->rseq, 0, sizeof(peer->rseq));
-#ifndef NDEBUG
-  {
-      printf("key_block:\n");
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/* #ifndef NDEBUG */
+/*   { */
+/*       printf("key_block:\n"); */
+/*       printf("  client_MAC_secret:\t");   */
+/*       dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_MAC_secret:\t");   */
+/*       dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  client_write_key:\t");   */
+/*       dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_write_key:\t");   */
+/*       dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  client_IV:\t\t");   */
+/*       dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_iv_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
       
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_IV:\t\t");   */
+/*       dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_iv_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
       
 
-  }
-#endif
+/*   } */
+/* #endif */
 
   /* Client Finished */
   {
@@ -1669,16 +1667,16 @@ decrypt_verify(dtls_peer_t *peer,
       return 0;
     }
       
-#ifndef NDEBUG
-    printf("nonce:\t");
-    dump(N, DTLS_CCM_BLOCKSIZE);
-    printf("\nkey:\t");
-    dump(dtls_kb_remote_write_key(CURRENT_CONFIG(peer)), 
-	 dtls_kb_key_size(CURRENT_CONFIG(peer)));
-    printf("\nciphertext:\n");
-    dump(*cleartext, *clen);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     printf("nonce:\t"); */
+/*     dump(N, DTLS_CCM_BLOCKSIZE); */
+/*     printf("\nkey:\t"); */
+/*     dump(dtls_kb_remote_write_key(CURRENT_CONFIG(peer)),  */
+/* 	 dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*     printf("\nciphertext:\n"); */
+/*     dump(*cleartext, *clen); */
+/*     printf("\n"); */
+/* #endif */
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
 
@@ -1698,16 +1696,16 @@ decrypt_verify(dtls_peer_t *peer,
     if (!ok)
       warn("decryption failed\n");
     else {
-#ifndef NDEBUG
-      printf("decrypt_verify(): found %ld bytes cleartext\n", len);
-#endif
+/* #ifndef NDEBUG */
+/*       printf("decrypt_verify(): found %ld bytes cleartext\n", len); */
+/* #endif */
       *clen = len;
     }
-#ifndef NDEBUG
-    printf("\ncleartext:\n");
-    dump(*cleartext, *clen);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     printf("\ncleartext:\n"); */
+/*     dump(*cleartext, *clen); */
+/*     printf("\n"); */
+/* #endif */
   }
 
   return ok;
@@ -1872,42 +1870,42 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
-#ifndef NDEBUG
-  {
-      printf("key_block:\n");
-      printf("  client_MAC_secret:\t");  
-      dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/* #ifndef NDEBUG */
+/*   { */
+/*       printf("key_block:\n"); */
+/*       printf("  client_MAC_secret:\t");   */
+/*       dump(dtls_kb_client_mac_secret(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  server_MAC_secret:\t");  
-      dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)), 
-	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_MAC_secret:\t");   */
+/*       dump(dtls_kb_server_mac_secret(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_mac_secret_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  client_write_key:\t");  
-      dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  client_write_key:\t");   */
+/*       dump(dtls_kb_client_write_key(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  server_write_key:\t");  
-      dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)), 
-	   dtls_kb_key_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_write_key:\t");   */
+/*       dump(dtls_kb_server_write_key(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_key_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
 
-      printf("  client_IV:\t\t");  
-      dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  client_IV:\t\t");   */
+/*       dump(dtls_kb_client_iv(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_iv_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
       
-      printf("  server_IV:\t\t");  
-      dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)), 
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer)));
-      printf("\n");
+/*       printf("  server_IV:\t\t");   */
+/*       dump(dtls_kb_server_iv(CURRENT_CONFIG(peer)),  */
+/* 	   dtls_kb_iv_size(CURRENT_CONFIG(peer))); */
+/*       printf("\n"); */
       
 
-  }
-#endif
+/*   } */
+/* #endif */
 
   return 1;
 }  
@@ -1940,11 +1938,11 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 #else /* WITH_CONTIKI */
     list_remove(ctx->peers, peer);
 
-#ifndef NDEBUG
-    PRINTF("removed peer [");
-    PRINT6ADDR(&peer->session.addr);
-    PRINTF("]:%d\n", uip_ntohs(peer->session.port));
-#endif
+/* #ifndef NDEBUG */
+/*     PRINTF("removed peer ["); */
+/*     PRINT6ADDR(&peer->session.addr); */
+/*     PRINTF("]:%d\n", uip_ntohs(peer->session.port)); */
+/* #endif */
 #endif /* WITH_CONTIKI */
 
     free_peer = 1;
@@ -2115,12 +2113,12 @@ dtls_handle_message(dtls_context_t *ctx,
       goto next;
     }
 
-#ifndef NDEBUG
-    hexdump(msg, sizeof(dtls_record_header_t));
-    printf("\n");
-    hexdump(data, data_length);
-    printf("\n");
-#endif
+/* #ifndef NDEBUG */
+/*     hexdump(msg, sizeof(dtls_record_header_t)); */
+/*     printf("\n"); */
+/*     hexdump(data, data_length); */
+/*     printf("\n"); */
+/* #endif */
 
     /* Handle received record according to the first byte of the
      * message, i.e. the subprotocol. We currently do not support
@@ -2371,11 +2369,13 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 			      sendbuf, &len) > 0) {
 	
 #ifndef NDEBUG
-	debug("retransmit %d bytes\n", len);
-	hexdump(sendbuf, sizeof(dtls_record_header_t));
-	printf("\n");
-	hexdump(node->data, node->length);
-	printf("\n");
+	if (dtls_get_log_level() >= LOG_DEBUG) {
+	  debug("retransmit %d bytes\n", len);
+	  hexdump(sendbuf, sizeof(dtls_record_header_t));
+	  printf("\n");
+	  hexdump(node->data, node->length);
+	  printf("\n");
+	}
 #endif
 	
 	(void)CALL(context, write, &node->peer->session, sendbuf, len);
