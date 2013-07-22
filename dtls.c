@@ -3165,6 +3165,7 @@ dtls_handle_message(dtls_context_t *ctx,
 	peer = NULL;
 	return err;
       }
+      break;
 
     case DTLS_CT_HANDSHAKE:
       err = handle_handshake(ctx, peer, session, role, state, msg, data, data_length);
