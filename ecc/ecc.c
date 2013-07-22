@@ -601,8 +601,8 @@ int ecc_ecdsa_sign(const uint32_t *d, const uint32_t *e, const uint32_t *k, uint
  *  s: s value of the signature (32 bytes)
  *
  * return:
- *  1: signature is ok
- *  0: signature check failed the signature is invalid
+ *  0: signature is ok
+ *  -1: signature check failed the signature is invalid
  */
 int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, const uint32_t *r, const uint32_t *s)
 {
@@ -639,7 +639,7 @@ int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, 
 	ecc_ec_add(tmp1_x, tmp1_y, tmp2_x, tmp2_y, tmp3_x, tmp3_y);
 	// TODO: this u_1 * G + u_2 * Q_A  could be optimiced with Straus's algorithm.
 
-	return isSame(tmp3_x, r, arrayLength);
+	return isSame(tmp3_x, r, arrayLength) ? 0 : -1;
 }
 
 int ecc_is_valid_key(const uint32_t * priv_key)
