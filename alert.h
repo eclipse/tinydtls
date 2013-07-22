@@ -65,4 +65,16 @@ typedef enum {
 
 #define DTLS_EVENT_CONNECTED      0x01DE
 
+static inline int
+dtls_alert_create(dtls_alert_level_t level, dtls_alert_t desc)
+{
+  return -((level << 8) | desc);
+}
+
+static inline int
+dtls_alert_fatal_create(dtls_alert_t desc)
+{
+  return dtls_alert_create(DTLS_ALERT_LEVEL_FATAL, desc);
+}
+
 #endif /* _ALERT_H_ */

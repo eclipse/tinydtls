@@ -726,13 +726,13 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (!ok) {
     /* reset config cipher to a well-defined value */
     config->cipher = TLS_NULL_WITH_NULL_NULL;
-    return -1;
+    goto error;
   }
 
   if (data_length < sizeof(uint8)) { 
     /* no compression specified, take the current compression method */
     config->compression = CURRENT_CONFIG(peer)->compression;
-    return -1;
+    goto error;
   }
 
   i = dtls_uint8_to_int(data);
@@ -753,10 +753,15 @@ dtls_update_parameters(dtls_context_t *ctx,
     data += sizeof(uint8);    
   }
 
+  if (!ok) {
+    /* reset config cipher to a well-defined value */
+    goto error;
+  }
+
   if (data_length < sizeof(uint16)) { 
     /* no tls extensions specified */
     if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-      return -1;
+      goto error;
     }
     return 0;
   }
@@ -817,14 +822,18 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
     if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type) {
       warn("not all required tls extensions found in client hello\n");
-      return -1;
+      goto error;
     }
   }
 
-  return !ok;
+  return 0;
  error:
   warn("ClientHello too short (%d bytes)\n", data_length);
-  return -1;
+  if (peer->state == DTLS_STATE_CONNECTED) {
+    return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
+  } else {
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
 }
 
 static inline int
@@ -2878,8 +2887,6 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     if (err < 0) {
 
       warn("error updating security parameters\n");
-      dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
-		 DTLS_ALERT_NO_RENEGOTIATION);
       return err;
     }
 
@@ -2906,8 +2913,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_HELLO_REQUEST:
   default:
     dsrv_log(LOG_CRIT, "unhandled message %d\n", data[0]);
-    err = -1;
-    assert(0);
+    return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
   }
 
   return err;
@@ -3027,6 +3033,32 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   return free_peer;
 }
 
+static int dtls_alert_send_from_err(dtls_context_t *ctx, dtls_peer_t *peer,
+				    session_t *session, int err)
+{
+  int level;
+  int desc;
+
+  if (err < -(1 << 8) && err > -(3 << 8)) {
+    level = ((-err) & 0xff00) >> 8;
+    desc = (-err) & 0xff;
+    if (!peer) {
+      peer = dtls_get_peer(ctx, session);
+    }
+    if (peer) {
+      return dtls_alert(ctx, peer, level, desc);
+    }
+  } else if (err == -1) {
+    if (!peer) {
+      peer = dtls_get_peer(ctx, session);
+    }
+    if (peer) {
+      return dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
+    }
+  }
+  return -1;
+}
+
 /** 
  * Handles incoming data as DTLS message from given peer.
  */
@@ -3097,7 +3129,9 @@ dtls_handle_message(dtls_context_t *ctx,
     case DTLS_CT_CHANGE_CIPHER_SPEC:
       err = handle_ccs(ctx, peer, msg, data, data_length);
       if (err < 0) {
-        return err;
+	warn("error while handling ChangeCipherSpec package\n");
+	dtls_alert_send_from_err(ctx, peer, session, err);
+	return err;
       }
       break;
 
@@ -3114,8 +3148,9 @@ dtls_handle_message(dtls_context_t *ctx,
     case DTLS_CT_HANDSHAKE:
       err = handle_handshake(ctx, peer, session, role, state, msg, data, data_length);
       if (err < 0) {
-        warn("received wrong package\n");
-        return err;
+	warn("error while handling handshake package\n");
+	dtls_alert_send_from_err(ctx, peer, session, err);
+	return err;
       }
       if (peer && peer->state == DTLS_STATE_CONNECTED) {
 	/* stop retransmissions */
