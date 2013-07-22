@@ -79,7 +79,7 @@
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
-#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + 32 + 20
+#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + 32 + 12 + 20
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + 32 + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
