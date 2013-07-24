@@ -101,23 +101,6 @@
 #define HANDSHAKE(M) ((dtls_handshake_header_t *)((M) + DTLS_RH_LENGTH))
 #define CLIENTHELLO(M) ((dtls_client_hello_t *)((M) + HS_HDR_LENGTH))
 
-#define IS_HELLOVERIFY(M,L) \
-      ((L) >= DTLS_HS_LENGTH + DTLS_HV_LENGTH && (M)[0] == DTLS_HT_HELLO_VERIFY_REQUEST)
-#define IS_SERVERHELLO(M,L) \
-      ((L) >= DTLS_HS_LENGTH + 6 && (M)[0] == DTLS_HT_SERVER_HELLO)
-#define IS_SERVERKEYEXCHANGE(M,L) \
-      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_KEY_EXCHANGE)
-#define IS_CERTIFICATEREQUEST(M,L) \
-      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE_REQUEST)
-#define IS_SERVERHELLODONE(M,L) \
-      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_SERVER_HELLO_DONE)
-#define IS_CERTIFICATE(M,L) \
-      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE)
-#define IS_CERTIFICATEVERIFY(M,L) \
-      ((L) >= DTLS_HS_LENGTH && (M)[0] == DTLS_HT_CERTIFICATE_VERIFY)
-#define IS_FINISHED(M,L) \
-      ((L) >= DTLS_HS_LENGTH + DTLS_FIN_LENGTH && (M)[0] == DTLS_HT_FINISHED)
-
 /* The length check here should work because dtls_*_to_int() works on
  * unsigned char. Otherwise, broken messages could cause severe
  * trouble. Note that this macro jumps out of the current program flow
@@ -849,11 +832,6 @@ check_client_keyexchange(dtls_context_t *ctx,
 			 dtls_peer_t *peer,
 			 uint8 *data, size_t length) {
 
-  if (data[0] != DTLS_HT_CLIENT_KEY_EXCHANGE) {
-    debug("This is not a client key exchange\n");
-    return -1;
-  }
-
   if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
 
     if (length < DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH) {
@@ -968,6 +946,9 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   const unsigned char *label;
   unsigned char buf[DTLS_HMAC_MAX];
 
+  if (data_length < DTLS_HS_LENGTH + DTLS_FIN_LENGTH)
+    return -1;
+
   /* Use a union here to ensure that sufficient stack space is
    * reserved. As statebuf and verify_data are not used at the same
    * time, we can re-use the storage safely.
@@ -976,12 +957,6 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
     unsigned char statebuf[DTLS_HASH_CTX_SIZE];
     unsigned char verify_data[DTLS_FIN_LENGTH];
   } b;
-
-  debug("check Finish message\n");
-  if (record[0] != DTLS_CT_HANDSHAKE || !IS_FINISHED(data, data_length)) {
-    debug("failed\n");
-    return -1;
-  }
 
   /* temporarily store hash status for roll-back after finalize */
   memcpy(b.statebuf, &peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
@@ -1355,61 +1330,53 @@ dtls_verify_peer(dtls_context_t *ctx,
 #undef mycookie
 #define mycookie (buf + DTLS_HV_LENGTH)
 
-  /* check if we can access at least all fields from the handshake header */
-  if (record[0] == DTLS_CT_HANDSHAKE
-      && data_length >= DTLS_HS_LENGTH 
-      && data[0] == DTLS_HT_CLIENT_HELLO) {
+  /* Store cookie where we can reuse it for the HelloVerify request. */
+  err = dtls_create_cookie(ctx, session, data, data_length, mycookie, &len);
+  if (err < 0)
+    return err;
 
-    /* Store cookie where we can reuse it for the HelloVerify request. */
-    err = dtls_create_cookie(ctx, session, data, data_length, mycookie, &len);
-    if (err < 0)
-      return err;
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "create cookie", mycookie, len, 0);
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "create cookie", mycookie, len, 0);
-
-    assert(len == DTLS_COOKIE_LENGTH);
+  assert(len == DTLS_COOKIE_LENGTH);
     
-    /* Perform cookie check. */
-    len = dtls_get_cookie(data, data_length, &cookie);
+  /* Perform cookie check. */
+  len = dtls_get_cookie(data, data_length, &cookie);
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "compare with cookie", cookie, len, 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "compare with cookie", cookie, len, 0);
 
-    /* check if cookies match */
-    if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
-      debug("found matching cookie\n");
-      return 0;
-    }
-
-    if (len > 0) {
-      dtls_dsrv_hexdump_log(LOG_DEBUG, "invalid cookie", cookie, len, 0);
-    } else {
-      debug("cookie len is 0!\n");
-    }
-
-    /* ClientHello did not contain any valid cookie, hence we send a
-     * HelloVerify request. */
-
-    dtls_int_to_uint16(p, DTLS_VERSION);
-    p += sizeof(uint16);
-
-    dtls_int_to_uint8(p, DTLS_COOKIE_LENGTH);
-    p += sizeof(uint8);
-
-    assert(p == mycookie);
-
-    p += DTLS_COOKIE_LENGTH;
-
-    err = dtls_send_handshake_msg_hash(ctx, peer, session,
-				       DTLS_HT_HELLO_VERIFY_REQUEST,
-				       buf, p - buf, 0);
-    if (err < 0) {
-      warn("cannot send HelloVerify request\n");
-      return err;
-    }
-    return err; /* HelloVerify is sent, now we cannot do anything but wait */
+  /* check if cookies match */
+  if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
+    debug("found matching cookie\n");
+    return 0;
   }
 
-  return -1;			/* not a ClientHello, signal error */
+  if (len > 0) {
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "invalid cookie", cookie, len, 0);
+  } else {
+    debug("cookie len is 0!\n");
+  }
+
+  /* ClientHello did not contain any valid cookie, hence we send a
+   * HelloVerify request. */
+
+  dtls_int_to_uint16(p, DTLS_VERSION);
+  p += sizeof(uint16);
+
+  dtls_int_to_uint8(p, DTLS_COOKIE_LENGTH);
+  p += sizeof(uint8);
+
+  assert(p == mycookie);
+
+  p += DTLS_COOKIE_LENGTH;
+
+  err = dtls_send_handshake_msg_hash(ctx, peer, session,
+				     DTLS_HT_HELLO_VERIFY_REQUEST,
+				     buf, p - buf, 0);
+  if (err < 0) {
+    warn("cannot send HelloVerify request\n");
+  }
+  return err; /* HelloVerify is sent, now we cannot do anything but wait */
+
 #undef mycookie
 }
 
@@ -1424,9 +1391,6 @@ check_client_certificate_verify(dtls_context_t *ctx,
   unsigned char *result_s;
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
-
-  if (!IS_CERTIFICATEVERIFY(data, data_length))
-    return -1;
 
   assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
 
@@ -2159,62 +2123,60 @@ check_server_hello(dtls_context_t *ctx,
    * request containing a cookie. If so, we must repeat the
    * ClientHello with the given Cookie.
    */
+  if (data_length < DTLS_HS_LENGTH + DTLS_HS_LENGTH)
+    return -1;
 
-  if (IS_SERVERHELLO(data, data_length)) {
-    debug("handle ServerHello\n");
+  update_hs_hash(peer, data, data_length);
 
-    update_hs_hash(peer, data, data_length);
+  /* FIXME: check data_length before accessing fields */
 
-    /* FIXME: check data_length before accessing fields */
-
-    /* Get the server's random data and store selected cipher suite
-     * and compression method (like dtls_update_parameters().
-     * Then calculate master secret and wait for ServerHelloDone. When received,
-     * send ClientKeyExchange (?) and ChangeCipherSpec + ClientFinished. */
+  /* Get the server's random data and store selected cipher suite
+   * and compression method (like dtls_update_parameters().
+   * Then calculate master secret and wait for ServerHelloDone. When received,
+   * send ClientKeyExchange (?) and ChangeCipherSpec + ClientFinished. */
     
-    /* check server version */
-    data += DTLS_HS_LENGTH;
-    data_length -= DTLS_HS_LENGTH;
+  /* check server version */
+  data += DTLS_HS_LENGTH;
+  data_length -= DTLS_HS_LENGTH;
     
-    if (dtls_uint16_to_int(data) != DTLS_VERSION) {
-      dsrv_log(LOG_ALERT, "unknown DTLS version\n");
-      return -1;
-    }
-
-    data += sizeof(uint16);	      /* skip version field */
-    data_length -= sizeof(uint16);
-
-    /* store server random data */
-    memcpy(OTHER_CONFIG(peer)->server_random, data,
-	   sizeof(OTHER_CONFIG(peer)->server_random));
-    /* skip server random */
-    data += sizeof(OTHER_CONFIG(peer)->server_random);
-    data_length -= sizeof(OTHER_CONFIG(peer)->server_random);
-
-    SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
-    
-    /* Check cipher suite. As we offer all we have, it is sufficient
-     * to check if the cipher suite selected by the server is in our
-     * list of known cipher suites. Subsets are not supported. */
-    OTHER_CONFIG(peer)->cipher = dtls_uint16_to_int(data);
-    if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher, 1)) {
-      dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n", 
-	       data[0], data[1]);
-      return -1;
-    }
-    data += sizeof(uint16);
-    data_length -= sizeof(uint16);
-
-    /* Check if NULL compression was selected. We do not know any other. */
-    if (dtls_uint8_to_int(data) != TLS_COMP_NULL) {
-      dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
-      return -1;
-    }
-
-    /* FIXME: check PSK hint */
-
-    return 0;
+  if (dtls_uint16_to_int(data) != DTLS_VERSION) {
+    dsrv_log(LOG_ALERT, "unknown DTLS version\n");
+    return -1;
   }
+
+  data += sizeof(uint16);	      /* skip version field */
+  data_length -= sizeof(uint16);
+
+  /* store server random data */
+  memcpy(OTHER_CONFIG(peer)->server_random, data,
+	 sizeof(OTHER_CONFIG(peer)->server_random));
+  /* skip server random */
+  data += sizeof(OTHER_CONFIG(peer)->server_random);
+  data_length -= sizeof(OTHER_CONFIG(peer)->server_random);
+
+  SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
+    
+  /* Check cipher suite. As we offer all we have, it is sufficient
+   * to check if the cipher suite selected by the server is in our
+   * list of known cipher suites. Subsets are not supported. */
+  OTHER_CONFIG(peer)->cipher = dtls_uint16_to_int(data);
+  if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher, 1)) {
+    dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n",
+	     data[0], data[1]);
+    return -1;
+  }
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  /* Check if NULL compression was selected. We do not know any other. */
+  if (dtls_uint8_to_int(data) != TLS_COMP_NULL) {
+    dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
+    return -1;
+  }
+
+  /* FIXME: check PSK hint */
+
+  return 0;
 
 error:
   return -1;
@@ -2228,10 +2190,8 @@ check_server_hello_verify_request(dtls_context_t *ctx,
   dtls_hello_verify_t *hv;
   int res;
 
-  if (!IS_HELLOVERIFY(data, data_length)) {
-    debug("no HelloVerify\n");
+  if (data_length < DTLS_HS_LENGTH + DTLS_HV_LENGTH)
     return -1;
-  }
 
   hv = (dtls_hello_verify_t *)(data + DTLS_HS_LENGTH);
 
@@ -2250,9 +2210,6 @@ check_server_certificate(dtls_context_t *ctx,
 {
   int err;
   dtls_security_parameters_t *config = OTHER_CONFIG(peer);
-
-  if (!IS_CERTIFICATE(data, data_length))
-    return -1;
 
   update_hs_hash(peer, data, data_length);
 
@@ -2308,9 +2265,6 @@ check_server_key_exchange(dtls_context_t *ctx,
   unsigned char *result_r;
   unsigned char *result_s;
   unsigned char *key_params;
-
-  if (!IS_SERVERKEYEXCHANGE(data, data_length))
-    return -1;
 
   update_hs_hash(peer, data, data_length);
 
@@ -2441,9 +2395,6 @@ check_certificate_request(dtls_context_t *ctx,
   int sig_alg;
   int hash_alg;
 
-  if (!IS_CERTIFICATEREQUEST(data, data_length))
-    return -1;
-
   update_hs_hash(peer, data, data_length);
 
   assert(OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
@@ -2519,9 +2470,7 @@ check_server_hellodone(dtls_context_t *ctx,
   const dtls_ecdsa_key_t *ecdsa_key;
 
   /* calculate master key, send CCS */
-  if (!IS_SERVERHELLODONE(data, data_length))
-    return -1;
-  
+
   update_hs_hash(peer, data, data_length);
 
   if (OTHER_CONFIG(peer)->do_client_auth) {
