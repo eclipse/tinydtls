@@ -1329,6 +1329,10 @@ dtls_verify_peer(dtls_context_t *ctx,
     
   /* Perform cookie check. */
   len = dtls_get_cookie(data, data_length, &cookie);
+  if (len < 0) {
+    warn("error while fetching the cookie, err: %i\n", err);
+    return err;
+  }
 
   dtls_dsrv_hexdump_log(LOG_DEBUG, "compare with cookie", cookie, len, 0);
 
