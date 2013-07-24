@@ -2616,12 +2616,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   int err = 0;
 
   if (data_length < DTLS_HS_LENGTH) {
-    warn("handshake message to short");
+    warn("handshake message too short\n");
     return -1;
   }
 
   if (!peer && data[0] != DTLS_HT_CLIENT_HELLO) {
-    warn("If there is no peer only ClientHello is allowed");
+    warn("If there is no peer only ClientHello is allowed\n");
     return -1;
   }
   /* The following switch construct handles the given message with
@@ -2848,7 +2848,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
        * the handshake. */
       peer = dtls_new_peer(ctx, session);
       if (!peer) {
-        dsrv_log(LOG_ALERT, "cannot create peer");
+        dsrv_log(LOG_ALERT, "cannot create peer\n");
         /* FIXME: signal internal error */
         return -1;
       }
@@ -2949,7 +2949,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   /* send change cipher spec message and switch to new configuration */
   err = dtls_send_ccs(ctx, peer);
   if (err < 0) {
-    warn("cannot send CCS message");
+    warn("cannot send CCS message\n");
     return err;
   } 
   
@@ -3173,7 +3173,7 @@ dtls_new_context(void *app_data) {
   return c;
 
  error:
-  dsrv_log(LOG_ALERT, "cannot create DTLS context");
+  dsrv_log(LOG_ALERT, "cannot create DTLS context\n");
   if (c)
     dtls_free_context(c);
   return NULL;
