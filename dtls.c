@@ -2941,14 +2941,16 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     return err;
   }
 
-  if (init_cipher(OTHER_CONFIG(peer), peer->role)) {
-    return -1;
+  err = init_cipher(OTHER_CONFIG(peer), peer->role);
+  if (err < 0) {
+    return err;
   }
 
   /* send change cipher spec message and switch to new configuration */
-  if (dtls_send_ccs(ctx, peer) < 0) {
+  err = dtls_send_ccs(ctx, peer);
+  if (err < 0) {
     warn("cannot send CCS message");
-    return -1;
+    return err;
   } 
   
   SWITCH_CONFIG(peer);
