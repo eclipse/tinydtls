@@ -868,18 +868,6 @@ check_client_keyexchange(dtls_context_t *ctx,
   return 0;
 }
 
-static int
-check_ccs(dtls_context_t *ctx, 
-	  dtls_peer_t *peer,
-	  uint8 *record, uint8 *data, size_t data_length) {
-
-  if (DTLS_RECORD_HEADER(record)->content_type != DTLS_CT_CHANGE_CIPHER_SPEC
-      || data_length < 1 || data[0] != 1)
-    return 0;
-
-  return 1;
-}
-
 dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
 	      const session_t *session) {
@@ -2933,13 +2921,14 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
    * by ourself, the security context is switched and the record
    * sequence number is reset. */
   
-  if (peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC
-      || !check_ccs(ctx, peer, record_header, data, data_length)) {
+  if (peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC) {
     /* signal error? */
     warn("expected ChangeCipherSpec during handshake\n");
     return -1;
-
   }
+
+  if (data_length < 1 || data[0] != 1)
+    return -1;
 
   err = calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
 			    OTHER_CONFIG(peer)->client_random,
