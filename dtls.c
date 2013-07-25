@@ -1300,6 +1300,30 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   return res;
 }
 
+static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
+{
+  if (peer->state != DTLS_STATE_CLOSED)
+    dtls_close(ctx, &peer->session);
+  if (unlink) {
+#ifndef WITH_CONTIKI
+    HASH_DEL_PEER(ctx->peers, peer);
+#else /* WITH_CONTIKI */
+    list_remove(ctx->peers, peer);
+
+#ifndef NDEBUG
+    PRINTF("removed peer [");
+    PRINT6ADDR(&peer->session.addr);
+    PRINTF("]:%d\n", uip_ntohs(peer->session.port));
+#endif
+#endif /* WITH_CONTIKI */
+  }
+  dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
+  dtls_cipher_free(OTHER_CONFIG(peer)->write_cipher);
+  dtls_cipher_free(CURRENT_CONFIG(peer)->read_cipher);
+  dtls_cipher_free(CURRENT_CONFIG(peer)->write_cipher);
+  dtls_free_peer(peer);
+}
+
 /**
  * Checks a received Client Hello message for a valid cookie. When the
  * Client Hello contains no cookie, the function fails and a Hello
@@ -3033,7 +3057,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   
   if (free_peer) {
     dtls_stop_retransmission(ctx, peer);
-    dtls_free_peer(peer);
+    dtls_destory_peer(ctx, peer, 0);
   }
 
   return free_peer;
@@ -3233,7 +3257,7 @@ void dtls_free_context(dtls_context_t *ctx) {
 
   if (ctx->peers) {
     HASH_ITER(hh, ctx->peers, p, tmp) {
-      dtls_free_peer(p);
+      dtls_destory_peer(ctx, p, 1);
     }
   }
 #else /* WITH_CONTIKI */
@@ -3242,7 +3266,7 @@ void dtls_free_context(dtls_context_t *ctx) {
   p = (dtls_peer_t *)peer_storage.mem;
   for (i = 0; i < peer_storage.num; ++i, ++p) {
     if (peer_storage.count[i])
-      dtls_free_peer(p);
+      dtls_destory_peer(ctx, p, 1);
   }
 #endif /* WITH_CONTIKI */
 }
