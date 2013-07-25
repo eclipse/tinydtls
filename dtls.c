@@ -2933,7 +2933,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
    * by ourself, the security context is switched and the record
    * sequence number is reset. */
   
-  if (peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC) {
+  if (!peer || peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC) {
     warn("expected ChangeCipherSpec during handshake\n");
     return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
   }
@@ -2984,6 +2984,11 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
   info("** Alert: level %d, description %d\n", data[0], data[1]);
+
+  if (!peer) {
+    warn("got an alert for an unknown peer, we probably already removed it, ignore it\n");
+    return 0;
+  }
 
   /* The peer object is invalidated for FATAL alerts and close
    * notifies. This is done in two steps.: First, remove the object
@@ -3162,6 +3167,11 @@ dtls_handle_message(dtls_context_t *ctx,
 
     case DTLS_CT_APPLICATION_DATA:
       info("** application data:\n");
+      if (!peer) {
+        warn("no peer available, send an alert\n");
+        dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_UNEXPECTED_MESSAGE);
+        return -1;
+      }
       CALL(ctx, read, &peer->session, data, data_length);
       break;
     default:
