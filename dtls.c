@@ -2978,7 +2978,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 int
 handle_alert(dtls_context_t *ctx, dtls_peer_t *peer, 
 	     uint8 *record_header, uint8 *data, size_t data_length) {
-  int free_peer = -1;		/* indicates whether to free peer */
+  int free_peer = 0;		/* indicates whether to free peer */
 
   if (data_length < 2)
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
@@ -3011,7 +3011,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 #endif
 #endif /* WITH_CONTIKI */
 
-    free_peer = 0;
+    free_peer = 1;
 
   }
 
