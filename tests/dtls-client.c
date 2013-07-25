@@ -28,6 +28,8 @@ static size_t len = 0;
 
 static str output_file = { 0, NULL }; /* output file name */
 
+static dtls_context_t *dtls_context = NULL;
+
 
 static const unsigned char ecdsa_priv_key[] = {
 			0x41, 0xC1, 0xCB, 0x6B, 0x51, 0x24, 0x7A, 0x14,
@@ -158,6 +160,13 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   return dtls_handle_message(ctx, &session, buf, len);
 }    
 
+static void dtls_handle_signal(int sig)
+{
+  dtls_free_context(dtls_context);
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
+
 /* stolen from libcoap: */
 int 
 resolve_address(const char *server, struct sockaddr *dst) {
@@ -230,7 +239,6 @@ static dtls_handler_t cb = {
 
 int 
 main(int argc, char **argv) {
-  dtls_context_t *dtls_context = NULL;
   fd_set rfds, wfds;
   struct timeval timeout;
   unsigned short port = DEFAULT_PORT;
@@ -317,6 +325,11 @@ main(int argc, char **argv) {
   if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
     dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+  }
+
+  if (signal(SIGINT, dtls_handle_signal) == SIG_ERR) {
+    dsrv_log(LOG_ALERT, "An error occurred while setting a signal handler.\n");
+    return EXIT_FAILURE;
   }
 
   dtls_context = dtls_new_context(&fd);
