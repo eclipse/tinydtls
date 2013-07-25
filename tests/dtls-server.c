@@ -119,6 +119,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   assert(fd);
 
+  memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
   len = recvfrom(*fd, buf, sizeof(buf), 0, 
 		 &session.addr.sa, &session.size);
