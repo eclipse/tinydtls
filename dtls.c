@@ -925,6 +925,7 @@ finalize_hs_hash(dtls_peer_t *peer, uint8 *buf) {
 static inline void
 clear_hs_hash(dtls_peer_t *peer) {
   assert(peer);
+  debug("clear MAC\n");
   dtls_hash_init(&peer->hs_state.hs_hash);
 }
 
@@ -2142,6 +2143,9 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   assert(p - buf <= sizeof(buf));
 
+  if (cookie_length != 0)
+    clear_hs_hash(peer);
+
   return dtls_send_handshake_msg_hash(ctx, peer, &peer->session,
 				      DTLS_HT_CLIENT_HELLO,
 				      buf, p - buf, cookie_length != 0);
@@ -2649,6 +2653,42 @@ decrypt_verify(dtls_peer_t *peer,
   return ok;
 }
 
+static int
+dtls_send_hello_request(dtls_context_t *ctx, dtls_peer_t *peer)
+{
+  return dtls_send_handshake_msg_hash(ctx, peer, &peer->session,
+				      DTLS_HT_HELLO_REQUEST,
+				      NULL, 0, 0);
+}
+
+int
+dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
+{
+  dtls_peer_t *peer = NULL;
+  int err;
+
+  peer = dtls_get_peer(ctx, dst);
+
+  if (!peer) {
+    return -1;
+  }
+  if (peer->state != DTLS_STATE_CONNECTED)
+    return -1;
+
+  if (peer->role == DTLS_CLIENT) {
+    /* send ClientHello with empty Cookie */
+    err = dtls_send_client_hello(ctx, peer, NULL, 0);
+    if (err < 0)
+      warn("cannot send ClientHello\n");
+    else
+      peer->state = DTLS_STATE_CLIENTHELLO;
+    return err;
+  } else if (peer->role == DTLS_SERVER) {
+    return dtls_send_hello_request(ctx, peer);
+  }
+
+  return -1;
+}
 
 int
 handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
@@ -2943,6 +2983,21 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     break;
 
   case DTLS_HT_HELLO_REQUEST:
+
+    debug("DTLS_HT_HELLO_REQUEST\n");
+    if (state != DTLS_STATE_CONNECTED) {
+      /* we should just ignore such packages when in handshake */
+      return 0;
+    }
+
+    /* send ClientHello with empty Cookie */
+    err = dtls_send_client_hello(ctx, peer, NULL, 0);
+    if (err < 0)
+      warn("cannot send ClientHello\n");
+    else
+      peer->state = DTLS_STATE_CLIENTHELLO;
+
+    return err;
   default:
     dsrv_log(LOG_CRIT, "unhandled message %d\n", data[0]);
     return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
