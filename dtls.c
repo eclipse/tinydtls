@@ -765,6 +765,23 @@ check_client_keyexchange(dtls_context_t *ctx,
   return length >= DTLS_CKX_LENGTH && data[0] == DTLS_HT_CLIENT_KEY_EXCHANGE;
 }
 
+/**
+ * Releases the storage allocated for read_cipher and write_cipher and
+ * sets both fields to NULL.
+ */
+static void
+invalidate_ciphers(dtls_security_parameters_t *config) {
+  if (config->read_cipher) {
+    dtls_cipher_free(config->read_cipher);
+    config->read_cipher = NULL;
+  }
+  
+  if (config->write_cipher) {
+    dtls_cipher_free(config->write_cipher);
+    config->write_cipher = NULL;
+  }
+}
+
 static int
 check_ccs(dtls_context_t *ctx, 
 	  dtls_peer_t *peer,
@@ -786,7 +803,7 @@ check_ccs(dtls_context_t *ctx,
 
   if (!OTHER_CONFIG(peer)->read_cipher) {
     warn("cannot create read cipher\n");
-    return 0;
+    goto error;
   }
 
   dtls_cipher_set_iv(OTHER_CONFIG(peer)->read_cipher,
@@ -803,7 +820,7 @@ check_ccs(dtls_context_t *ctx,
 
   if (!OTHER_CONFIG(peer)->write_cipher) {
     warn("cannot create write cipher\n");
-    return 0;
+    goto error;
   }
 
   dtls_cipher_set_iv(OTHER_CONFIG(peer)->write_cipher,
@@ -811,6 +828,11 @@ check_ccs(dtls_context_t *ctx,
 		     dtls_kb_iv_size(OTHER_CONFIG(peer)));
 
   return 1;
+
+ error:
+
+  invalidate_ciphers(OTHER_CONFIG(peer));
+  return 0;
 }
 
 #ifndef NDEBUG
@@ -1503,7 +1525,7 @@ check_server_hellodone(dtls_context_t *ctx,
 
   if (!OTHER_CONFIG(peer)->read_cipher) {
     warn("cannot create read cipher\n");
-    return 0;
+    goto error;
   }
 
   dtls_cipher_set_iv(OTHER_CONFIG(peer)->read_cipher,
@@ -1519,9 +1541,8 @@ check_server_hellodone(dtls_context_t *ctx,
 		    dtls_kb_key_size(OTHER_CONFIG(peer)));
   
   if (!OTHER_CONFIG(peer)->write_cipher) {
-    dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
     warn("cannot create write cipher\n");
-    return 0;
+    goto error;
   }
   
   dtls_cipher_set_iv(OTHER_CONFIG(peer)->write_cipher,
@@ -1621,6 +1642,10 @@ check_server_hellodone(dtls_context_t *ctx,
       return 0;
     }
   }
+  return 1;
+ error:
+
+  invalidate_ciphers(OTHER_CONFIG(peer));
   return 1;
 }
 

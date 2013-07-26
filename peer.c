@@ -45,6 +45,13 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
+  int i;
+  for (i = 0; i < sizeof(peer->security_params) / sizeof(dtls_security_parameters_t);
+       i++) {
+    dtls_cipher_free(peer->security_params[i].read_cipher);
+    dtls_cipher_free(peer->security_params[i].write_cipher);
+  }
+
   free(peer);
 }
 #else /* WITH_CONTIKI */
@@ -65,6 +72,13 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
+  int i;
+  for (i = 0; i < sizeof(peer->security_params) / sizeof(dtls_security_parameters_t);
+       i++) {
+    dtls_cipher_free(peer->security_params[i].read_cipher);
+    dtls_cipher_free(peer->security_params[i].write_cipher);
+  }
+
   memb_free(&peer_storage, peer);
 }
 #endif /* WITH_CONTIKI */
