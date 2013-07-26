@@ -237,6 +237,9 @@ static dtls_handler_t cb = {
   .verify_ecdsa_key = verify_ecdsa_key
 };
 
+#define DTLS_CLIENT_CMD_CLOSE "client:close"
+#define DTLS_CLIENT_CMD_RENEGOTIATE "client:renegotiate"
+
 int 
 main(int argc, char **argv) {
   fd_set rfds, wfds;
@@ -368,8 +371,21 @@ main(int argc, char **argv) {
 	handle_stdin();
     }
 
-    if (len)
-      try_send(dtls_context, &dst);
+    if (len) {
+      if (len >= strlen(DTLS_CLIENT_CMD_CLOSE) &&
+	  !memcmp(buf, DTLS_CLIENT_CMD_CLOSE, strlen(DTLS_CLIENT_CMD_CLOSE))) {
+	printf("client: closing connection\n");
+	dtls_close(dtls_context, &dst);
+	len = 0;
+      } else if (len >= strlen(DTLS_CLIENT_CMD_RENEGOTIATE) &&
+	         !memcmp(buf, DTLS_CLIENT_CMD_RENEGOTIATE, strlen(DTLS_CLIENT_CMD_RENEGOTIATE))) {
+	printf("client: renegotiate connection\n");
+	dtls_renegotiate(dtls_context, &dst);
+	len = 0;
+      } else {
+	try_send(dtls_context, &dst);
+      }
+    }
   }
   
   dtls_free_context(dtls_context);
