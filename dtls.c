@@ -575,11 +575,6 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_cipher_set_iv(config->read_cipher,
-		     dtls_kb_remote_iv(config, role),
-		     dtls_kb_iv_size(config, role));
-
-
   dtls_cipher_free(config->write_cipher);
   
   config->write_cipher = dtls_cipher_new(handshake->cipher,
@@ -591,10 +586,6 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
     warn("cannot create write cipher\n");
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
-
-  dtls_cipher_set_iv(config->write_cipher,
-		     dtls_kb_local_iv(config, role),
-		     dtls_kb_iv_size(config, role));
 
   config->cipher = handshake->cipher;
   config->compression = handshake->compression;
@@ -1046,8 +1037,8 @@ dtls_prepare_record(dtls_peer_t *peer,
      * seq_num(2+6) + type(1) + version(2) + length(2)
      */
 #define A_DATA_LEN 13
-#define A_DATA N
-    unsigned char N[max(DTLS_CCM_BLOCKSIZE, A_DATA_LEN)];
+    unsigned char N[DTLS_CCM_BLOCKSIZE];
+    unsigned char A_DATA[A_DATA_LEN];
     
     debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
 
@@ -1097,8 +1088,6 @@ dtls_prepare_record(dtls_peer_t *peer,
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
 			  dtls_kb_local_write_key(security, peer->role),
 			  dtls_kb_key_size(security, peer->role), 0);
-
-    dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
     
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
      * 
@@ -1109,7 +1098,7 @@ dtls_prepare_record(dtls_peer_t *peer,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
     
-    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8,
+    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8, N,
 		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
@@ -2589,8 +2578,8 @@ decrypt_verify(dtls_peer_t *peer,
      * seq_num(2+6) + type(1) + version(2) + length(2)
      */
 #define A_DATA_LEN 13
-#define A_DATA N
-    unsigned char N[max(DTLS_CCM_BLOCKSIZE, A_DATA_LEN)];
+    unsigned char N[DTLS_CCM_BLOCKSIZE];
+    unsigned char A_DATA[A_DATA_LEN];
     long int len;
 
 
@@ -2619,8 +2608,6 @@ decrypt_verify(dtls_peer_t *peer,
 			  dtls_kb_key_size(security, peer->role), 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "ciphertext", *cleartext, *clen, 0);
 
-    dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
-
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
      * 
      * additional_data = seq_num + TLSCompressed.type +
@@ -2630,7 +2617,7 @@ decrypt_verify(dtls_peer_t *peer,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, *clen - 8); /* length without nonce_explicit */
 
-    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext,
+    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext, N,
 		       A_DATA, A_DATA_LEN);
 
     ok = len >= 0;

@@ -72,7 +72,6 @@ typedef enum {
 /** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
 typedef struct {
   rijndael_ctx ctx;		       /**< AES-128 encryption context */
-  unsigned char N[DTLS_CCM_BLOCKSIZE]; /**< nonce */
 } aes128_ccm_t;
 
 typedef struct dtls_cipher_context_t {
@@ -255,6 +254,7 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
 int dtls_encrypt(dtls_cipher_context_t *ctx, 
 		 const unsigned char *src, size_t length,
 		 unsigned char *buf,
+		 unsigned char *nounce,
 		 const unsigned char *aad, size_t aad_length);
 
 /** 
@@ -278,6 +278,7 @@ int dtls_encrypt(dtls_cipher_context_t *ctx,
 int dtls_decrypt(dtls_cipher_context_t *ctx, 
 		 const unsigned char *src, size_t length,
 		 unsigned char *buf,
+		 unsigned char *nounce,
 		 const unsigned char *a_data, size_t a_data_length);
 
 /* helper functions */
@@ -352,13 +353,6 @@ dtls_cipher_context_t *dtls_cipher_new(dtls_cipher_t code,
  * Releases the storage allocated by dtls_cipher_new() for @p cipher_context 
  */
 void dtls_cipher_free(dtls_cipher_context_t *cipher_context);
-
-
-/** 
- * Initializes the given cipher context @p ctx with the initialization
- * vector @p iv of length @p length. */
-void dtls_cipher_set_iv(dtls_cipher_context_t *ctx,
-			unsigned char *iv, size_t length);
 
 #endif /* _CRYPTO_H_ */
 
