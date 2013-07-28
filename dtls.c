@@ -492,6 +492,7 @@ calculate_key_block(dtls_context_t *ctx,
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
   pre_master_secret = security->key_block;
+  uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   int err;
 
   switch (handshake->cipher) {
@@ -524,35 +525,36 @@ calculate_key_block(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", handshake->client_random,
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", handshake->tmp.random.client,
 			DTLS_RANDOM_LENGTH, 0);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", handshake->server_random,
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", handshake->tmp.random.server,
 			DTLS_RANDOM_LENGTH, 0);
   dtls_dsrv_hexdump_log(LOG_DEBUG, "pre_master_secret", pre_master_secret,
 			pre_master_len, 0);
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
-	   handshake->client_random, DTLS_RANDOM_LENGTH,
-	   handshake->server_random, DTLS_RANDOM_LENGTH,
-	   handshake->master_secret,
+	   handshake->tmp.random.client, DTLS_RANDOM_LENGTH,
+	   handshake->tmp.random.server, DTLS_RANDOM_LENGTH,
+	   master_secret,
 	   DTLS_MASTER_SECRET_LENGTH);
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", handshake->master_secret,
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", master_secret,
 			DTLS_MASTER_SECRET_LENGTH, 0);
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
-                    "key expansion" + server_random + client_random) */
+                    "key expansion" + tmp.random.server + tmp.random.client) */
 
-  dtls_prf(handshake->master_secret,
+  dtls_prf(master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   PRF_LABEL(key), PRF_LABEL_SIZE(key),
-	   handshake->server_random, DTLS_RANDOM_LENGTH,
-	   handshake->client_random, DTLS_RANDOM_LENGTH,
+	   handshake->tmp.random.server, DTLS_RANDOM_LENGTH,
+	   handshake->tmp.random.client, DTLS_RANDOM_LENGTH,
 	   security->key_block,
 	   dtls_kb_size(security, peer->role));
 
+  memcpy(handshake->tmp.master_secret, master_secret, DTLS_MASTER_SECRET_LENGTH);
   dtls_debug_keyblock(security);
   return 0;
 }
@@ -686,7 +688,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   /* store client random in config 
    * FIXME: if we send the ServerHello here, we do not need to store
    * the client's random bytes */
-  memcpy(config->client_random, data, DTLS_RANDOM_LENGTH);
+  memcpy(config->tmp.random.client, data, DTLS_RANDOM_LENGTH);
   data += DTLS_RANDOM_LENGTH;
   data_length -= DTLS_RANDOM_LENGTH;
 
@@ -973,7 +975,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
     label_size = PRF_LABEL_SIZE(client);
   }
 
-  dtls_prf(peer->handshake_params.master_secret,
+  dtls_prf(peer->handshake_params.tmp.master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   label, label_size,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
@@ -1538,10 +1540,10 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   /* Set server random: First 4 bytes are the server's Unix timestamp,
    * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(handshake->server_random, clock_time());
-  prng(handshake->server_random + 4, 28);
+  dtls_int_to_uint32(handshake->tmp.random.server, clock_time());
+  prng(handshake->tmp.random.server + 4, 28);
 
-  memcpy(p, handshake->server_random, DTLS_RANDOM_LENGTH);
+  memcpy(p, handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
   p += DTLS_RANDOM_LENGTH;
 
   *p++ = 0;			/* no session id */
@@ -1741,8 +1743,8 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* sign the ephemeral and its paramaters */
   dtls_ecdsa_create_sig(key->priv_key, DTLS_EC_KEY_SIZE,
-		       config->client_random, DTLS_RANDOM_LENGTH,
-		       config->server_random, DTLS_RANDOM_LENGTH,
+		       config->tmp.random.client, DTLS_RANDOM_LENGTH,
+		       config->tmp.random.server, DTLS_RANDOM_LENGTH,
 		       key_params, p - key_params,
 		       point_r, point_s);
 
@@ -1990,7 +1992,7 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 
   length = dtls_hash_finalize(hash, &hs_hash);
 
-  dtls_prf(peer->handshake_params.master_secret,
+  dtls_prf(peer->handshake_params.tmp.master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   label, labellen,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished), 
@@ -2039,12 +2041,12 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   if (cookie_length == 0) {
     /* Set client random: First 4 bytes are the client's Unix timestamp,
      * followed by 28 bytes of generate random data. */
-    dtls_int_to_uint32(&handshake->client_random, clock_time());
-    prng(handshake->client_random + sizeof(uint32),
+    dtls_int_to_uint32(&handshake->tmp.random.client, clock_time());
+    prng(handshake->tmp.random.client + sizeof(uint32),
          DTLS_RANDOM_LENGTH - sizeof(uint32));
   }
   /* we must use the same Client Random as for the previous request */
-  memcpy(p, handshake->client_random, DTLS_RANDOM_LENGTH);
+  memcpy(p, handshake->tmp.random.client, DTLS_RANDOM_LENGTH);
   p += DTLS_RANDOM_LENGTH;
 
   /* session id (length 0) */
@@ -2179,7 +2181,7 @@ check_server_hello(dtls_context_t *ctx,
   data_length -= sizeof(uint16);
 
   /* store server random data */
-  memcpy(handshake->server_random, data, DTLS_RANDOM_LENGTH);
+  memcpy(handshake->tmp.random.server, data, DTLS_RANDOM_LENGTH);
   /* skip server random */
   data += DTLS_RANDOM_LENGTH;
   data_length -= DTLS_RANDOM_LENGTH;
@@ -2402,8 +2404,8 @@ check_server_key_exchange(dtls_context_t *ctx,
 
   i = dtls_ecdsa_verify_sig(config->ecdsa.other_pub_x, config->ecdsa.other_pub_y,
   			    sizeof(config->ecdsa.other_pub_x),
-			    config->client_random, DTLS_RANDOM_LENGTH,
-			    config->server_random, DTLS_RANDOM_LENGTH,
+			    config->tmp.random.client, DTLS_RANDOM_LENGTH,
+			    config->tmp.random.server, DTLS_RANDOM_LENGTH,
 			    key_params,
 			    1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
 			    result_r, result_s);

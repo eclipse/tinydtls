@@ -110,15 +110,18 @@ typedef struct {
 } dtls_security_parameters_t;
 
 typedef struct {
-  uint8  client_random[DTLS_RANDOM_LENGTH];	/**< client random gmt and bytes */
-  uint8  server_random[DTLS_RANDOM_LENGTH];	/**< server random gmt and bytes */
+  union {
+    struct random_t {
+      uint8 client[DTLS_RANDOM_LENGTH];	/**< client random gmt and bytes */
+      uint8 server[DTLS_RANDOM_LENGTH];	/**< server random gmt and bytes */
+    } random;
+    /** the session's master secret */
+    uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
+  } tmp;
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
   unsigned int do_client_auth:1;
-
-  /** the session's master secret */
-  uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
 
   dtls_handshake_parameters_ecdsa_t ecdsa;
 } dtls_handshake_parameters_t;
