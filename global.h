@@ -81,7 +81,7 @@ typedef struct __session_t {
     struct sockaddr_in  sin;
     struct sockaddr_in6 sin6;
   } addr;
-  int ifindex;
+  uint8_t ifindex;
 } __session_t;
 
 #define session_t __session_t
