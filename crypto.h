@@ -76,7 +76,6 @@ typedef struct {
 
 typedef struct dtls_cipher_context_t {
   /** numeric identifier of this cipher suite in host byte order. */
-  dtls_cipher_t code;
   aes128_ccm_t data;		/**< The crypto context */
 } dtls_cipher_context_t;
 
