@@ -114,9 +114,6 @@
     P += dtls_ ## T ## _to_int(P) + sizeof(T);				\
   }
 
-uint8 _clear[DTLS_MAX_BUF]; /* target buffer message decryption */
-uint8 _buf[DTLS_MAX_BUF]; /* target buffer for several crypto operations */
-
 /* some constants for the PRF */
 #define PRF_LABEL(Label) prf_label_##Label
 #define PRF_LABEL_SIZE(Label) (sizeof(PRF_LABEL(Label)) - 1)
