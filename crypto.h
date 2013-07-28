@@ -56,6 +56,7 @@
 
 /** Length of DTLS master_secret */
 #define DTLS_MASTER_SECRET_LENGTH 48
+#define DTLS_RANDOM_LENGTH 32
 
 #ifndef DTLS_CIPHER_CONTEXT_MAX
 #define DTLS_CIPHER_CONTEXT_MAX 4
@@ -109,8 +110,8 @@ typedef struct {
 } dtls_security_parameters_t;
 
 typedef struct {
-  uint8  client_random[32];	/**< client random gmt and bytes */
-  uint8  server_random[32];	/**< server random gmt and bytes */
+  uint8  client_random[DTLS_RANDOM_LENGTH];	/**< client random gmt and bytes */
+  uint8  server_random[DTLS_RANDOM_LENGTH];	/**< server random gmt and bytes */
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
