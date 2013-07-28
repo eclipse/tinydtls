@@ -404,18 +404,6 @@ typedef struct {
 int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
 #endif
 
-/**
- * Retrieves a pointer to the cookie contained in a Client Hello message.
- *
- * \param hello_msg   Points to the received Client Hello message
- * \param msglen      Length of \p hello_msg
- * \param cookie      Is set to the beginning of the cookie in the message if
- *                    found. Undefined if this function returns \c 0.
- * \return \c 0 if no cookie was found, < 0 on error. On success, the return
- *         value reflects the cookie's length.
- */
-int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
-
 /** 
  * Handles incoming data as DTLS message from given peer.
  *

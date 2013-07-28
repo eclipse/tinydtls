@@ -139,7 +139,7 @@ static const unsigned char cert_asn1_header[] = {
 extern void netq_init();
 extern void crypto_init();
 
-dtls_context_t the_dtls_context;
+static dtls_context_t the_dtls_context;
 
 #ifndef WITH_CONTIKI
 static inline dtls_peer_t *
@@ -200,15 +200,15 @@ dtls_init() {
  * \param buflen The actual length of \p buf.
  * \return Less than zero on error, the number of bytes written otherwise.
  */
-int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
+static int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	      uint8 *buf, size_t buflen);
 
 /**
  * Stops ongoing retransmissions of handshake messages for @p peer.
  */
-void dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer);
+static void dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer);
 
-dtls_peer_t *
+static dtls_peer_t *
 dtls_get_peer(struct dtls_context_t *ctx, const session_t *session) {
   dtls_peer_t *p = NULL;
 
@@ -235,7 +235,7 @@ dtls_write(struct dtls_context_t *ctx,
     return peer ? 0 : -1;
 }
 
-int
+static int
 dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
   /* To access the cookie, we have to determine the session id's
    * length and skip the whole thing. */
@@ -260,7 +260,7 @@ dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
   return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
-int
+static int
 dtls_create_cookie(dtls_context_t *ctx, 
 		   session_t *session,
 		   uint8 *msg, int msglen,
@@ -426,7 +426,7 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
 }
 
 /** only one compression method is currently defined */
-uint8 compression_methods[] = { 
+static uint8 compression_methods[] = {
   TLS_COMPRESSION_NULL
 };
 
@@ -487,7 +487,7 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 			dtls_kb_iv_size(config, peer->role), 0);
 }
 
-int
+static int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_handshake_parameters_t *handshake,
 		    dtls_security_parameters_t *security,
@@ -558,7 +558,7 @@ calculate_key_block(dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
 {
   /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
@@ -663,7 +663,7 @@ static int verify_ext_cert_type(uint8 *data, size_t data_length) {
  * \param data_length The actual size of \p data.
  * \return \c 0 if an error occurred, \c 1 otherwise.
  */
-int
+static int
 dtls_update_parameters(dtls_context_t *ctx, 
 		       dtls_peer_t *peer,
 		       uint8 *data, size_t data_length) {
@@ -877,7 +877,7 @@ check_client_keyexchange(dtls_context_t *ctx,
   return 0;
 }
 
-dtls_peer_t *
+static dtls_peer_t *
 dtls_new_peer(dtls_context_t *ctx, 
 	      const session_t *session) {
   dtls_peer_t *peer;
@@ -1008,7 +1008,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
  *                undefined. 
  * \return Less than zero on error, or greater than zero success.
  */
-int
+static int
 dtls_prepare_record(dtls_peer_t *peer,
 		    unsigned char type,
 		    uint8 *data_array[], size_t data_len_array[],
@@ -1213,7 +1213,7 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
  * @return Less than zero in case of an error or the number of
  *   bytes that have been sent otherwise.
  */
-int
+static int
 dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 	  unsigned char type,
 	  uint8 *buf, size_t buflen) {
@@ -1339,7 +1339,7 @@ static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
  * \return \c 1 if msg is a Client Hello with a valid cookie, \c 0 or
  * \c -1 otherwise.
  */
-int
+static int
 dtls_verify_peer(dtls_context_t *ctx, 
 		 dtls_peer_t *peer, 
 		 session_t *session,
@@ -1809,7 +1809,7 @@ dtls_send_server_hello_done(dtls_context_t *ctx, dtls_peer_t *peer)
 				 NULL, 0);
 }
 
-int
+static int
 dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   int res;
@@ -1873,7 +1873,7 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
 }
 
     
-int
+static int
 dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   uint8 buf[DTLS_CKXEC_LENGTH];
@@ -1978,7 +1978,7 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 				 buf, p - buf);
 }
 
-int
+static int
 dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 		   const unsigned char *label, size_t labellen)
 {
@@ -2571,7 +2571,7 @@ check_server_hellodone(dtls_context_t *ctx,
   return dtls_send_finished(ctx, peer, PRF_LABEL(client), PRF_LABEL_SIZE(client));
 }
 
-int
+static int
 decrypt_verify(dtls_peer_t *peer,
 	       uint8 *packet, size_t length,
 	       uint8 **cleartext, size_t *clen) {
@@ -2687,7 +2687,7 @@ dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
   return -1;
 }
 
-int
+static int
 handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 		 const dtls_peer_type role, const dtls_state_t state,
 		 uint8 *record_header, uint8 *data, size_t data_length) {
@@ -3003,7 +3003,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   return err;
 }
 
-int
+static int
 handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer, 
 	   uint8 *record_header, uint8 *data, size_t data_length)
 {
@@ -3057,7 +3057,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
  * Handles incoming Alert messages. This function returns \c 1 if the
  * connection should be closed and the peer is to be invalidated.
  */
-int
+static int
 handle_alert(dtls_context_t *ctx, dtls_peer_t *peer, 
 	     uint8 *record_header, uint8 *data, size_t data_length) {
   int free_peer = 0;		/* indicates whether to free peer */
@@ -3369,7 +3369,7 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   return res;
 }
 
-void
+static void
 dtls_retransmit(dtls_context_t *context, netq_t *node) {
   if (!context || !node)
     return;
@@ -3407,7 +3407,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
   netq_node_free(node);
 }
 
-void
+static void
 dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer) {
   void *node;
   node = list_head((list_t)context->sendqueue); 

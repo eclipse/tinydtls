@@ -187,7 +187,7 @@ dtls_ccm_init(aes128_ccm_t *ccm_ctx, unsigned char *N, size_t length) {
   memcpy(ccm_ctx->N, N, DTLS_CCM_BLOCKSIZE);
 }
 
-size_t
+static size_t
 dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 		 unsigned char *buf, 
 		 const unsigned char *aad, size_t la) {
@@ -203,7 +203,7 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
   return len;
 }
 
-size_t
+static size_t
 dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 		 size_t srclen, unsigned char *buf,
 		 const unsigned char *aad, size_t la) {
