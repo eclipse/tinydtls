@@ -136,9 +136,6 @@ static const unsigned char cert_asn1_header[] = {
          0x04 /* uncompressed, followed by the r und s values of the public key */
 };
 
-extern void netq_init();
-extern void crypto_init();
-
 static dtls_context_t the_dtls_context;
 
 #ifndef WITH_CONTIKI

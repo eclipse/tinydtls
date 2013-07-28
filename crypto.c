@@ -64,8 +64,6 @@ dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
 }
 #endif /* WITH_CONTIKI */
 
-extern void dtls_hmac_storage_init();
-
 void crypto_init() {
   dtls_hmac_storage_init();
 

@@ -49,14 +49,12 @@ static inline void
 netq_free_node(netq_t *node) {
   memb_free(&netq_storage, node);
 }
-#endif /* WITH_CONTIKI */
 
 void
 netq_init() {
-#ifdef WITH_CONTIKI
   memb_init(&netq_storage);
-#endif /* WITH_CONTIKI */
 }
+#endif /* WITH_CONTIKI */
 
 int 
 netq_insert_node(netq_t **queue, netq_t *node) {

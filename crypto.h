@@ -171,6 +171,8 @@ typedef struct {
 /* just for consistency */
 #define dtls_kb_digest_size(Param, Role) DTLS_MAC_LENGTH
 
+void crypto_init();
+
 /** 
  * Expands the secret and key to a block of DTLS_HMAC_MAX 
  * size according to the algorithm specified in section 5 of
