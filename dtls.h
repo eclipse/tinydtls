@@ -51,12 +51,6 @@
 #define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
 #endif
 
-/** Known compression methods
- *
- * \hideinitializer
- */
-#define TLS_COMP_NULL      0x00	/* NULL compression */
- 
 typedef enum { 
   DTLS_STATE_INIT = 0, DTLS_STATE_WAIT_CLIENTHELLO, DTLS_STATE_WAIT_CLIENTCERTIFICATE,
   DTLS_STATE_WAIT_CLIENTKEYEXCHANGE, DTLS_STATE_WAIT_CERTIFICATEVERIFY,

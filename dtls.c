@@ -435,7 +435,7 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
 
 /** only one compression method is currently defined */
 uint8 compression_methods[] = { 
-  TLS_COMP_NULL 
+  TLS_COMPRESSION_NULL
 };
 
 static inline int is_psk_supported(dtls_context_t *ctx){
@@ -894,6 +894,7 @@ dtls_new_peer(dtls_context_t *ctx,
     dtls_dsrv_log_addr(LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
     CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
+    CURRENT_CONFIG(peer)->compression = TLS_COMPRESSION_NULL;
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
     debug("DTLSv12: initialize HASH_SHA256\n");
@@ -2085,7 +2086,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint8(p, 1);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, TLS_COMP_NULL);
+  dtls_int_to_uint8(p, TLS_COMPRESSION_NULL);
   p += sizeof(uint8);
 
   if (extension_size) {
@@ -2207,7 +2208,7 @@ check_server_hello(dtls_context_t *ctx,
   data_length -= sizeof(uint16);
 
   /* Check if NULL compression was selected. We do not know any other. */
-  if (dtls_uint8_to_int(data) != TLS_COMP_NULL) {
+  if (dtls_uint8_to_int(data) != TLS_COMPRESSION_NULL) {
     dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
   }

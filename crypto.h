@@ -92,7 +92,7 @@ typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
   uint8  server_random[32];	/**< server random gmt and bytes */
 
-  unsigned char compression;		/**< compression method */
+  dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
 

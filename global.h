@@ -143,6 +143,11 @@ typedef enum {
   TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AC /**< TODO: replace with values from draft-mcgrew-tls-aes-ccm-ecc */
 } dtls_cipher_t;
 
+/** Known compression suites.*/
+typedef enum {
+  TLS_COMPRESSION_NULL = 0x0000		/* NULL compression */
+} dtls_compression_t;
+
 #define TLS_EXT_ELLIPTIC_CURVES		10 /* see RFC 4492 */
 #define TLS_EXT_SIG_HASH_ALGO		13 /* see RFC 5246 */
 #define TLS_EXT_CLIENT_CERIFICATE_TYPE	122 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
