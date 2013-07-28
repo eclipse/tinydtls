@@ -88,9 +88,6 @@ typedef struct {
 } dtls_handshake_parameters_ecdsa_t;
 
 typedef struct {
-  uint8  client_random[32];	/**< client random gmt and bytes */
-  uint8  server_random[32];	/**< server random gmt and bytes */
-
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
