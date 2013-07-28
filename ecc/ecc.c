@@ -421,52 +421,7 @@ static void fieldInv(const uint32_t *A, const uint32_t *modulus, const uint32_t 
 	}
 }
 
-
-void ecc_ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy){
-	uint32_t tempA[8];
-	uint32_t tempB[8];
-	uint32_t tempC[8];
-	uint32_t tempD[16];
-
-	if(isZero(px) && isZero(py)){
-		copy(qx, Sx,arrayLength);
-		copy(qy, Sy,arrayLength);
-		return;
-	} else if(isZero(qx) && isZero(qy)) {
-		copy(px, Sx,arrayLength);
-		copy(py, Sy,arrayLength);
-		return;
-	}
-
-	if(isSame(px, qx, arrayLength)){
-		if(!isSame(py, qy, arrayLength)){
-			setZero(Sx, 8);
-			setZero(Sy, 8);
-			return;
-		} else {
-			ecc_ec_double(px, py, Sx, Sy);
-			return;
-		}
-	}
-
-	fieldSub(py, qy, ecc_prime_m, tempA);
-	fieldSub(px, qx, ecc_prime_m, tempB);
-	fieldInv(tempB, ecc_prime_m, ecc_prime_r, tempB);
-	fieldMult(tempA, tempB, tempD, arrayLength); 
-	fieldModP(tempC, tempD); //tempC = lambda
-
-	fieldMult(tempC, tempC, tempD, arrayLength); //tempA = lambda^2
-	fieldModP(tempA, tempD);
-	fieldSub(tempA, px, ecc_prime_m, tempB); //lambda^2 - Px
-	fieldSub(tempB, qx, ecc_prime_m, Sx); //lambda^2 - Px - Qx
-
-	fieldSub(qx, Sx, ecc_prime_m, tempB);
-	fieldMult(tempC, tempB, tempD, arrayLength);
-	fieldModP(tempC, tempD);
-	fieldSub(tempC, qy, ecc_prime_m, Sy);
-}
-
-void ecc_ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy){
+void static ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy){
 	uint32_t tempA[8];
 	uint32_t tempB[8];
 	uint32_t tempC[8];
@@ -502,6 +457,50 @@ void ecc_ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_
 	fieldSub(tempC, py, ecc_prime_m, Dy); //Dy = lambda * (qx-dx) - px
 }
 
+void static ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy){
+	uint32_t tempA[8];
+	uint32_t tempB[8];
+	uint32_t tempC[8];
+	uint32_t tempD[16];
+
+	if(isZero(px) && isZero(py)){
+		copy(qx, Sx,arrayLength);
+		copy(qy, Sy,arrayLength);
+		return;
+	} else if(isZero(qx) && isZero(qy)) {
+		copy(px, Sx,arrayLength);
+		copy(py, Sy,arrayLength);
+		return;
+	}
+
+	if(isSame(px, qx, arrayLength)){
+		if(!isSame(py, qy, arrayLength)){
+			setZero(Sx, 8);
+			setZero(Sy, 8);
+			return;
+		} else {
+			ec_double(px, py, Sx, Sy);
+			return;
+		}
+	}
+
+	fieldSub(py, qy, ecc_prime_m, tempA);
+	fieldSub(px, qx, ecc_prime_m, tempB);
+	fieldInv(tempB, ecc_prime_m, ecc_prime_r, tempB);
+	fieldMult(tempA, tempB, tempD, arrayLength); 
+	fieldModP(tempC, tempD); //tempC = lambda
+
+	fieldMult(tempC, tempC, tempD, arrayLength); //tempA = lambda^2
+	fieldModP(tempA, tempD);
+	fieldSub(tempA, px, ecc_prime_m, tempB); //lambda^2 - Px
+	fieldSub(tempB, qx, ecc_prime_m, Sx); //lambda^2 - Px - Qx
+
+	fieldSub(qx, Sx, ecc_prime_m, tempB);
+	fieldMult(tempC, tempB, tempD, arrayLength);
+	fieldModP(tempC, tempD);
+	fieldSub(tempC, qy, ecc_prime_m, Sy);
+}
+
 void ecc_ec_mult(const uint32_t *px, const uint32_t *py, const uint32_t *secret, uint32_t *resultx, uint32_t *resulty){
 	uint32_t Qx[8];
 	uint32_t Qy[8];
@@ -513,11 +512,11 @@ void ecc_ec_mult(const uint32_t *px, const uint32_t *py, const uint32_t *secret,
 
 	int i;
 	for (i = 256;i--;){
-		ecc_ec_double(Qx, Qy, tempx, tempy);
+		ec_double(Qx, Qy, tempx, tempy);
 		copy(tempx, Qx,arrayLength);
 		copy(tempy, Qy,arrayLength);
 		if ((((secret[i/32])>>(i%32)) & 0x01) == 1){ //<- TODO quark, muss anders gemacht werden
-			ecc_ec_add(Qx, Qy, px, py, tempx, tempy); //eccAdd
+			ec_add(Qx, Qy, px, py, tempx, tempy); //eccAdd
 			copy(tempx, Qx,arrayLength);
 			copy(tempy, Qy,arrayLength);
 		}
@@ -636,7 +635,7 @@ int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, 
 	ecc_ec_mult(x, y, u2, tmp2_x, tmp2_y);
 
 	// tmp3 = tmp1 + tmp2
-	ecc_ec_add(tmp1_x, tmp1_y, tmp2_x, tmp2_y, tmp3_x, tmp3_y);
+	ec_add(tmp1_x, tmp1_y, tmp2_x, tmp2_y, tmp3_x, tmp3_y);
 	// TODO: this u_1 * G + u_2 * Q_A  could be optimiced with Straus's algorithm.
 
 	return isSame(tmp3_x, r, arrayLength) ? 0 : -1;
@@ -707,6 +706,15 @@ void ecc_rshift(uint32_t* A)
 int ecc_isGreater(const uint32_t *A, const uint32_t *B, uint8_t length)
 {
 	return isGreater(A, B , length);
+}
+
+void ecc_ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy)
+{
+	ec_add(px, py, qx, qy, Sx, Sy);
+}
+void ecc_ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy)
+{
+	ec_double(px, py, Dx, Dy);
 }
 
 #endif /* TEST_INCLUDE */

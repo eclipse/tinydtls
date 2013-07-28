@@ -44,8 +44,6 @@ extern const uint32_t ecc_g_point_x[8];
 extern const uint32_t ecc_g_point_y[8];
 
 //ec Functions
-void ecc_ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy);
-void ecc_ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy);
 void ecc_ec_mult(const uint32_t *px, const uint32_t *py, const uint32_t *secret, uint32_t *resultx, uint32_t *resulty);
 
 static inline void ecc_ecdh(const uint32_t *px, const uint32_t *py, const uint32_t *secret, uint32_t *resultx, uint32_t *resulty) {
@@ -61,6 +59,10 @@ static inline void ecc_gen_pub_key(const uint32_t *priv_key, uint32_t *pub_x, ui
 }
 
 #ifdef TEST_INCLUDE
+//ec Functions
+void ecc_ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy);
+void ecc_ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy);
+
 //simple Functions for addition and substraction of big numbers
 uint32_t ecc_add( const uint32_t *x, const uint32_t *y, uint32_t *result, uint8_t length);
 uint32_t ecc_sub( const uint32_t *x, const uint32_t *y, uint32_t *result, uint8_t length);
