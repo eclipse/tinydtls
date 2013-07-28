@@ -118,19 +118,22 @@ strnlen(const char *s, size_t maxlen) {
 #endif
 
 size_t
-dsrv_print_addr(const session_t *addr, unsigned char *buf, size_t len) {
+dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #ifdef HAVE_ARPA_INET_H
   const void *addrptr = NULL;
   in_port_t port;
-  unsigned char *p = buf;
+  char *p = buf;
 
   switch (addr->addr.sa.sa_family) {
   case AF_INET: 
+    if (len < INET_ADDRSTRLEN)
+      return 0;
+  
     addrptr = &addr->addr.sin.sin_addr;
     port = ntohs(addr->addr.sin.sin_port);
     break;
   case AF_INET6:
-    if (len < 7) /* do not proceed if buffer is even too short for [::]:0 */
+    if (len < INET6_ADDRSTRLEN + 2)
       return 0;
 
     *p++ = '[';
@@ -144,12 +147,12 @@ dsrv_print_addr(const session_t *addr, unsigned char *buf, size_t len) {
     return min(22, len);
   }
 
-  if (inet_ntop(addr->addr.sa.sa_family, addrptr, (char *)p, len) == 0) {
+  if (inet_ntop(addr->addr.sa.sa_family, addrptr, p, len) == 0) {
     perror("dsrv_print_addr");
     return 0;
   }
 
-  p += strnlen((char *)p, len);
+  p += strnlen(p, len);
 
   if (addr->addr.sa.sa_family == AF_INET6) {
     if (p < buf + len) {
@@ -158,15 +161,15 @@ dsrv_print_addr(const session_t *addr, unsigned char *buf, size_t len) {
       return 0;
   }
 
-  p += snprintf((char *)p, buf + len - p + 1, ":%d", port);
+  p += snprintf(p, buf + len - p + 1, ":%d", port);
 
-  return buf + len - p;
+  return p - buf;
 #else /* HAVE_ARPA_INET_H */
 # if WITH_CONTIKI
-  unsigned char *p = buf;
+  char *p = buf;
   uint8_t i;
 #  if WITH_UIP6
-  const unsigned char hex[] = "0123456789ABCDEF";
+  const char hex[] = "0123456789ABCDEF";
 
   if (len < 41)
     return 0;
@@ -191,12 +194,12 @@ dsrv_print_addr(const session_t *addr, unsigned char *buf, size_t len) {
     return 0;
 
 #ifdef HAVE_SNPRINTF
-  p += snprintf((char *)p, buf + len - p + 1, ":%d", uip_htons(addr->port));
+  p += snprintf(p, buf + len - p + 1, ":%d", uip_htons(addr->port));
 #else /* HAVE_SNPRINTF */
   /* @todo manual conversion of port number */
 #endif /* HAVE_SNPRINTF */
 
-  return buf + len - p;
+  return p - buf;
 # else /* WITH_CONTIKI */
   /* TODO: output addresses manually */
 #   warning "inet_ntop() not available, network addresses will not be included in debug output"
@@ -282,8 +285,12 @@ void dump(unsigned char *buf, size_t len) {
 
 void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
 {
-  unsigned char addrbuf[72];
-  dsrv_print_addr(addr, addrbuf, sizeof(addrbuf));
+  char addrbuf[73];
+  int len;
+
+  len = dsrv_print_addr(addr, addrbuf, sizeof(addrbuf));
+  if (!len)
+    return;
   dsrv_log(level, "%s: %s\n", name, addrbuf);
 }
 
