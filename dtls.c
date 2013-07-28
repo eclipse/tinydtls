@@ -79,7 +79,8 @@
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
-#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + 32 + 12 + 20
+#define DTLS_COOKIE_LENGTH_MAX 32
+#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + DTLS_COOKIE_LENGTH_MAX + 12 + 20
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + 32 + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
@@ -2036,6 +2037,11 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
+
+  if (cookie_length > DTLS_COOKIE_LENGTH_MAX) {
+    warn("the cookie is too long\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
 
   if (cookie_length == 0) {
     /* Set client random: First 4 bytes are the client's Unix timestamp,
