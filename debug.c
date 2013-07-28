@@ -117,7 +117,7 @@ strnlen(const char *s, size_t maxlen) {
 #define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
-size_t
+static size_t
 dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #ifdef HAVE_ARPA_INET_H
   const void *addrptr = NULL;

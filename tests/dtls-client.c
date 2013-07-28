@@ -148,13 +148,8 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
-    char addrbuf[72];
-    dsrv_print_addr(&session, addrbuf, sizeof(addrbuf));
-    dsrv_log(LOG_DEBUG, "got %d bytes from %s\n", len, addrbuf);
-    dump((unsigned char *)&session, sizeof(session_t));
-    PRINTF("\n");
-    dump(buf, len);
-    PRINTF("\n");
+    dtls_dsrv_log_addr(LOG_DEBUG, "peer", &session);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "bytes from peer", buf, len, 0);
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
