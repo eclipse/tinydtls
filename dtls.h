@@ -96,9 +96,8 @@ typedef struct dtls_peer_t {
 
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
-  dtls_security_parameters_t security_params[2]; 
-  int config;	             /**< denotes which security params are in effect 
-			      FIXME: check if we can use epoch for this */
+  dtls_security_parameters_t security_params;
+  dtls_handshake_parameters_t handshake_params;
 } dtls_peer_t;
 
 typedef struct dtls_psk_key_t {

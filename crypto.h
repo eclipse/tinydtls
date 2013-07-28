@@ -86,7 +86,7 @@ typedef struct {
   uint8 other_eph_pub_y[32];
   uint8 other_pub_x[32];
   uint8 other_pub_y[32];
-} dtls_security_parameters_ecdsa_t;
+} dtls_handshake_parameters_ecdsa_t;
 
 typedef struct {
   uint8  client_random[32];	/**< client random gmt and bytes */
@@ -95,9 +95,6 @@ typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
-
-  /** the session's master secret */
-  uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
 
   /** 
    * The key block generated from PRF applied to client and server
@@ -109,10 +106,21 @@ typedef struct {
 
   dtls_cipher_context_t *read_cipher;  /**< decryption context */
   dtls_cipher_context_t *write_cipher; /**< encryption context */
-
-  dtls_security_parameters_ecdsa_t ecdsa;
-  int do_client_auth;
 } dtls_security_parameters_t;
+
+typedef struct {
+  uint8  client_random[32];	/**< client random gmt and bytes */
+  uint8  server_random[32];	/**< server random gmt and bytes */
+
+  dtls_compression_t compression;		/**< compression method */
+  dtls_cipher_t cipher;		/**< cipher type */
+  unsigned int do_client_auth:1;
+
+  /** the session's master secret */
+  uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
+
+  dtls_handshake_parameters_ecdsa_t ecdsa;
+} dtls_handshake_parameters_t;
 
 /* The following macros provide access to the components of the
  * key_block in the security parameters. */

@@ -114,11 +114,6 @@
     P += dtls_ ## T ## _to_int(P) + sizeof(T);				\
   }
 
-#define CURRENT_CONFIG(Peer) (&(Peer)->security_params[(Peer)->config])
-#define OTHER_CONFIG(Peer) (&(Peer)->security_params[!((Peer)->config & 0x01)])
-
-#define SWITCH_CONFIG(Peer) ((Peer)->config = !((Peer)->config & 0x01))
-
 uint8 _clear[DTLS_MAX_BUF]; /* target buffer message decryption */
 uint8 _buf[DTLS_MAX_BUF]; /* target buffer for several crypto operations */
 
@@ -497,16 +492,15 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 
 int
 calculate_key_block(dtls_context_t *ctx, 
-		    dtls_security_parameters_t *config,
-		    session_t *session,
-		    unsigned char client_random[32],
-		    unsigned char server_random[32]) {
+		    dtls_handshake_parameters_t *handshake,
+		    dtls_security_parameters_t *security,
+		    session_t *session) {
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
-  pre_master_secret = config->key_block;
+  pre_master_secret = security->key_block;
   int err;
 
-  switch (config->cipher) {
+  switch (handshake->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
@@ -524,10 +518,10 @@ calculate_key_block(dtls_context_t *ctx,
     break;
   }
   case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
-    pre_master_len = dtls_ecdh_pre_master_secret(config->ecdsa.own_eph_priv,
-						 config->ecdsa.other_eph_pub_x,
-						 config->ecdsa.other_eph_pub_y,
-						 sizeof(config->ecdsa.own_eph_priv),
+    pre_master_len = dtls_ecdh_pre_master_secret(handshake->ecdsa.own_eph_priv,
+						 handshake->ecdsa.other_eph_pub_x,
+						 handshake->ecdsa.other_eph_pub_y,
+						 sizeof(handshake->ecdsa.own_eph_priv),
 						 pre_master_secret);
     break;
   }
@@ -536,45 +530,45 @@ calculate_key_block(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", client_random, 32, 0);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", server_random, 32, 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", handshake->client_random, 32, 0);
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", handshake->server_random, 32, 0);
   dtls_dsrv_hexdump_log(LOG_DEBUG, "pre_master_secret", pre_master_secret,
 			pre_master_len, 0);
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
-	   client_random, 32,
-	   server_random, 32,
-	   config->master_secret, 
+	   handshake->client_random, 32,
+	   handshake->server_random, 32,
+	   handshake->master_secret,
 	   DTLS_MASTER_SECRET_LENGTH);
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", config->master_secret,
+  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", handshake->master_secret,
 			DTLS_MASTER_SECRET_LENGTH, 0);
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
                     "key expansion" + server_random + client_random) */
 
-  dtls_prf(config->master_secret, 
+  dtls_prf(handshake->master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   PRF_LABEL(key), PRF_LABEL_SIZE(key),
-	   server_random, 32,
-	   client_random, 32,
-	   config->key_block,
-	   dtls_kb_size(config, peer->role));
+	   handshake->server_random, 32,
+	   handshake->client_random, 32,
+	   security->key_block,
+	   dtls_kb_size(security, peer->role));
 
-  dtls_debug_keyblock(config);
+  dtls_debug_keyblock(security);
   return 0;
 }
 
 int
-init_cipher(dtls_security_parameters_t *config, dtls_peer_type role)
+init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
 {
   /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
   dtls_cipher_free(config->read_cipher);
 
-  assert(config->cipher != TLS_NULL_WITH_NULL_NULL);
-  config->read_cipher = dtls_cipher_new(config->cipher,
+  assert(handshake->cipher != TLS_NULL_WITH_NULL_NULL);
+  config->read_cipher = dtls_cipher_new(handshake->cipher,
 					dtls_kb_remote_write_key(config, role),
 					dtls_kb_key_size(config, role));
 
@@ -590,7 +584,7 @@ init_cipher(dtls_security_parameters_t *config, dtls_peer_type role)
 
   dtls_cipher_free(config->write_cipher);
   
-  config->write_cipher = dtls_cipher_new(config->cipher,
+  config->write_cipher = dtls_cipher_new(handshake->cipher,
 					 dtls_kb_local_write_key(config, role),
 					 dtls_kb_key_size(config, role));
 
@@ -603,6 +597,10 @@ init_cipher(dtls_security_parameters_t *config, dtls_peer_type role)
   dtls_cipher_set_iv(config->write_cipher,
 		     dtls_kb_local_iv(config, role),
 		     dtls_kb_iv_size(config, role));
+
+  config->cipher = handshake->cipher;
+  config->compression = handshake->compression;
+
   return 0;
 }
 
@@ -677,7 +675,8 @@ dtls_update_parameters(dtls_context_t *ctx,
   int ext_elliptic_curve;
   int ext_client_cert_type;
   int ext_server_cert_type;
-  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
+  dtls_security_parameters_t *security = &peer->security_params;
 
   assert(config);
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
@@ -704,11 +703,11 @@ dtls_update_parameters(dtls_context_t *ctx,
     /* Looks like we do not have a cipher nor compression. This is ok
      * for renegotiation, but not for the initial handshake. */
 
-    if (CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL)
+    if (security->cipher == TLS_NULL_WITH_NULL_NULL)
       goto error;
 
-    config->cipher = CURRENT_CONFIG(peer)->cipher;
-    config->compression = CURRENT_CONFIG(peer)->compression;
+    config->cipher = security->cipher;
+    config->compression = security->compression;
 
     return 0;
   }
@@ -735,7 +734,7 @@ dtls_update_parameters(dtls_context_t *ctx,
 
   if (data_length < sizeof(uint8)) { 
     /* no compression specified, take the current compression method */
-    config->compression = CURRENT_CONFIG(peer)->compression;
+    config->compression = security->compression;
     goto error;
   }
 
@@ -842,10 +841,10 @@ dtls_update_parameters(dtls_context_t *ctx,
 
 static inline int
 check_client_keyexchange(dtls_context_t *ctx, 
-			 dtls_peer_t *peer,
+			 dtls_handshake_parameters_t *handshake,
 			 uint8 *data, size_t length) {
 
-  if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
 
     if (length < DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH) {
       debug("The client key exchange is too short\n");
@@ -865,13 +864,13 @@ check_client_keyexchange(dtls_context_t *ctx,
     }
     data += sizeof(uint8);
 
-    memcpy(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x, data,
-	   sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x));
-    data += sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_x);
+    memcpy(handshake->ecdsa.other_eph_pub_x, data,
+	   sizeof(handshake->ecdsa.other_eph_pub_x));
+    data += sizeof(handshake->ecdsa.other_eph_pub_x);
 
-    memcpy(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y, data,
-	   sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y));
-    data += sizeof(OTHER_CONFIG(peer)->ecdsa.other_eph_pub_y);
+    memcpy(handshake->ecdsa.other_eph_pub_y, data,
+	   sizeof(handshake->ecdsa.other_eph_pub_y));
+    data += sizeof(handshake->ecdsa.other_eph_pub_y);
   } else {
     if (length < DTLS_CKX_LENGTH) {
       debug("The client key exchange is too short\n");
@@ -893,8 +892,8 @@ dtls_new_peer(dtls_context_t *ctx,
 
     dtls_dsrv_log_addr(LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
-    CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
-    CURRENT_CONFIG(peer)->compression = TLS_COMPRESSION_NULL;
+    peer->security_params.cipher = TLS_NULL_WITH_NULL_NULL;
+    peer->security_params.compression = TLS_COMPRESSION_NULL;
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
     debug("DTLSv12: initialize HASH_SHA256\n");
@@ -978,7 +977,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
     label_size = PRF_LABEL_SIZE(client);
   }
 
-  dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
+  dtls_prf(peer->handshake_params.master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   label, label_size,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
@@ -1021,11 +1020,12 @@ dtls_prepare_record(dtls_peer_t *peer,
   uint8 *p, *start;
   int res;
   int i;
+  dtls_security_parameters_t *security = &peer->security_params;
   
   p = dtls_set_record_header(type, peer, sendbuf);
   start = p;
 
-  if (!peer || CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (!peer || security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite */
 
     res = 0;
@@ -1084,11 +1084,11 @@ dtls_prepare_record(dtls_peer_t *peer,
     }
 
     memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_local_iv(CURRENT_CONFIG(peer), peer->role),
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role));
-    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role), start, 8); /* epoch + seq_num */
+    memcpy(N, dtls_kb_local_iv(security, peer->role),
+	   dtls_kb_iv_size(security, peer->role));
+    memcpy(N + dtls_kb_iv_size(security, peer->role), start, 8); /* epoch + seq_num */
 
-    cipher_context = CURRENT_CONFIG(peer)->write_cipher;
+    cipher_context = security->write_cipher;
 
     if (!cipher_context) {
       warn("no write_cipher available!\n");
@@ -1097,8 +1097,8 @@ dtls_prepare_record(dtls_peer_t *peer,
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", N, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
-			  dtls_kb_local_write_key(CURRENT_CONFIG(peer), peer->role),
-			  dtls_kb_key_size(CURRENT_CONFIG(peer), peer->role), 0);
+			  dtls_kb_local_write_key(security, peer->role),
+			  dtls_kb_key_size(security, peer->role), 0);
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
     
@@ -1305,6 +1305,8 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
 
 static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
+  dtls_security_parameters_t *security = &peer->security_params;
+
   if (peer->state != DTLS_STATE_CLOSED)
     dtls_close(ctx, &peer->session);
   if (unlink) {
@@ -1320,10 +1322,8 @@ static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
 #endif
 #endif /* WITH_CONTIKI */
   }
-  dtls_cipher_free(OTHER_CONFIG(peer)->read_cipher);
-  dtls_cipher_free(OTHER_CONFIG(peer)->write_cipher);
-  dtls_cipher_free(CURRENT_CONFIG(peer)->read_cipher);
-  dtls_cipher_free(CURRENT_CONFIG(peer)->write_cipher);
+  dtls_cipher_free(security->read_cipher);
+  dtls_cipher_free(security->write_cipher);
   dtls_free_peer(peer);
 }
 
@@ -1416,7 +1416,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
 				dtls_peer_t *peer,
 				uint8 *data, size_t data_length)
 {
-  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
   int i;
   unsigned char *result_r;
   unsigned char *result_s;
@@ -1527,8 +1527,9 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   uint8 *p;
   int ecdsa;
   uint8 extension_size;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
 
-  ecdsa = OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
+  ecdsa = handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
 
   extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
 
@@ -1541,23 +1542,23 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   /* Set server random: First 4 bytes are the server's Unix timestamp,
    * followed by 28 bytes of generate random data. */
-  dtls_int_to_uint32(OTHER_CONFIG(peer)->server_random, clock_time());
-  prng(OTHER_CONFIG(peer)->server_random + 4, 28);
+  dtls_int_to_uint32(handshake->server_random, clock_time());
+  prng(handshake->server_random + 4, 28);
 
-  memcpy(p, OTHER_CONFIG(peer)->server_random,
-         sizeof(OTHER_CONFIG(peer)->server_random));
-  p += sizeof(OTHER_CONFIG(peer)->server_random);
+  memcpy(p, handshake->server_random,
+         sizeof(handshake->server_random));
+  p += sizeof(handshake->server_random);
 
   *p++ = 0;			/* no session id */
 
-  if (OTHER_CONFIG(peer)->cipher != TLS_NULL_WITH_NULL_NULL) {
+  if (handshake->cipher != TLS_NULL_WITH_NULL_NULL) {
     /* selected cipher suite */
-    dtls_int_to_uint16(p, OTHER_CONFIG(peer)->cipher);
+    dtls_int_to_uint16(p, handshake->cipher);
     p += sizeof(uint16);
 
     /* selected compression method */
-    if (OTHER_CONFIG(peer)->compression >= 0)
-      *p++ = compression_methods[OTHER_CONFIG(peer)->compression];
+    if (handshake->compression >= 0)
+      *p++ = compression_methods[handshake->compression];
   }
 
   if (extension_size) {
@@ -1708,7 +1709,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   uint8 *ephemeral_pub_y;
   uint32_t point_r[9];
   uint32_t point_s[9];
-  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
 
   /* ServerKeyExchange 
    *
@@ -1823,7 +1824,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
     return res;
   }
 
-  if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+  if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
     const dtls_ecdsa_key_t *ecdsa_key;
 
     res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
@@ -1846,7 +1847,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       return res;
     }
 
-    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key) {
       res = dtls_send_server_certificate_request(ctx, peer);
 
@@ -1876,14 +1877,13 @@ dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
 
     
 int
-dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
-			      dtls_security_parameters_t *config)
+dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
   size_t size;
 
-  switch (config->cipher) {
+  switch (peer->handshake_params.cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
@@ -1921,7 +1921,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer,
     ephemeral_pub_y = p;
     p += DTLS_EC_KEY_SIZE;
 
-    dtls_ecdsa_generate_key(OTHER_CONFIG(peer)->ecdsa.own_eph_priv,
+    dtls_ecdsa_generate_key(peer->handshake_params.ecdsa.own_eph_priv,
     			    ephemeral_pub_x, ephemeral_pub_y,
     			    DTLS_EC_KEY_SIZE);
 
@@ -1981,11 +1981,6 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 				 buf, p - buf);
 }
 
-#define msg_overhead(Peer,Length) (DTLS_RH_LENGTH +	\
-  ((Length + dtls_kb_iv_size(CURRENT_CONFIG(Peer), (Peer)->role) + \
-    dtls_kb_digest_size(CURRENT_CONFIG(Peer), (Peer)->role)) /     \
-   DTLS_BLK_LENGTH + 1) * DTLS_BLK_LENGTH)
-
 int
 dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 		   const unsigned char *label, size_t labellen)
@@ -2000,7 +1995,7 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 
   length = dtls_hash_finalize(hash, &hs_hash);
 
-  dtls_prf(CURRENT_CONFIG(peer)->master_secret, 
+  dtls_prf(peer->handshake_params.master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
 	   label, labellen,
 	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished), 
@@ -2026,6 +2021,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   uint8_t extension_size;
   int psk;
   int ecdsa;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
 
   psk = is_psk_supported(ctx);
   ecdsa = is_ecdsa_supported(ctx, 1);
@@ -2048,14 +2044,14 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   if (cookie_length == 0) {
     /* Set client random: First 4 bytes are the client's Unix timestamp,
      * followed by 28 bytes of generate random data. */
-    dtls_int_to_uint32(&OTHER_CONFIG(peer)->client_random, clock_time());
-    prng(OTHER_CONFIG(peer)->client_random + sizeof(uint32),
-         sizeof(OTHER_CONFIG(peer)->client_random) - sizeof(uint32));
+    dtls_int_to_uint32(&handshake->client_random, clock_time());
+    prng(handshake->client_random + sizeof(uint32),
+         sizeof(handshake->client_random) - sizeof(uint32));
   }
   /* we must use the same Client Random as for the previous request */
-  memcpy(p, OTHER_CONFIG(peer)->client_random,
-	 sizeof(OTHER_CONFIG(peer)->client_random));
-  p += sizeof(OTHER_CONFIG(peer)->client_random);
+  memcpy(p, handshake->client_random,
+	 sizeof(handshake->client_random));
+  p += sizeof(handshake->client_random);
 
   /* session id (length 0) */
   dtls_int_to_uint8(p, 0);
@@ -2157,6 +2153,8 @@ check_server_hello(dtls_context_t *ctx,
 		      dtls_peer_t *peer,
 		      uint8 *data, size_t data_length)
 {
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
+
   /* This function is called when we expect a ServerHello (i.e. we
    * have sent a ClientHello).  We might instead receive a HelloVerify
    * request containing a cookie. If so, we must repeat the
@@ -2187,19 +2185,19 @@ check_server_hello(dtls_context_t *ctx,
   data_length -= sizeof(uint16);
 
   /* store server random data */
-  memcpy(OTHER_CONFIG(peer)->server_random, data,
-	 sizeof(OTHER_CONFIG(peer)->server_random));
+  memcpy(handshake->server_random, data,
+	 sizeof(handshake->server_random));
   /* skip server random */
-  data += sizeof(OTHER_CONFIG(peer)->server_random);
-  data_length -= sizeof(OTHER_CONFIG(peer)->server_random);
+  data += sizeof(handshake->server_random);
+  data_length -= sizeof(handshake->server_random);
 
   SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
     
   /* Check cipher suite. As we offer all we have, it is sufficient
    * to check if the cipher suite selected by the server is in our
    * list of known cipher suites. Subsets are not supported. */
-  OTHER_CONFIG(peer)->cipher = dtls_uint16_to_int(data);
-  if (!known_cipher(ctx, OTHER_CONFIG(peer)->cipher, 1)) {
+  handshake->cipher = dtls_uint16_to_int(data);
+  if (!known_cipher(ctx, handshake->cipher, 1)) {
     dsrv_log(LOG_ALERT, "unsupported cipher 0x%02x 0x%02x\n",
 	     data[0], data[1]);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
@@ -2248,7 +2246,7 @@ check_server_certificate(dtls_context_t *ctx,
 			 uint8 *data, size_t data_length)
 {
   int err;
-  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
 
   update_hs_hash(peer, data, data_length);
 
@@ -2299,7 +2297,7 @@ check_server_key_exchange(dtls_context_t *ctx,
 			  dtls_peer_t *peer,
 			  uint8 *data, size_t data_length)
 {
-  dtls_security_parameters_t *config = OTHER_CONFIG(peer);
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
   int i;
   unsigned char *result_r;
   unsigned char *result_s;
@@ -2436,7 +2434,7 @@ check_certificate_request(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  assert(peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
 
   data += DTLS_HS_LENGTH;
 
@@ -2496,7 +2494,7 @@ check_certificate_request(dtls_context_t *ctx,
 
   /* common names are ignored */
 
-  OTHER_CONFIG(peer)->do_client_auth = 1;
+  peer->handshake_params.do_client_auth = 1;
   return 0;
 }
 
@@ -2507,12 +2505,14 @@ check_server_hellodone(dtls_context_t *ctx,
 {
   int res;
   const dtls_ecdsa_key_t *ecdsa_key;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
+  dtls_security_parameters_t *security = &peer->security_params;
 
   /* calculate master key, send CCS */
 
   update_hs_hash(peer, data, data_length);
 
-  if (OTHER_CONFIG(peer)->do_client_auth) {
+  if (handshake->do_client_auth) {
 
     res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
     if (res < 0) {
@@ -2529,14 +2529,14 @@ check_server_hellodone(dtls_context_t *ctx,
   }
 
   /* send ClientKeyExchange */
-  res = dtls_send_client_key_exchange(ctx, peer, OTHER_CONFIG(peer));
+  res = dtls_send_client_key_exchange(ctx, peer);
 
   if (res < 0) {
     debug("cannot send KeyExchange message\n");
     return res;
   }
 
-  if (OTHER_CONFIG(peer)->do_client_auth) {
+  if (handshake->do_client_auth) {
 
     res = dtls_send_certificate_verify_ecdh(ctx, peer, ecdsa_key);
 
@@ -2546,18 +2546,6 @@ check_server_hellodone(dtls_context_t *ctx,
     }
   }
 
-  res = calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
-			    OTHER_CONFIG(peer)->client_random,
-			    OTHER_CONFIG(peer)->server_random);
-  if (res < 0) {
-    return res;
-  }
-
-  res = init_cipher(OTHER_CONFIG(peer), peer->role);
-  if (res < 0) {
-    return res;
-  }
-
   /* and switch cipher suite */
   res = dtls_send_ccs(ctx, peer);
   if (res < 0) {
@@ -2565,11 +2553,21 @@ check_server_hellodone(dtls_context_t *ctx,
     return res;
   }
 
-  SWITCH_CONFIG(peer);
+  res = calculate_key_block(ctx, handshake, security,
+			    &peer->session);
+  if (res < 0) {
+    return res;
+  }
+
+  res = init_cipher(handshake, security, peer->role);
+  if (res < 0) {
+    return res;
+  }
+
   inc_uint(uint16, peer->epoch);
   memset(peer->rseq, 0, sizeof(peer->rseq));
 
-  dtls_debug_keyblock(CURRENT_CONFIG(peer));
+  dtls_debug_keyblock(security);
 
   /* Client Finished */
   debug ("send Finished\n");
@@ -2581,11 +2579,12 @@ decrypt_verify(dtls_peer_t *peer,
 	       uint8 *packet, size_t length,
 	       uint8 **cleartext, size_t *clen) {
   int ok = 0;
+  dtls_security_parameters_t *security = &peer->security_params;
   
   *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
   *clen = length - sizeof(dtls_record_header_t);
 
-  if (CURRENT_CONFIG(peer)->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite selected */
     return 1;
   } else {			/* TLS_PSK_WITH_AES_128_CCM_8 */   
@@ -2604,15 +2603,15 @@ decrypt_verify(dtls_peer_t *peer,
       return -1;
 
     memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_remote_iv(CURRENT_CONFIG(peer), peer->role),
-	   dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role));
+    memcpy(N, dtls_kb_remote_iv(security, peer->role),
+	   dtls_kb_iv_size(security, peer->role));
 
     /* read epoch and seq_num from message */
-    memcpy(N + dtls_kb_iv_size(CURRENT_CONFIG(peer), peer->role), *cleartext, 8);
+    memcpy(N + dtls_kb_iv_size(security, peer->role), *cleartext, 8);
     *cleartext += 8;
     *clen -= 8;
 
-    cipher_context = CURRENT_CONFIG(peer)->read_cipher;
+    cipher_context = security->read_cipher;
     
     if (!cipher_context) {
       warn("no read_cipher available!\n");
@@ -2621,8 +2620,8 @@ decrypt_verify(dtls_peer_t *peer,
 
     dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", N, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key",
-			  dtls_kb_remote_write_key(CURRENT_CONFIG(peer), peer->role),
-			  dtls_kb_key_size(CURRENT_CONFIG(peer), peer->role), 0);
+			  dtls_kb_remote_write_key(security, peer->role),
+			  dtls_kb_key_size(security, peer->role), 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "ciphertext", *cleartext, *clen, 0);
 
     dtls_cipher_set_iv(cipher_context, N, DTLS_CCM_BLOCKSIZE);
@@ -2742,7 +2741,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       warn("error in check_server_hello err: %i\n", err);
       return err;
     }
-    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
+    if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
       peer->state = DTLS_STATE_WAIT_SERVERCERTIFICATE;
     else
       peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
@@ -2862,14 +2861,14 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
 
-    err = check_client_keyexchange(ctx, peer, data, data_length);
+    err = check_client_keyexchange(ctx, &peer->handshake_params, data, data_length);
     if (err < 0) {
       warn("error in check_client_keyexchange err: %i\n", err);
       return err;
     }
     update_hs_hash(peer, data, data_length);
 
-    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key)
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
@@ -2970,7 +2969,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     if (err < 0) {
       return err;
     }
-    if (OTHER_CONFIG(peer)->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key)
       peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
     else
@@ -3012,6 +3011,8 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 	   uint8 *record_header, uint8 *data, size_t data_length)
 {
   int err;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
+  dtls_security_parameters_t *security = &peer->security_params;
 
   /* A CCS message is handled after a KeyExchange message was
    * received from the client. When security parameters have been
@@ -3027,32 +3028,30 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   if (data_length < 1 || data[0] != 1)
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
-  err = calculate_key_block(ctx, OTHER_CONFIG(peer), &peer->session,
-			    OTHER_CONFIG(peer)->client_random,
-			    OTHER_CONFIG(peer)->server_random);
-  if (err < 0) {
-    return err;
-  }
-
-  err = init_cipher(OTHER_CONFIG(peer), peer->role);
-  if (err < 0) {
-    return err;
-  }
-
   /* send change cipher spec message and switch to new configuration */
   err = dtls_send_ccs(ctx, peer);
   if (err < 0) {
     warn("cannot send CCS message\n");
     return err;
-  } 
+  }
+
+  err = calculate_key_block(ctx, handshake, security,
+			    &peer->session);
+  if (err < 0) {
+    return err;
+  }
+
+  err = init_cipher(handshake, security, peer->role);
+  if (err < 0) {
+    return err;
+  }
   
-  SWITCH_CONFIG(peer);
   inc_uint(uint16, peer->epoch);
   memset(peer->rseq, 0, sizeof(peer->rseq));
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
-  dtls_debug_keyblock(CURRENT_CONFIG(peer));
+  dtls_debug_keyblock(security);
 
   return 0;
 }  
