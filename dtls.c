@@ -1052,8 +1052,14 @@ dtls_prepare_record(dtls_peer_t *peer,
 #define A_DATA_LEN 13
     unsigned char N[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
-    
-    debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
+
+    if (security->cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+      debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
+    } else if (security->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+      debug("dtls_prepare_record(): encrypt using TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8\n");
+    } else {
+      debug("dtls_prepare_record(): encrypt using unknown cipher\n");
+    }
 
     /* set nonce       
        from http://tools.ietf.org/html/draft-mcgrew-tls-aes-ccm-03:
