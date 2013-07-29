@@ -75,6 +75,20 @@ netq_insert_node(netq_t **queue, netq_t *node) {
   return 1;
 }
 
+netq_t *
+netq_head(netq_t **queue) {
+  if (!queue)
+    return NULL;
+
+  return list_head((list_t)queue);
+}
+
+netq_t *netq_pop_first(netq_t **queue) {
+  if (!queue)
+    return NULL;
+
+  return list_pop((list_t)queue);
+}
 
 netq_t *
 netq_node_new() {
