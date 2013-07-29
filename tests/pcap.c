@@ -3,12 +3,9 @@
 #include <getopt.h>
 #include <pcap/pcap.h>
 
+#include "config.h"
 #include "debug.h"
 #include "dtls.h"
-#include "numeric.h"
-#include "hmac.h"
-#include "md5/md5.h"
-#include "sha1/sha.h"
 
 #define TRANSPORT_HEADER_SIZE (14+20+8) /* Ethernet + IP + UDP */
 
@@ -24,9 +21,9 @@ int config = 0;
 unsigned int epoch[2] = { 0, 0 };
 
 #if DTLS_VERSION == 0xfeff
-dtls_hash_t *hs_hash[2];
+dtls_hash_t hs_hash[2];
 #elif DTLS_VERSION == 0xfefd
-dtls_hash_t *hs_hash[1];
+dtls_hash_t hs_hash[1];
 #endif
 
 static inline void
@@ -38,7 +35,7 @@ update_hash(uint8 *record, size_t rlength,
     return;
 
   for (i = 0; i < sizeof(hs_hash) / sizeof(dtls_hash_t *); ++i) {
-    hs_hash[i]->update(hs_hash[i]->data, data, data_length);
+    dtls_hash_update(hs_hash[i], data, data_length);
   }
 }
 
@@ -55,27 +52,27 @@ finalize_hash(uint8 *buf) {
 
   /* temporarily store hash status for roll-back after finalize */
 #if DTLS_VERSION == 0xfeff
-  memcpy(statebuf, hs_hash[0]->data, sizeof(md5_state_t));
+  memcpy(statebuf, hs_hash[0], sizeof(md5_state_t));
   memcpy(statebuf + sizeof(md5_state_t), 
-	 hs_hash[1]->data, 
+	 hs_hash[1], 
 	 sizeof(SHA_CTX));
 #elif DTLS_VERSION == 0xfefd
-  memcpy(statebuf, hs_hash[0]->data, sizeof(statebuf));
+  memcpy(statebuf, hs_hash[0], sizeof(statebuf));
 #endif
 
-  hs_hash[0]->finalize(buf, hs_hash[0]->data);
+  dtls_hash_finalize(buf, hs_hash[0]);
 #if DTLS_VERSION == 0xfeff
-  hs_hash[1]->finalize(buf + 16, hs_hash[1]->data);
+  dtls_hash_finalize(buf + 16, hs_hash[1]);
 #endif
 
   /* restore hash status */
 #if DTLS_VERSION == 0xfeff
-  memcpy(hs_hash[0]->data, statebuf, sizeof(md5_state_t));
-  memcpy(hs_hash[1]->data, 
+  memcpy(hs_hash[0], statebuf, sizeof(md5_state_t));
+  memcpy(hs_hash[1], 
 	 statebuf + sizeof(md5_state_t), 
 	 sizeof(SHA_CTX));
 #elif DTLS_VERSION == 0xfefd
-  memcpy(hs_hash[0]->data, statebuf, sizeof(statebuf));
+  memcpy(hs_hash[0], statebuf, sizeof(statebuf));
 #endif
 }
 
@@ -88,6 +85,9 @@ clear_hash() {
   memset(hs_hash, 0, sizeof(hs_hash));
 }
 
+#undef CURRENT_CONFIG
+#undef OTHER_CONFIG
+#undef SWITCH_CONFIG
 #define CURRENT_CONFIG (&security_params[config])
 #define OTHER_CONFIG   (&security_params[!(config & 0x01)])
 #define SWITCH_CONFIG  (config = !(config & 0x01))
@@ -109,8 +109,7 @@ pcap_verify(dtls_security_parameters_t *sec,
 		 is_client 
 		 ? dtls_kb_client_mac_secret(sec)
 		 : dtls_kb_server_mac_secret(sec),
-		 dtls_kb_mac_secret_size(sec),
-		 dtls_kb_mac_algorithm(sec));
+		 dtls_kb_mac_secret_size(sec));
 
   cleartext_length -= dtls_kb_digest_size(sec);
 
@@ -139,12 +138,6 @@ decrypt_verify(int is_client, const uint8 *packet, size_t length,
   static unsigned char buf[1000];
   
   switch (CURRENT_CONFIG->cipher) {
-  case -1:			/* no cipher suite selected */
-    *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
-    *clen = length - sizeof(dtls_record_header_t);
-
-    ok = 1;
-    break;
   case AES128:			/* TLS_PSK_WITH_AES128_CBC_SHA */
     *cleartext = buf;
     *clen = length - sizeof(dtls_record_header_t);
@@ -156,7 +149,7 @@ decrypt_verify(int is_client, const uint8 *packet, size_t length,
 
     res = dtls_decrypt(cipher,
 		       (uint8 *)packet + sizeof(dtls_record_header_t), *clen, 
-		       buf);
+		       buf, NULL, 0);
 
     if (res < 0) {
       warn("decryption failed!\n");
@@ -168,10 +161,11 @@ decrypt_verify(int is_client, const uint8 *packet, size_t length,
 	*clen = res - dtls_kb_digest_size(CURRENT_CONFIG);
     }
     break;
-  default:
-    warn("unknown cipher!\n");
-    /* fall through and fail */
-    ok = 0;
+  default:			/* no cipher suite selected */
+    *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
+    *clen = length - sizeof(dtls_record_header_t);
+    
+    ok = 1;
   }
   
   if (ok)
@@ -261,7 +255,7 @@ handle_packet(const u_char *packet, int length) {
       if (memcmp(packet, initial_hello, sizeof(initial_hello)) == 0)
 	goto next;
 	
-      memcpy(OTHER_CONFIG->client_random, data + 14, 32);
+      memcpy(dtls_kb_client_iv(OTHER_CONFIG), data + 14, 32);
 
 	clear_hash();
 #if DTLS_VERSION == 0xfeff
@@ -271,22 +265,27 @@ handle_packet(const u_char *packet, int length) {
       hs_hash[0]->init(hs_hash[0]->data);
       hs_hash[1]->init(hs_hash[1]->data);
 #elif DTLS_VERSION == 0xfefd
-      hs_hash[0] = dtls_new_hash(HASH_SHA256);
-      hs_hash[0]->init(hs_hash[0]->data);
+      dtls_hash_init(hs_hash[0]);
 #endif
     }
     
     if (packet[0] == 22 && data[0] == 2) { /* ServerHello */
-      memcpy(OTHER_CONFIG->server_random, data + 14, 32);
-      OTHER_CONFIG->cipher = 0;	/* FIXME: search in ciphers */
+      memcpy(dtls_kb_server_iv(OTHER_CONFIG), data + 14, 32);
+      /* FIXME: search in ciphers */
+      OTHER_CONFIG->cipher = TLS_PSK_WITH_AES_128_CCM_8;
     }
     
     if (packet[0] == 20 && data[0] == 1) { /* ChangeCipherSpec */
+      printf("client random: ");
+      dump(dtls_kb_client_iv(OTHER_CONFIG), 32);
+      printf("\nserver random: ");
+      dump(dtls_kb_server_iv(OTHER_CONFIG), 32);
+      printf("\n");
       master_secret_len = 
 	dtls_prf(pre_master_secret, pre_master_len,
 		 (unsigned char *)"master secret", 13,
-		 OTHER_CONFIG->client_random, 32,
-		 OTHER_CONFIG->server_random, 32,
+		 dtls_kb_client_iv(OTHER_CONFIG), 32,
+		 dtls_kb_server_iv(OTHER_CONFIG), 32,
 		 master_secret, DTLS_MASTER_SECRET_LENGTH);
   
       printf("master_secret:\n  ");
@@ -299,38 +298,38 @@ handle_packet(const u_char *packet, int length) {
                      "key expansion" + server_random + client_random) */
       dtls_prf(master_secret, master_secret_len,
 	       (unsigned char *)"key expansion", 13,
-	       OTHER_CONFIG->server_random, 32,
-	       OTHER_CONFIG->client_random, 32,
+	       dtls_kb_server_iv(OTHER_CONFIG), 32,
+	       dtls_kb_client_iv(OTHER_CONFIG), 32,
 	       OTHER_CONFIG->key_block, 
 	       dtls_kb_size(OTHER_CONFIG));
 
       OTHER_CONFIG->read_cipher = 
-	dtls_new_cipher(&ciphers[0], 
+	dtls_cipher_new(OTHER_CONFIG->cipher,
 			dtls_kb_client_write_key(OTHER_CONFIG),
 			dtls_kb_key_size(OTHER_CONFIG));
-      
+
       if (!OTHER_CONFIG->read_cipher) {
 	warn("cannot create read cipher\n");
       } else {
-	dtls_init_cipher(OTHER_CONFIG->read_cipher,
-			 dtls_kb_client_iv(OTHER_CONFIG),
-			 dtls_kb_iv_size(OTHER_CONFIG));
+	dtls_cipher_set_iv(OTHER_CONFIG->read_cipher,
+			   dtls_kb_client_iv(OTHER_CONFIG),
+			   dtls_kb_iv_size(OTHER_CONFIG));
       }
 
       OTHER_CONFIG->write_cipher = 
-	dtls_new_cipher(&ciphers[0], 
+	dtls_cipher_new(OTHER_CONFIG->cipher, 
 			dtls_kb_server_write_key(OTHER_CONFIG),
 			dtls_kb_key_size(OTHER_CONFIG));
       
       if (!OTHER_CONFIG->write_cipher) {
 	warn("cannot create write cipher\n");
       } else {
-	dtls_init_cipher(OTHER_CONFIG->write_cipher,
-			 dtls_kb_server_iv(OTHER_CONFIG),
-			 dtls_kb_iv_size(OTHER_CONFIG));
+	dtls_cipher_set_iv(OTHER_CONFIG->write_cipher,
+			   dtls_kb_server_iv(OTHER_CONFIG),
+			   dtls_kb_iv_size(OTHER_CONFIG));
       }
 
-      if (is_client)
+      /* if (is_client) */
 	SWITCH_CONFIG;
       epoch[is_client]++;
 
@@ -393,6 +392,12 @@ handle_packet(const u_char *packet, int length) {
       }
     }
 
+    if (packet[0] == 23) {	/* Application Data */
+      printf("Application Data:\n");
+      dump(data, data_length);
+      printf("\n");
+    }
+
   next:
     length -= rlen;
     packet += rlen;
@@ -406,10 +411,12 @@ void init() {
   memset(hs_hash, 0, sizeof(hs_hash));
 
   /* set pre_master_secret to default if no PSK was given */
-  if (!pre_master_len)
-    pre_master_len = 
-      dtls_pre_master_secret((unsigned char *)"secretPSK", 9, 
-			     pre_master_secret);
+  if (!pre_master_len) {
+    /* unsigned char psk[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 }; */
+    pre_master_len =
+      dtls_pre_master_secret((unsigned char *)"secretPSK", 9,
+    			     pre_master_secret);
+  }
 }
 
 int main(int argc, char **argv) {
