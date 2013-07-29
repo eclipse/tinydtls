@@ -88,6 +88,11 @@ typedef struct {
 } dtls_handshake_parameters_ecdsa_t;
 
 typedef struct {
+  uint16_t id_length;
+  unsigned char identity[32];
+} dtls_handshake_parameters_psk_t;
+
+typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
@@ -119,6 +124,7 @@ typedef struct {
   unsigned int do_client_auth:1;
 
   dtls_handshake_parameters_ecdsa_t ecdsa;
+  dtls_handshake_parameters_psk_t psk;
 } dtls_handshake_parameters_t;
 
 /* The following macros provide access to the components of the

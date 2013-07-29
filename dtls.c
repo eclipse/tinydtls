@@ -85,7 +85,7 @@
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
-#define DTLS_CKX_LENGTH 1
+#define DTLS_CKXPSK_LENGTH_MIN 2
 #define DTLS_CKXEC_LENGTH (1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_CV_LENGTH (1 + 1 + 2 + 1 + 1 + 1 + 1 + DTLS_EC_KEY_SIZE + 1 + 1 + DTLS_EC_KEY_SIZE)
 #define DTLS_FIN_LENGTH 12
@@ -499,7 +499,7 @@ calculate_key_block(dtls_context_t *ctx,
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
-    err = CALL(ctx, get_psk_key, session, NULL, 0, &psk);
+    err = CALL(ctx, get_psk_key, session, handshake->psk.identity, handshake->psk.id_length, &psk);
     if (err < 0) {
       dsrv_log(LOG_CRIT, "no psk key for session available\n");
       return err;
@@ -861,10 +861,23 @@ check_client_keyexchange(dtls_context_t *ctx,
 	   sizeof(handshake->ecdsa.other_eph_pub_y));
     data += sizeof(handshake->ecdsa.other_eph_pub_y);
   } else {
-    if (length < DTLS_CKX_LENGTH) {
+    int id_length;
+
+    if (length < DTLS_HS_LENGTH + DTLS_CKXPSK_LENGTH_MIN) {
       debug("The client key exchange is too short\n");
       return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
     }
+    data += DTLS_HS_LENGTH;
+
+    id_length = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+
+    if (DTLS_HS_LENGTH + DTLS_CKXPSK_LENGTH_MIN + id_length != length) {
+      debug("The identity has a wrong length\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+    }
+    handshake->psk.id_length = min(id_length, 32);
+    memcpy(handshake->psk.identity, data, min(id_length, 32));
   }
   return 0;
 }
