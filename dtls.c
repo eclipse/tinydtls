@@ -547,6 +547,23 @@ calculate_key_block(dtls_context_t *ctx,
   return 0;
 }
 
+/**
+ * Releases the storage allocated for read_cipher and write_cipher and
+ * sets both fields to NULL.
+ */
+static void
+invalidate_ciphers(dtls_security_parameters_t *config) {
+  if (config->read_cipher) {
+    dtls_cipher_free(config->read_cipher);
+    config->read_cipher = NULL;
+  }
+  
+  if (config->write_cipher) {
+    dtls_cipher_free(config->write_cipher);
+    config->write_cipher = NULL;
+  }
+}
+
 static int
 init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
 {
@@ -560,7 +577,7 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
 
   if (!config->read_cipher) {
     warn("cannot create read cipher\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    goto error;
   }
 
   dtls_cipher_free(config->write_cipher);
@@ -570,15 +587,18 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
 					 dtls_kb_key_size(config, role));
 
   if (!config->write_cipher) {
-    dtls_cipher_free(config->read_cipher);
     warn("cannot create write cipher\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    goto error;
   }
 
   config->cipher = handshake->cipher;
   config->compression = handshake->compression;
 
   return 0;
+error:
+
+  invalidate_ciphers(config);
+  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 }
 
 /* TODO: add a generic method which iterates over a list and searches for a specific key */
@@ -1277,8 +1297,6 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
 
 static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
-  dtls_security_parameters_t *security = &peer->security_params;
-
   if (peer->state != DTLS_STATE_CLOSED)
     dtls_close(ctx, &peer->session);
   if (unlink) {
@@ -1294,8 +1312,6 @@ static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
 #endif
 #endif /* WITH_CONTIKI */
   }
-  dtls_cipher_free(security->read_cipher);
-  dtls_cipher_free(security->write_cipher);
   dtls_free_peer(peer);
 }
 
