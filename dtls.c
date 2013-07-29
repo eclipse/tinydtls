@@ -225,11 +225,24 @@ dtls_write(struct dtls_context_t *ctx,
 	   session_t *dst, uint8 *buf, size_t len) {
   
   dtls_peer_t *peer = dtls_get_peer(ctx, dst);
-  
-  if (peer && peer->state == DTLS_STATE_CONNECTED)
-    return dtls_send(ctx, peer, DTLS_CT_APPLICATION_DATA, buf, len);
-  else
-    return peer ? 0 : -1;
+
+  /* Check if peer connection already exists */
+  if (!peer) { /* no ==> create one */
+    int res;
+
+    /* dtls_connect() returns a value greater than zero if a new
+     * connection attempt is made, 0 for session reuse. */
+    res = dtls_connect(ctx, dst);
+
+    return (res >= 0) ? 0 : res;
+  } else { /* a session exists, check if it is in state connected */
+    
+    if (peer->state != DTLS_STATE_CONNECTED) {
+      return 0;
+    } else {
+      return dtls_send(ctx, peer, DTLS_CT_APPLICATION_DATA, buf, len);
+    }
+  }
 }
 
 static int

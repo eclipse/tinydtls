@@ -43,7 +43,7 @@ LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) 
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
-.PHONY: all dirs clean distclean .gitignore doc
+.PHONY: all dirs clean install dist distclean .gitignore doc
 
 .SUFFIXES:
 .SUFFIXES:      .c .o
@@ -67,6 +67,10 @@ distclean:	clean
 dist:	$(FILES)
 	test -d $(DISTDIR)/aes || mkdir $(DISTDIR)/aes
 	cp -p $(FILES) $(DISTDIR)/aes
+
+install:	$(HEADERS)
+	test -d $(includedir)/aes || mkdir -p $(includedir)/aes
+	$(install) $(HEADERS) $(includedir)/aes
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@

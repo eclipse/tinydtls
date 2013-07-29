@@ -51,6 +51,17 @@
 #include <arpa/inet.h>
 #endif
 
+#ifndef DTLSv12
+/* The current version of tinyDTLS supports DTLSv1.2 only. */
+#define DTLSv12 1
+#endif
+
+#ifndef WITH_SHA256
+/* The current version of tinyDTLS supports DTLSv1.2 with SHA256 PRF
+   only. */
+#define WITH_SHA256 1
+#endif
+
 #ifndef WITH_CONTIKI
 typedef unsigned int clock_time_t;
 #else /* WITH_CONTIKI */

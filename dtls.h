@@ -328,7 +328,7 @@ int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
  * @param buf      The data to write.
  * @param len      The actual length of @p data.
  * 
- * @return The number of bytes written of @c -1 on error.
+ * @return The number of bytes written or @c -1 on error.
  */
 int dtls_write(struct dtls_context_t *ctx, session_t *session, 
 	       uint8 *buf, size_t len);
