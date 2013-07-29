@@ -3430,14 +3430,8 @@ dtls_check_retransmit(dtls_context_t *context, clock_time_t *next) {
   netq_t *node = netq_head((netq_t **)context->sendqueue);
 
   dtls_ticks(&now);
-  if (!node)
-    printf("retransmit queue is empty!\n");
-  else 
-    printf("node-t is %u (now is %u)\n", node->t, now);
-  
   while (node && node->t <= now) {
     netq_pop_first((netq_t **)context->sendqueue);
-    printf("call retransmit\n");
     dtls_retransmit(context, node);
     node = netq_head((netq_t **)context->sendqueue);
   }

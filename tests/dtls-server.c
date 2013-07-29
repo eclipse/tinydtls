@@ -257,7 +257,7 @@ main(int argc, char **argv) {
     }
   }
 
-  set_log_level(log_level);
+  dtls_set_log_level(log_level);
 
   /* init socket and set it to non-blocking */
   fd = socket(listen_addr.sin6_family, SOCK_DGRAM, 0);

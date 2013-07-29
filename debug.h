@@ -38,10 +38,10 @@ typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN,
 
 #ifndef NDEBUG
 /** Returns the current log level. */
-log_t get_log_level();
+log_t dtls_get_log_level();
 
 /** Sets the log level to the specified value. */
-void set_log_level(log_t level);
+void dtls_set_log_level(log_t level);
 
 /** 
  * Writes the given text to \c stdout. The text is output only when \p
