@@ -677,6 +677,106 @@ static int verify_ext_ec_point_formats(uint8 *data, size_t data_length) {
   return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
+static int
+dtls_check_tls_extension(dtls_peer_t *peer,
+			 uint8 *data, size_t data_length, int client_hello)
+{
+  int i, j;
+  int ext_elliptic_curve = 0;
+  int ext_client_cert_type = 0;
+  int ext_server_cert_type = 0;
+  int ext_ec_point_formats = 0;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
+
+  if (data_length < sizeof(uint16)) { 
+    /* no tls extensions specified */
+    if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+      goto error;
+    }
+    return 0;
+  }
+
+  /* get the length of the tls extension list */
+  j = dtls_uint16_to_int(data);
+  data += sizeof(uint16);
+  data_length -= sizeof(uint16);
+
+  if (data_length < j)
+    goto error;
+
+  /* check for TLS extensions needed for this cipher */
+  while (data_length) {
+    if (data_length < sizeof(uint16) * 2)
+      goto error;
+
+    /* get the tls extension type */
+    i = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+    data_length -= sizeof(uint16);
+
+    /* get the length of the tls extension */
+    j = dtls_uint16_to_int(data);
+    data += sizeof(uint16);
+    data_length -= sizeof(uint16);
+
+    if (data_length < j)
+      goto error;
+
+    switch (i) {
+      case TLS_EXT_ELLIPTIC_CURVES:
+        ext_elliptic_curve = 1;
+        if (verify_ext_eliptic_curves(data, j))
+          goto error;
+        break;
+      case TLS_EXT_CLIENT_CERIFICATE_TYPE:
+        ext_client_cert_type = 1;
+        if (client_hello) {
+	  if (verify_ext_cert_type(data, j))
+            goto error;
+        } else {
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_OOB)
+	    goto error;
+        }
+        break;
+      case TLS_EXT_SERVER_CERIFICATE_TYPE:
+        ext_server_cert_type = 1;
+        if (client_hello) {
+	  if (verify_ext_cert_type(data, j))
+            goto error;
+        } else {
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_OOB)
+	    goto error;
+        }
+        break;
+      case TLS_EXT_EC_POINT_FORMATS:
+        ext_ec_point_formats = 1;
+        if (verify_ext_ec_point_formats(data, j))
+          goto error;
+        break;
+      default:
+        warn("unsupported tls extension: %i\n", i);
+        break;
+    }
+    data += j;
+    data_length -= j;
+  }
+  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type
+	&& !ext_ec_point_formats) {
+      warn("not all required tls extensions found in client hello\n");
+      goto error;
+    }
+  }
+  return 0;
+
+error:
+  if (client_hello && peer->state == DTLS_STATE_CONNECTED) {
+    return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
+  } else {
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+}
+
 /**
  * Updates the security parameters of given \p peer.  As this must be
  * done before the new configuration is activated, it changes the
@@ -696,10 +796,6 @@ dtls_update_parameters(dtls_context_t *ctx,
 		       uint8 *data, size_t data_length) {
   int i, j;
   int ok;
-  int ext_elliptic_curve;
-  int ext_client_cert_type;
-  int ext_server_cert_type;
-  int ext_ec_point_formats;
   dtls_handshake_parameters_t *config = &peer->handshake_params;
   dtls_security_parameters_t *security = &peer->security_params;
 
@@ -785,83 +881,8 @@ dtls_update_parameters(dtls_context_t *ctx,
     /* reset config cipher to a well-defined value */
     goto error;
   }
-
-  if (data_length < sizeof(uint16)) { 
-    /* no tls extensions specified */
-    if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-      goto error;
-    }
-    return 0;
-  }
-
-  /* get the length of the tls extension list */
-  j = dtls_uint16_to_int(data);
-  data += sizeof(uint16);
-  data_length -= sizeof(uint16);
-
-  if (data_length < j)
-    goto error;
-
-  ext_elliptic_curve = 0;
-  ext_client_cert_type = 0;
-  ext_server_cert_type = 0;
-  ext_ec_point_formats = 0;
-
-  /* check for TLS extensions needed for this cipher */
-  while (data_length) {
-    if (data_length < sizeof(uint16) * 2)
-      goto error;
-
-    /* get the tls extension type */
-    i = dtls_uint16_to_int(data);
-    data += sizeof(uint16);
-    data_length -= sizeof(uint16);
-
-    /* get the length of the tls extension */
-    j = dtls_uint16_to_int(data);
-    data += sizeof(uint16);
-    data_length -= sizeof(uint16);
-
-    if (data_length < j)
-      goto error;
-
-    switch (i) {
-      case TLS_EXT_ELLIPTIC_CURVES:
-        ext_elliptic_curve = 1;
-        if (verify_ext_eliptic_curves(data, j))
-          goto error;
-        break;
-      case TLS_EXT_CLIENT_CERIFICATE_TYPE:
-        ext_client_cert_type = 1;
-        if (verify_ext_cert_type(data, j))
-          goto error;
-        break;
-      case TLS_EXT_SERVER_CERIFICATE_TYPE:
-        ext_server_cert_type = 1;
-        if (verify_ext_cert_type(data, j))
-          goto error;
-        break;
-      case TLS_EXT_EC_POINT_FORMATS:
-        ext_ec_point_formats = 1;
-        if (verify_ext_ec_point_formats(data, j))
-          goto error;
-        break;
-      default:
-        warn("unsupported tls extension: %i\n", i);
-        break;
-    }
-    data += j;
-    data_length -= j;
-  }
-  if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type
-	&& !ext_ec_point_formats) {
-      warn("not all required tls extensions found in client hello\n");
-      goto error;
-    }
-  }
-
-  return 0;
+  
+  return dtls_check_tls_extension(peer, data, data_length, 1);
  error:
   warn("ClientHello too short (%d bytes)\n", data_length);
   if (peer->state == DTLS_STATE_CONNECTED) {
