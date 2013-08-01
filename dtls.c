@@ -653,6 +653,30 @@ static int verify_ext_cert_type(uint8 *data, size_t data_length) {
   return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
+static int verify_ext_ec_point_formats(uint8 *data, size_t data_length) {
+  int i, cert_type;
+
+  /* length of ec_point_formats list */
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  if (i + sizeof(uint8) != data_length) {
+    warn("the list of the supported ec_point_formats should be tls extension length - 1\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  for (i = data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
+    /* check if this ec_point_format is supported */
+    cert_type = dtls_uint8_to_int(data);
+    data += sizeof(uint8);
+
+    if (cert_type == TLS_EXT_EC_POINT_FORMATS_UNCOMPRESSED)
+      return 0;
+  }
+
+  warn("no supported ec_point_format found\n");
+  return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+}
+
 /**
  * Updates the security parameters of given \p peer.  As this must be
  * done before the new configuration is activated, it changes the
@@ -675,6 +699,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   int ext_elliptic_curve;
   int ext_client_cert_type;
   int ext_server_cert_type;
+  int ext_ec_point_formats;
   dtls_handshake_parameters_t *config = &peer->handshake_params;
   dtls_security_parameters_t *security = &peer->security_params;
 
@@ -780,6 +805,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   ext_elliptic_curve = 0;
   ext_client_cert_type = 0;
   ext_server_cert_type = 0;
+  ext_ec_point_formats = 0;
 
   /* check for TLS extensions needed for this cipher */
   while (data_length) {
@@ -815,6 +841,11 @@ dtls_update_parameters(dtls_context_t *ctx,
         if (verify_ext_cert_type(data, j))
           goto error;
         break;
+      case TLS_EXT_EC_POINT_FORMATS:
+        ext_ec_point_formats = 1;
+        if (verify_ext_ec_point_formats(data, j))
+          goto error;
+        break;
       default:
         warn("unsupported tls extension: %i\n", i);
         break;
@@ -823,7 +854,8 @@ dtls_update_parameters(dtls_context_t *ctx,
     data_length -= j;
   }
   if (config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type) {
+    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type
+	&& !ext_ec_point_formats) {
       warn("not all required tls extensions found in client hello\n");
       goto error;
     }
