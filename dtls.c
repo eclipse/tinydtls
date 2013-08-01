@@ -2337,8 +2337,10 @@ check_server_hello(dtls_context_t *ctx,
     dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
   }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
 
-  return 0;
+  return dtls_check_tls_extension(peer, data, data_length, 0);
 
 error:
   return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
