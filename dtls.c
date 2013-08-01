@@ -886,8 +886,14 @@ check_client_keyexchange(dtls_context_t *ctx,
       debug("The identity has a wrong length\n");
       return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
     }
-    handshake->psk.id_length = min(id_length, 32);
-    memcpy(handshake->psk.identity, data, min(id_length, 32));
+
+    if (id_length > DTLS_PSK_MAX_CLIENT_IDENTITY_LEN) {
+      warn("please use a smaller client identity\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
+
+    handshake->psk.id_length = id_length;
+    memcpy(handshake->psk.identity, data, id_length);
   }
   return 0;
 }
