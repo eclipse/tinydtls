@@ -1552,7 +1552,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
    * encoding function, so we do not need to guess.) */
-  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 8];
+  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 8 + 6];
   uint8 *p;
   int ecdsa;
   uint8 extension_size;
@@ -1561,7 +1561,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   ecdsa = handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
 
-  extension_size = (ecdsa) ? 2 + 5 + 5 + 8 : 0;
+  extension_size = (ecdsa) ? 2 + 5 + 5 + 8 + 6 : 0;
 
   /* Handshake header */
   p = buf;
@@ -1634,6 +1634,21 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
     dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES_SECP256R1);
     p += sizeof(uint16);
+
+    /* ec_point_formats */
+    dtls_int_to_uint16(p, TLS_EXT_EC_POINT_FORMATS);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 2);
+    p += sizeof(uint16);
+
+    /* number of supported formats */
+    dtls_int_to_uint8(p, 1);
+    p += sizeof(uint8);
+
+    dtls_int_to_uint8(p, TLS_EXT_EC_POINT_FORMATS_UNCOMPRESSED);
+    p += sizeof(uint8);
   }
 
   assert(p - buf <= sizeof(buf));
