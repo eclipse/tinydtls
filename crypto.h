@@ -122,9 +122,10 @@ typedef struct {
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
   unsigned int do_client_auth:1;
-
-  dtls_handshake_parameters_ecdsa_t ecdsa;
-  dtls_handshake_parameters_psk_t psk;
+  union {
+    dtls_handshake_parameters_ecdsa_t ecdsa;
+    dtls_handshake_parameters_psk_t psk;
+  } keyx;
 } dtls_handshake_parameters_t;
 
 /* The following macros provide access to the components of the

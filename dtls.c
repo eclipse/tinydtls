@@ -489,7 +489,8 @@ calculate_key_block(dtls_context_t *ctx,
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
-    err = CALL(ctx, get_psk_key, session, handshake->psk.identity, handshake->psk.id_length, &psk);
+    err = CALL(ctx, get_psk_key, session, handshake->keyx.psk.identity,
+	       handshake->keyx.psk.id_length, &psk);
     if (err < 0) {
       dsrv_log(LOG_CRIT, "no psk key for session available\n");
       return err;
@@ -503,10 +504,10 @@ calculate_key_block(dtls_context_t *ctx,
     break;
   }
   case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
-    pre_master_len = dtls_ecdh_pre_master_secret(handshake->ecdsa.own_eph_priv,
-						 handshake->ecdsa.other_eph_pub_x,
-						 handshake->ecdsa.other_eph_pub_y,
-						 sizeof(handshake->ecdsa.own_eph_priv),
+    pre_master_len = dtls_ecdh_pre_master_secret(handshake->keyx.ecdsa.own_eph_priv,
+						 handshake->keyx.ecdsa.other_eph_pub_x,
+						 handshake->keyx.ecdsa.other_eph_pub_y,
+						 sizeof(handshake->keyx.ecdsa.own_eph_priv),
 						 pre_master_secret);
     break;
   }
@@ -863,13 +864,13 @@ check_client_keyexchange(dtls_context_t *ctx,
     }
     data += sizeof(uint8);
 
-    memcpy(handshake->ecdsa.other_eph_pub_x, data,
-	   sizeof(handshake->ecdsa.other_eph_pub_x));
-    data += sizeof(handshake->ecdsa.other_eph_pub_x);
+    memcpy(handshake->keyx.ecdsa.other_eph_pub_x, data,
+	   sizeof(handshake->keyx.ecdsa.other_eph_pub_x));
+    data += sizeof(handshake->keyx.ecdsa.other_eph_pub_x);
 
-    memcpy(handshake->ecdsa.other_eph_pub_y, data,
-	   sizeof(handshake->ecdsa.other_eph_pub_y));
-    data += sizeof(handshake->ecdsa.other_eph_pub_y);
+    memcpy(handshake->keyx.ecdsa.other_eph_pub_y, data,
+	   sizeof(handshake->keyx.ecdsa.other_eph_pub_y));
+    data += sizeof(handshake->keyx.ecdsa.other_eph_pub_y);
   } else {
     int id_length;
 
@@ -892,8 +893,8 @@ check_client_keyexchange(dtls_context_t *ctx,
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
 
-    handshake->psk.id_length = id_length;
-    memcpy(handshake->psk.identity, data, id_length);
+    handshake->keyx.psk.id_length = id_length;
+    memcpy(handshake->keyx.psk.identity, data, id_length);
   }
   return 0;
 }
@@ -1501,8 +1502,8 @@ check_client_certificate_verify(dtls_context_t *ctx,
 
   dtls_hash_finalize(sha256hash, &hs_hash);
 
-  i = dtls_ecdsa_verify_sig_hash(config->ecdsa.other_pub_x, config->ecdsa.other_pub_y,
-  			    sizeof(config->ecdsa.other_pub_x),
+  i = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
+			    sizeof(config->keyx.ecdsa.other_pub_x),
 			    sha256hash, sizeof(sha256hash),
 			    result_r, result_s);
 
@@ -1735,7 +1736,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   ephemeral_pub_y = p;
   p += DTLS_EC_KEY_SIZE;
 
-  dtls_ecdsa_generate_key(config->ecdsa.own_eph_priv,
+  dtls_ecdsa_generate_key(config->keyx.ecdsa.own_eph_priv,
 			  ephemeral_pub_x, ephemeral_pub_y,
 			  DTLS_EC_KEY_SIZE);
 
@@ -1928,8 +1929,8 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
-    err = CALL(ctx, get_psk_key, &peer->session, handshake->psk.identity,
-	       handshake->psk.id_length, &psk);
+    err = CALL(ctx, get_psk_key, &peer->session, handshake->keyx.psk.identity,
+	       handshake->keyx.psk.id_length, &psk);
     if (err < 0) {
       dsrv_log(LOG_CRIT, "no psk key to send in kx\n");
       return err;
@@ -1964,7 +1965,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
     ephemeral_pub_y = p;
     p += DTLS_EC_KEY_SIZE;
 
-    dtls_ecdsa_generate_key(peer->handshake_params.ecdsa.own_eph_priv,
+    dtls_ecdsa_generate_key(peer->handshake_params.keyx.ecdsa.own_eph_priv,
     			    ephemeral_pub_x, ephemeral_pub_y,
     			    DTLS_EC_KEY_SIZE);
 
@@ -2313,18 +2314,18 @@ check_server_certificate(dtls_context_t *ctx,
   }
   data += sizeof(cert_asn1_header);
 
-  memcpy(config->ecdsa.other_pub_x, data,
-	 sizeof(config->ecdsa.other_pub_x));
-  data += sizeof(config->ecdsa.other_pub_x);
+  memcpy(config->keyx.ecdsa.other_pub_x, data,
+	 sizeof(config->keyx.ecdsa.other_pub_x));
+  data += sizeof(config->keyx.ecdsa.other_pub_x);
 
-  memcpy(config->ecdsa.other_pub_y, data,
-	 sizeof(config->ecdsa.other_pub_y));
-  data += sizeof(config->ecdsa.other_pub_y);
+  memcpy(config->keyx.ecdsa.other_pub_y, data,
+	 sizeof(config->keyx.ecdsa.other_pub_y));
+  data += sizeof(config->keyx.ecdsa.other_pub_y);
 
   err = CALL(ctx, verify_ecdsa_key, &peer->session,
-	     config->ecdsa.other_pub_x,
-	     config->ecdsa.other_pub_y,
-	     sizeof(config->ecdsa.other_pub_x));
+	     config->keyx.ecdsa.other_pub_x,
+	     config->keyx.ecdsa.other_pub_y,
+	     sizeof(config->keyx.ecdsa.other_pub_x));
   if (err < 0) {
     warn("The certificate was not accepted\n");
     return err;
@@ -2384,13 +2385,13 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  memcpy(config->ecdsa.other_eph_pub_x, data, sizeof(config->ecdsa.other_eph_pub_y));
-  data += sizeof(config->ecdsa.other_eph_pub_y);
-  data_length -= sizeof(config->ecdsa.other_eph_pub_y);
+  memcpy(config->keyx.ecdsa.other_eph_pub_x, data, sizeof(config->keyx.ecdsa.other_eph_pub_y));
+  data += sizeof(config->keyx.ecdsa.other_eph_pub_y);
+  data_length -= sizeof(config->keyx.ecdsa.other_eph_pub_y);
 
-  memcpy(config->ecdsa.other_eph_pub_y, data, sizeof(config->ecdsa.other_eph_pub_y));
-  data += sizeof(config->ecdsa.other_eph_pub_y);
-  data_length -= sizeof(config->ecdsa.other_eph_pub_y);
+  memcpy(config->keyx.ecdsa.other_eph_pub_y, data, sizeof(config->keyx.ecdsa.other_eph_pub_y));
+  data += sizeof(config->keyx.ecdsa.other_eph_pub_y);
+  data_length -= sizeof(config->keyx.ecdsa.other_eph_pub_y);
 
 
   if (data_length < dtls_uint16_to_int(data)) {
@@ -2448,8 +2449,8 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   data += i;
   data_length -= i;
 
-  i = dtls_ecdsa_verify_sig(config->ecdsa.other_pub_x, config->ecdsa.other_pub_y,
-  			    sizeof(config->ecdsa.other_pub_x),
+  i = dtls_ecdsa_verify_sig(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
+			    sizeof(config->keyx.ecdsa.other_pub_x),
 			    config->tmp.random.client, DTLS_RANDOM_LENGTH,
 			    config->tmp.random.server, DTLS_RANDOM_LENGTH,
 			    key_params,
@@ -2495,8 +2496,8 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  config->psk.id_length = len;
-  memcpy(config->psk.identity, data, len);
+  config->keyx.psk.id_length = len;
+  memcpy(config->keyx.psk.identity, data, len);
   return 0;
 }
 
