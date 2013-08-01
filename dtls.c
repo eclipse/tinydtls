@@ -1603,8 +1603,6 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     p += sizeof(uint16);
   }
 
-  /* FIXME: if key->psk.id != NULL we need the server key exchange */
-
   assert(p - buf <= sizeof(buf));
 
   return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_HELLO,
@@ -2255,8 +2253,6 @@ check_server_hello(dtls_context_t *ctx,
     dsrv_log(LOG_ALERT, "unsupported compression method 0x%02x\n", data[0]);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
   }
-
-  /* FIXME: check PSK hint */
 
   return 0;
 
