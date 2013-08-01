@@ -1916,14 +1916,18 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
   uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
   size_t size;
+  int err;
+  dtls_handshake_parameters_t *handshake = &peer->handshake_params;
 
-  switch (peer->handshake_params.cipher) {
+  switch (handshake->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
     const dtls_psk_key_t *psk;
 
-    if (CALL(ctx, get_psk_key, &peer->session, NULL, 0, &psk) < 0) {
+    err = CALL(ctx, get_psk_key, &peer->session, handshake->psk.identity,
+	       handshake->psk.id_length, &psk);
+    if (err < 0) {
       dsrv_log(LOG_CRIT, "no psk key to send in kx\n");
-      return -2;
+      return err;
     }
 
     size = psk->id_length + sizeof(uint16);
@@ -2327,9 +2331,9 @@ check_server_certificate(dtls_context_t *ctx,
 }
 
 static int
-check_server_key_exchange(dtls_context_t *ctx, 
-			  dtls_peer_t *peer,
-			  uint8 *data, size_t data_length)
+check_server_key_exchange_ecdsa(dtls_context_t *ctx,
+				dtls_peer_t *peer,
+				uint8 *data, size_t data_length)
 {
   dtls_handshake_parameters_t *config = &peer->handshake_params;
   int i;
@@ -2453,6 +2457,43 @@ check_server_key_exchange(dtls_context_t *ctx,
     dsrv_log(LOG_ALERT, "wrong signature\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
+  return 0;
+}
+
+static int
+check_server_key_exchange_psk(dtls_context_t *ctx,
+			      dtls_peer_t *peer,
+			      uint8 *data, size_t data_length)
+{
+  dtls_handshake_parameters_t *config = &peer->handshake_params;
+  int len;
+
+  update_hs_hash(peer, data, data_length);
+
+  assert(config->cipher == TLS_PSK_WITH_AES_128_CCM_8);
+
+  data += DTLS_HS_LENGTH;
+
+  if (data_length < DTLS_HS_LENGTH + DTLS_SKEXECPSK_LENGTH_MIN) {
+    dsrv_log(LOG_ALERT, "the package length does not match the expected\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+
+  len = dtls_uint16_to_int(data);
+  data += sizeof(uint16);
+
+  if (len != data_length - DTLS_HS_LENGTH - sizeof(uint16)) {
+    warn("the length of the server identity hint is worng\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+
+  if (len > DTLS_PSK_MAX_CLIENT_IDENTITY_LEN) {
+    warn("please use a smaller server identity hint\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+  }
+
+  config->psk.id_length = len;
+  memcpy(config->psk.identity, data, len);
   return 0;
 }
 
@@ -2805,10 +2846,21 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_SERVER_KEY_EXCHANGE:
 
     debug("DTLS_HT_SERVER_KEY_EXCHANGE\n");
-    if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
-      return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+
+    if (peer->handshake_params.cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+      if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
+        return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+      }
+      err = check_server_key_exchange_ecdsa(ctx, peer, data, data_length);
+    } else if (peer->handshake_params.cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+      if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+        return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+      }
+      err = check_server_key_exchange_psk(ctx, peer, data, data_length);
+    } else {
+      assert(0);
     }
-    err = check_server_key_exchange(ctx, peer, data, data_length);
+
     if (err < 0) {
       warn("error in check_server_key_exchange err: %i\n", err);
       return err;
