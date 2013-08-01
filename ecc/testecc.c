@@ -161,7 +161,7 @@ void eccdhTest(){
 }
 
 void ecdsaTest() {
-	int ret;
+	int ret __attribute__((unused));
 	uint32_t tempx[9];
 	uint32_t tempy[9];
 	uint32_t pub_x[8];
