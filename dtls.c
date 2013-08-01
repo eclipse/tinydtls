@@ -1921,9 +1921,10 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
-  size_t size;
   int err;
   dtls_handshake_parameters_t *handshake = &peer->handshake_params;
+
+  p = buf;
 
   switch (handshake->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
@@ -1936,22 +1937,22 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
       return err;
     }
 
-    size = psk->id_length + sizeof(uint16);
-    p = buf;
+    if (psk->id_length + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
+      warn("the psk identity is too long\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
 
     dtls_int_to_uint16(p, psk->id_length);
-    memcpy(p + sizeof(uint16), psk->id, psk->id_length);
-    p += size;
+    p += sizeof(uint16);
+
+    memcpy(p, psk->id, psk->id_length);
+    p += psk->id_length;
 
     break;
   }
   case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
     uint8 *ephemeral_pub_x;
     uint8 *ephemeral_pub_y;
-
-    size = DTLS_CKXEC_LENGTH;
-
-    p = buf;
 
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
