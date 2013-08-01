@@ -56,6 +56,10 @@
 #define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
 #endif
 
+/* This is the maximal supported length of the psk client identity and psk
+ * server identity hint */
+#define DTLS_PSK_MAX_CLIENT_IDENTITY_LEN	32
+
 typedef struct dtls_psk_key_t {
   unsigned char *id;     /**< psk identity */
   size_t id_length;      /**< length of psk identity  */

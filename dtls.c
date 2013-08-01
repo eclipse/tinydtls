@@ -79,6 +79,8 @@
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
+#define DTLS_SKEXECPSK_LENGTH_MIN 2
+#define DTLS_SKEXECPSK_LENGTH_MAX 2 + DTLS_PSK_MAX_CLIENT_IDENTITY_LEN
 #define DTLS_CKXPSK_LENGTH_MIN 2
 #define DTLS_CKXEC_LENGTH (1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
 #define DTLS_CV_LENGTH (1 + 1 + 2 + 1 + 1 + 1 + 1 + DTLS_EC_KEY_SIZE + 1 + 1 + DTLS_EC_KEY_SIZE)
@@ -1749,6 +1751,32 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 }
 
 static int
+dtls_send_server_key_exchange_psk(dtls_context_t *ctx, dtls_peer_t *peer,
+				   const dtls_psk_key_t *key)
+{
+  uint8 buf[DTLS_SKEXECPSK_LENGTH_MAX];
+  uint8 *p;
+
+  p = buf;
+
+  if (key->id_length > DTLS_PSK_MAX_CLIENT_IDENTITY_LEN) {
+    warn("psk identity hint is too long\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+  }
+
+  dtls_int_to_uint16(p, key->id_length);
+  p += sizeof(uint16);
+
+  memcpy(p, key->id, key->id_length);
+  p += key->id_length;
+
+  assert(p - buf <= sizeof(buf));
+
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_KEY_EXCHANGE,
+				 buf, p - buf);
+}
+
+static int
 dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   uint8 buf[8];
@@ -1843,6 +1871,23 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       if (res < 0) {
         debug("dtls_server_hello: cannot prepare certificate Request record\n");
         return res;
+      }
+    }
+  } else if (peer->handshake_params.cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+    const dtls_psk_key_t *psk;
+
+    res = CALL(ctx, get_psk_key, &peer->session, NULL, 0, &psk);
+    if (res < 0) {
+      dsrv_log(LOG_CRIT, "no psk or identity found for this session\n");
+      return res;
+    }
+
+    if (psk->id_length) {
+      res = dtls_send_server_key_exchange_psk(ctx, peer, psk);
+
+      if (res < 0) {
+	debug("dtls_server_key_exchange_psk: cannot send server key exchange record\n");
+	return res;
       }
     }
   }
