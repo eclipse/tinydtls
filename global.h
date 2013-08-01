@@ -160,6 +160,7 @@ typedef enum {
 } dtls_compression_t;
 
 #define TLS_EXT_ELLIPTIC_CURVES		10 /* see RFC 4492 */
+#define TLS_EXT_EC_POINT_FORMATS	11 /* see RFC 4492 */
 #define TLS_EXT_SIG_HASH_ALGO		13 /* see RFC 5246 */
 #define TLS_EXT_CLIENT_CERIFICATE_TYPE	122 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
 #define TLS_EXT_SERVER_CERIFICATE_TYPE	123 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
@@ -167,6 +168,8 @@ typedef enum {
 #define TLS_CERT_TYPE_OOB 2 /* replcae with values from draft-ietf-tls-oob-pubkey */
 
 #define TLS_EXT_ELLIPTIC_CURVES_SECP256R1	23 /* see RFC 4492 */
+
+#define TLS_EXT_EC_POINT_FORMATS_UNCOMPRESSED	0 /* see RFC 4492 */
 
 #define TLS_EXT_SIG_HASH_ALGO_SHA256		4 /* see RFC 5246 */
 #define TLS_EXT_SIG_HASH_ALGO_ECDSA		3 /* see RFC 5246 */
