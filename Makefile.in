@@ -56,6 +56,13 @@ LDFLAGS:=@LIBS@
 ARFLAGS:=cru
 doc:=doc
 
+# files that should be ignored by git
+GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
+ autom4te.cache/ config.h config.log config.status configure \
+ doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
+ tests/dtls-client tests/dtls-server tests/prf-test $(package) \
+ $(DISTDIR)/ TAGS \*.patch .gitignore
+
 .PHONY: all dirs clean install dist distclean .gitignore doc TAGS
 
 .SUFFIXES:
@@ -113,4 +120,5 @@ TAGS:
 	mv $@.new $@
 
 .gitignore:
-	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
+	echo $(GITIGNOREDS) | sed 's/ /\n/g' > $@
+
