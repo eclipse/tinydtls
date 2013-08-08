@@ -1,6 +1,7 @@
 /* dtls -- a very basic DTLS implementation
  *
  * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2013 Hauke Mehrtens <hauke@hauke-m.de>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -39,13 +40,13 @@
 
 #ifndef WITH_CONTIKI
 #include "uthash.h"
+#include "t_list.h"
 #endif /* WITH_CONTIKI */
 
 #include "alert.h"
 #include "crypto.h"
 #include "hmac.h"
 
-#include "config.h"
 #include "global.h"
 #include "dtls_time.h"
 
@@ -55,27 +56,23 @@
 #define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
 #endif
 
-/** Known compression methods
- *
- * \hideinitializer
- */
-#define TLS_COMP_NULL      0x00	/* NULL compression */
- 
-typedef enum {
-  DTLS_KEY_INVALID=0, DTLS_KEY_PSK=1, DTLS_KEY_RPK=2
-} dtls_key_type_t;
+/* This is the maximal supported length of the psk client identity and psk
+ * server identity hint */
+#define DTLS_PSK_MAX_CLIENT_IDENTITY_LEN	32
 
-typedef struct dtls_key_t {
-  dtls_key_type_t type;
-  union {
-    struct dtls_psk_t {
-      unsigned char *id;     /**< psk identity */
-      size_t id_length;      /**< length of psk identity  */
-      unsigned char *key;    /**< key data */
-      size_t key_length;     /**< length of key */
-    } psk;
-  } key;
-} dtls_key_t;
+typedef struct dtls_psk_key_t {
+  unsigned char *id;     /**< psk identity */
+  size_t id_length;      /**< length of psk identity  */
+  unsigned char *key;    /**< key data */
+  size_t key_length;     /**< length of key */
+} dtls_psk_key_t;
+
+typedef struct dtls_ecdsa_key_t {
+  dtls_ecdh_curve curve;
+  const unsigned char *priv_key;	/** < private key as bytes > */
+  const unsigned char *pub_key_x;	/** < x part of the public key for the given private key > */
+  const unsigned char *pub_key_y;	/** < y part of the public key for the given private key > */
+} dtls_ecdsa_key_t;
 
 /** Length of the secret that is used for generating Hello Verify cookies. */
 #define DTLS_COOKIE_SECRET_LENGTH 12
@@ -144,6 +141,7 @@ typedef struct {
    * session. If found, the key must be stored in @p result and 
    * the return value must be @c 0. If not found, @p result is 
    * undefined and the return value must be less than zero.
+   * If PSK should not be supported, set this pointer to NULL.
    *
    * @param ctx     The current dtls context.
    * @param session The session where the key will be used.
@@ -155,10 +153,66 @@ typedef struct {
    *                session.
    * @return @c 0 if result is set, or less than zero on error.
    */
-  int (*get_key)(struct dtls_context_t *ctx, 
-		 const session_t *session, 
-		 const unsigned char *id, size_t id_len, 
-		 const dtls_key_t **result);
+  int (*get_psk_key)(struct dtls_context_t *ctx, 
+		     const session_t *session, 
+		     const unsigned char *id, size_t id_len, 
+		     const dtls_psk_key_t **result);
+
+  /**
+   * Called during handshake to get the server's or client's ecdsa
+   * key used to authenticate this server or client in this 
+   * session. If found, the key must be stored in @p result and 
+   * the return value must be @c 0. If not found, @p result is 
+   * undefined and the return value must be less than zero.
+   *
+   * If ECDSA should not be supported, set this pointer to NULL.
+   *
+   * Implement this if you want to provide your own certificate to 
+   * the other peer. This is mandatory for a server providing ECDSA
+   * support and optional for a client. A client doing DTLS client
+   * authentication has to implementing this callback.
+   *
+   * @param ctx     The current dtls context.
+   * @param session The session where the key will be used.
+   * @param result  Must be set to the key object to used for the given
+   *                session.
+   * @return @c 0 if result is set, or less than zero on error.
+   */
+  int (*get_ecdsa_key)(struct dtls_context_t *ctx, 
+		       const session_t *session,
+		       const dtls_ecdsa_key_t **result);
+
+  /**
+   * Called during handshake to check the peer's pubic key in this
+   * session. If the public key matches the session and should be
+   * considerated valid the return value must be @c 0. If not valid,
+   * the return value must be less than zero.
+   *
+   * If ECDSA should not be supported, set this pointer to NULL.
+   *
+   * Implement this if you want to verify the other peers public key.
+   * This is mandatory for a DTLS client doing based ECDSA
+   * authentication. A server implementing this will request the
+   * client to do DTLS client authentication.
+   *
+   * @param ctx          The current dtls context.
+   * @param session      The session where the key will be used.
+   * @param other_pub_x  x component of the public key.
+   * @param other_pub_y  y component of the public key.
+   * @return @c 0 if public key matches, or less than zero on error.
+   * error codes:
+   *   return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
+   *   return dtls_alert_fatal_create(DTLS_ALERT_UNSUPPORTED_CERTIFICATE);
+   *   return dtls_alert_fatal_create(DTLS_ALERT_CERTIFICATE_REVOKED);
+   *   return dtls_alert_fatal_create(DTLS_ALERT_CERTIFICATE_EXPIRED);
+   *   return dtls_alert_fatal_create(DTLS_ALERT_CERTIFICATE_UNKNOWN);
+   *   return dtls_alert_fatal_create(DTLS_ALERT_UNKNOWN_CA);
+   */
+  int (*verify_ecdsa_key)(struct dtls_context_t *ctx, 
+			  const session_t *session,
+			  const unsigned char *other_pub_x,
+			  const unsigned char *other_pub_y,
+			  size_t key_size);
 } dtls_handler_t;
 
 /** Holds global information of the DTLS engine. */
@@ -181,7 +235,6 @@ typedef struct dtls_context_t {
   dtls_handler_t *h;		/**< callback handlers */
 
   unsigned char readbuf[DTLS_MAX_BUF];
-  unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
 
 /** 
@@ -235,6 +288,8 @@ int dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
  * returns zero on success, and a value less than zero on error.
  */
 int dtls_close(dtls_context_t *ctx, const session_t *remote);
+
+int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
 
 /** 
  * Writes the application data given in @p buf to the peer specified
@@ -331,18 +386,6 @@ typedef struct {
  */
 int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
 #endif
-
-/**
- * Retrieves a pointer to the cookie contained in a Client Hello message.
- *
- * \param hello_msg   Points to the received Client Hello message
- * \param msglen      Length of \p hello_msg
- * \param cookie      Is set to the beginning of the cookie in the message if
- *                    found. Undefined if this function returns \c 0.
- * \return \c 0 if no cookie was found, < 0 on error. On success, the return
- *         value reflects the cookie's length.
- */
-int dtls_get_cookie(uint8 *hello_msg, int msglen, uint8 **cookie);
 
 /** 
  * Handles incoming data as DTLS message from given peer.
@@ -454,7 +497,7 @@ make install
    .write = send_to_peer,
    .read  = read_from_peer,
    .event = NULL,
-   .get_key = get_key
+   .get_psk_key = get_psk_key
  };
 
  fd = socket(...);
@@ -527,29 +570,28 @@ int send_to_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, si
 }
  * @endcode
  * 
- * @subsection dtls_get_key The Key Storage
+ * @subsection dtls_get_psk_key The Key Storage
  *
  * When a new DTLS session is created, the library must ask the application
  * for keying material. To do so, it invokes the registered call-back function
- * get_key() with the current context and session information as parameter.
+ * get_psk_key() with the current context and session information as parameter.
  * When the function is called with the @p id parameter set, the result must
- * point to a dtls_key_t structure for the given identity. When @p id is 
+ * point to a dtls_psk_key_t structure for the given identity. When @p id is 
  * @c NULL, the function must pick a suitable identity and return a pointer to
- * the corresponding dtls_key_t structure. The following example shows a
+ * the corresponding dtls_psk_key_t structure. The following example shows a
  * simple key storage for a pre-shared key for @c Client_identity:
  * 
  * @code
-int get_key(struct dtls_context_t *ctx, 
-	const session_t *session, 
-	const unsigned char *id, size_t id_len, 
-	const dtls_key_t **result) {
+int get_psk_key(struct dtls_context_t *ctx, 
+		const session_t *session, 
+		const unsigned char *id, size_t id_len, 
+		const dtls_psk_key_t **result) {
 
-  static const dtls_key_t psk = {
-    .type = DTLS_KEY_PSK,
-    .key.psk.id = (unsigned char *)"my identity", 
-    .key.psk.id_length = 11,
-    .key.psk.key = (unsigned char *)"secret", 
-    .key.psk.key_length = 6
+  static const dtls_psk_key_t psk = {
+    .id = (unsigned char *)"my identity", 
+    .id_length = 11,
+    .key = (unsigned char *)"secret", 
+    .key_length = 6
   };
    
   *result = &psk;
@@ -598,7 +640,7 @@ int handle_event(struct dtls_context_t *ctx, session_t *session,
  * templates ending in @c .in.
  *
  * Then, create a Contiki project with @c APPS += tinydtls in its Makefile. A sample
- * server could look like this (with read_from_peer() and get_key() as shown above).
+ * server could look like this (with read_from_peer() and get_psk_key() as shown above).
  *
  * @code
 #include "contiki.h"
@@ -618,7 +660,7 @@ static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
   .event = NULL,
-  .get_key = get_key
+  .get_psk_key = get_psk_key
 };
 
 PROCESS(server_process, "DTLS server process");

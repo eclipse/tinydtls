@@ -1,5 +1,8 @@
 #include "config.h" 
 
+/* This is needed for apple */
+#define __APPLE_USE_RFC_3542
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -20,31 +23,72 @@
 #define DEFAULT_PORT 20220
 #define PRINTF(...) printf(__VA_ARGS__)
 
-extern size_t dsrv_print_addr(const session_t *, unsigned char *, size_t);
-
 static char buf[200];
 static size_t len = 0;
 
 static str output_file = { 0, NULL }; /* output file name */
 
+static dtls_context_t *dtls_context = NULL;
+
+
+static const unsigned char ecdsa_priv_key[] = {
+			0x41, 0xC1, 0xCB, 0x6B, 0x51, 0x24, 0x7A, 0x14,
+			0x43, 0x21, 0x43, 0x5B, 0x7A, 0x80, 0xE7, 0x14,
+			0x89, 0x6A, 0x33, 0xBB, 0xAD, 0x72, 0x94, 0xCA,
+			0x40, 0x14, 0x55, 0xA1, 0x94, 0xA9, 0x49, 0xFA};
+
+static const unsigned char ecdsa_pub_key_x[] = {
+			0x36, 0xDF, 0xE2, 0xC6, 0xF9, 0xF2, 0xED, 0x29,
+			0xDA, 0x0A, 0x9A, 0x8F, 0x62, 0x68, 0x4E, 0x91,
+			0x63, 0x75, 0xBA, 0x10, 0x30, 0x0C, 0x28, 0xC5,
+			0xE4, 0x7C, 0xFB, 0xF2, 0x5F, 0xA5, 0x8F, 0x52};
+
+static const unsigned char ecdsa_pub_key_y[] = {
+			0x71, 0xA0, 0xD4, 0xFC, 0xDE, 0x1A, 0xB8, 0x78,
+			0x5A, 0x3C, 0x78, 0x69, 0x35, 0xA7, 0xCF, 0xAB,
+			0xE9, 0x3F, 0x98, 0x72, 0x09, 0xDA, 0xED, 0x0B,
+			0x4F, 0xAB, 0xC3, 0x6F, 0xC7, 0x72, 0xF8, 0x29};
+
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
 int
-get_key(struct dtls_context_t *ctx, 
-	const session_t *session, 
-	const unsigned char *id, size_t id_len, 
-	const dtls_key_t **result) {
-
-  static const dtls_key_t psk = {
-    .type = DTLS_KEY_PSK,
-    .key.psk.id = (unsigned char *)"Client_identity", 
-    .key.psk.id_length = 15,
-    .key.psk.key = (unsigned char *)"secretPSK", 
-    .key.psk.key_length = 9
+get_psk_key(struct dtls_context_t *ctx,
+	    const session_t *session,
+	    const unsigned char *id, size_t id_len,
+	    const dtls_psk_key_t **result) {
+  static const dtls_psk_key_t psk = {
+    .id = (unsigned char *)"Client_identity",
+    .id_length = 15,
+    .key = (unsigned char *)"secretPSK",
+    .key_length = 9
   };
-   
+
   *result = &psk;
+  return 0;
+}
+
+int
+get_ecdsa_key(struct dtls_context_t *ctx,
+	      const session_t *session,
+	      const dtls_ecdsa_key_t **result) {
+  static const dtls_ecdsa_key_t ecdsa_key = {
+    .curve = DTLS_ECDH_CURVE_SECP256R1,
+    .priv_key = ecdsa_priv_key,
+    .pub_key_x = ecdsa_pub_key_x,
+    .pub_key_y = ecdsa_pub_key_y
+  };
+
+  *result = &ecdsa_key;
+  return 0;
+}
+
+int
+verify_ecdsa_key(struct dtls_context_t *ctx,
+		 const session_t *session,
+		 const unsigned char *other_pub_x,
+		 const unsigned char *other_pub_y,
+		 size_t key_size) {
   return 0;
 }
 
@@ -82,10 +126,6 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
-#ifndef NDEBUG
-extern void dump(unsigned char *buf, size_t len);
-#endif
-
 int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
@@ -108,19 +148,19 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
-#ifndef NDEBUG
-    unsigned char addrbuf[72];
-    dsrv_print_addr(&session, addrbuf, sizeof(addrbuf));
-    dsrv_log(LOG_DEBUG, "got %d bytes from %s\n", len, (char *)addrbuf);
-    dump((unsigned char *)&session, sizeof(session_t));
-    PRINTF("\n");
-    dump(buf, len);
-    PRINTF("\n");
-#endif
+    dtls_dsrv_log_addr(LOG_DEBUG, "peer", &session);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "bytes from peer", buf, len, 0);
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
 }    
+
+static void dtls_handle_signal(int sig)
+{
+  dtls_free_context(dtls_context);
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
 
 /* stolen from libcoap: */
 int 
@@ -187,12 +227,16 @@ static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
   .event = NULL,
-  .get_key = get_key
+  .get_psk_key = get_psk_key,
+  .get_ecdsa_key = get_ecdsa_key,
+  .verify_ecdsa_key = verify_ecdsa_key
 };
+
+#define DTLS_CLIENT_CMD_CLOSE "client:close"
+#define DTLS_CLIENT_CMD_RENEGOTIATE "client:renegotiate"
 
 int 
 main(int argc, char **argv) {
-  dtls_context_t *dtls_context = NULL;
   fd_set rfds, wfds;
   struct timeval timeout;
   unsigned short port = DEFAULT_PORT;
@@ -281,6 +325,11 @@ main(int argc, char **argv) {
     dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
   }
 
+  if (signal(SIGINT, dtls_handle_signal) == SIG_ERR) {
+    dsrv_log(LOG_ALERT, "An error occurred while setting a signal handler.\n");
+    return EXIT_FAILURE;
+  }
+
   dtls_context = dtls_new_context(&fd);
   if (!dtls_context) {
     dsrv_log(LOG_EMERG, "cannot create context\n");
@@ -317,8 +366,21 @@ main(int argc, char **argv) {
 	handle_stdin();
     }
 
-    if (len)
-      try_send(dtls_context, &dst);
+    if (len) {
+      if (len >= strlen(DTLS_CLIENT_CMD_CLOSE) &&
+	  !memcmp(buf, DTLS_CLIENT_CMD_CLOSE, strlen(DTLS_CLIENT_CMD_CLOSE))) {
+	printf("client: closing connection\n");
+	dtls_close(dtls_context, &dst);
+	len = 0;
+      } else if (len >= strlen(DTLS_CLIENT_CMD_RENEGOTIATE) &&
+	         !memcmp(buf, DTLS_CLIENT_CMD_RENEGOTIATE, strlen(DTLS_CLIENT_CMD_RENEGOTIATE))) {
+	printf("client: renegotiate connection\n");
+	dtls_renegotiate(dtls_context, &dst);
+	len = 0;
+      } else {
+	try_send(dtls_context, &dst);
+      }
+    }
   }
   
   dtls_free_context(dtls_context);

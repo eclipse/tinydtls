@@ -92,7 +92,7 @@ typedef struct __session_t {
     struct sockaddr_in  sin;
     struct sockaddr_in6 sin6;
   } addr;
-  int ifindex;
+  uint8_t ifindex;
 } __session_t;
 
 #define session_t __session_t
@@ -139,7 +139,7 @@ typedef struct {
 
 #ifndef DTLS_MAX_BUF
 /** Maximum size of DTLS message. */
-#define DTLS_MAX_BUF 256
+#define DTLS_MAX_BUF 256 + 64
 #endif
 
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT
@@ -150,8 +150,29 @@ typedef struct {
 /** Known cipher suites.*/
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
-  TLS_PSK_WITH_AES_128_CCM_8 = 0xC0A8 /**< see RFC 6655 */
+  TLS_PSK_WITH_AES_128_CCM_8 = 0xC0A8, /**< see RFC 6655 */
+  TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AC /**< TODO: replace with values from draft-mcgrew-tls-aes-ccm-ecc */
 } dtls_cipher_t;
+
+/** Known compression suites.*/
+typedef enum {
+  TLS_COMPRESSION_NULL = 0x0000		/* NULL compression */
+} dtls_compression_t;
+
+#define TLS_EXT_ELLIPTIC_CURVES		10 /* see RFC 4492 */
+#define TLS_EXT_EC_POINT_FORMATS	11 /* see RFC 4492 */
+#define TLS_EXT_SIG_HASH_ALGO		13 /* see RFC 5246 */
+#define TLS_EXT_CLIENT_CERIFICATE_TYPE	122 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
+#define TLS_EXT_SERVER_CERIFICATE_TYPE	123 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
+
+#define TLS_CERT_TYPE_OOB 2 /* replcae with values from draft-ietf-tls-oob-pubkey */
+
+#define TLS_EXT_ELLIPTIC_CURVES_SECP256R1	23 /* see RFC 4492 */
+
+#define TLS_EXT_EC_POINT_FORMATS_UNCOMPRESSED	0 /* see RFC 4492 */
+
+#define TLS_EXT_SIG_HASH_ALGO_SHA256		4 /* see RFC 5246 */
+#define TLS_EXT_SIG_HASH_ALGO_ECDSA		3 /* see RFC 5246 */
 
 /** 
  * XORs \p n bytes byte-by-byte starting at \p y to the memory area

@@ -26,13 +26,6 @@
 #include "peer.h"
 #include "debug.h"
 
-#ifndef NDEBUG
-#include <stdio.h>
-
-extern size_t dsrv_print_addr(const session_t *addr, unsigned char *buf, 
-			      size_t len);
-#endif /* NDEBUG */
-
 #ifndef WITH_CONTIKI
 void peer_init()
 {
@@ -45,12 +38,8 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
-  int i;
-  for (i = 0; i < sizeof(peer->security_params) / sizeof(dtls_security_parameters_t);
-       i++) {
-    dtls_cipher_free(peer->security_params[i].read_cipher);
-    dtls_cipher_free(peer->security_params[i].write_cipher);
-  }
+  dtls_cipher_free(peer->security_params.read_cipher);
+  dtls_cipher_free(peer->security_params.write_cipher);
 
   free(peer);
 }
@@ -72,12 +61,8 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
-  int i;
-  for (i = 0; i < sizeof(peer->security_params) / sizeof(dtls_security_parameters_t);
-       i++) {
-    dtls_cipher_free(peer->security_params[i].read_cipher);
-    dtls_cipher_free(peer->security_params[i].write_cipher);
-  }
+  dtls_cipher_free(peer->security_params.read_cipher);
+  dtls_cipher_free(peer->security_params.write_cipher);
 
   memb_free(&peer_storage, peer);
 }
@@ -92,15 +77,10 @@ dtls_new_peer(const session_t *session) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
-#ifndef NDEBUG
-    if (dtls_get_log_level() >= LOG_DEBUG) {
-      unsigned char addrbuf[72];
-      dsrv_print_addr(session, addrbuf, sizeof(addrbuf));
-      printf("dtls_new_peer: %s\n", addrbuf);
-    }
-#endif
+    dtls_dsrv_log_addr(LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
-    CURRENT_CONFIG(peer)->cipher = TLS_NULL_WITH_NULL_NULL;
+    peer->security_params.cipher = TLS_NULL_WITH_NULL_NULL;
+    peer->security_params.compression = TLS_COMPRESSION_NULL;
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
     debug("DTLSv12: initialize HASH_SHA256\n");
@@ -112,4 +92,3 @@ dtls_new_peer(const session_t *session) {
   
   return peer;
 }
-

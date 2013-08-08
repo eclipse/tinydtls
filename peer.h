@@ -41,6 +41,8 @@
 #include "uthash.h"
 #endif /* WITH_CONTIKI */
 
+typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
+
 /** 
  * Holds security parameters, local state and the transport address
  * for each peer. */
@@ -53,16 +55,18 @@ typedef struct dtls_peer_t {
 
   session_t session;	     /**< peer address and local interface */
 
+  dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
   dtls_state_t state;        /**< DTLS engine state */
   uint16 epoch;		     /**< counter for cipher state changes*/
   uint48 rseq;		     /**< sequence number of last record sent */
 
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
-  dtls_security_parameters_t security_params[2]; 
-  int config;	             /**< denotes which security params are in effect */
-                             /* FIXME: check if we can use epoch for this */
+  dtls_security_parameters_t security_params;
+  dtls_handshake_parameters_t handshake_params;
 } dtls_peer_t;
+
+void peer_init();
 
 /**
  * Creates a new peer for given @p session. The current configuration

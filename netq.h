@@ -44,6 +44,13 @@ typedef struct netq_t {
   netq_packet_t data;		/**< the datagram to send */
 } netq_t;
 
+#ifndef WITH_CONTIKI
+static inline void netq_init()
+{ }
+#else
+void netq_init();
+#endif
+
 /** 
  * Adds a node to the given queue, ordered by their time-stamp t.
  * This function returns @c 0 on error, or non-zero if @p node has

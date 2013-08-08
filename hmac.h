@@ -56,6 +56,13 @@ dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
 }
 #endif /* WITH_SHA256 */
 
+#ifndef WITH_CONTIKI
+static inline void dtls_hmac_storage_init()
+{ }
+#else
+void dtls_hmac_storage_init();
+#endif
+
 /**
  * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
  * NIST Standard FIPS 198 describes the Keyed-Hash Message Authentication 

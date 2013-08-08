@@ -75,7 +75,7 @@ block0(size_t M,       /* number of auth bytes */
  *             is placed.
  * \return     The result is written to \p X.
  */
-void
+static void
 add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, size_t la,
 	      unsigned char B[DTLS_CCM_BLOCKSIZE], 
 	      unsigned char X[DTLS_CCM_BLOCKSIZE]) {
