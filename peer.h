@@ -85,7 +85,7 @@ dtls_peer_t *dtls_new_peer(const session_t *session);
 void dtls_free_peer(dtls_peer_t *peer);
 
 /** Returns the current state of @p peer. */
-inline dtls_state_t dtls_peer_state(const dtls_peer_t *peer) {
+static inline dtls_state_t dtls_peer_state(const dtls_peer_t *peer) {
   return peer->state;
 }
 
@@ -93,13 +93,8 @@ inline dtls_state_t dtls_peer_state(const dtls_peer_t *peer) {
  * Checks if given @p peer is connected. This function returns
  * @c 1 if connected, or @c 0 otherwise.
  */
-inline int dtls_peer_is_connected(const dtls_peer_t *peer) {
+static inline int dtls_peer_is_connected(const dtls_peer_t *peer) {
   return peer->state == DTLS_STATE_CONNECTED;
 }
-
-#define CURRENT_CONFIG(Peer) (&(Peer)->security_params[(Peer)->config])
-#define OTHER_CONFIG(Peer) (&(Peer)->security_params[!((Peer)->config & 0x01)])
-
-#define SWITCH_CONFIG(Peer) ((Peer)->config = !((Peer)->config & 0x01))
 
 #endif /* _PEER_H_ */

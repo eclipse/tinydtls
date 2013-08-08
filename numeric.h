@@ -98,6 +98,12 @@
   (((*(((unsigned char*)(Field)))) << 16)	\
    | ((*(((unsigned char*)(Field))+1)) << 8)	\
    | ((*(((unsigned char*)(Field))+2))))
+
+#define dtls_uint32_to_int(Field)			\
+  ((*(unsigned char*)(Field)) << 24)		\
+  | ((*(((unsigned char*)(Field))+1)) << 16)	\
+  | ((*(((unsigned char*)(Field))+2)) << 8)	\
+  | ((*(((unsigned char*)(Field))+3)))
   
 #define dtls_uint48_to_ulong(Field)			\
   (((uint64_t) *(unsigned char*)(Field)) << 40)		\

@@ -44,7 +44,6 @@ dtls_free_peer(dtls_peer_t *peer) {
   free(peer);
 }
 #else /* WITH_CONTIKI */
-PROCESS(dtls_retransmit_process, "DTLS retransmit process");
 
 #include "memb.h"
 MEMB(peer_storage, dtls_peer_t, DTLS_PEER_MAX);

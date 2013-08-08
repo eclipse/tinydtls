@@ -342,7 +342,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 void 
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
   static char timebuf[32];
-  va_list ap;
+  int n = 0;
 
   if (maxlog < level)
     return;

@@ -163,7 +163,7 @@ init_dtls() {
   server_conn = udp_new(NULL, 0, NULL);
   udp_bind(server_conn, UIP_HTONS(20220));
 
-  set_log_level(LOG_DEBUG);
+  dtls_set_log_level(LOG_DEBUG);
 
   dtls_context = dtls_new_context(server_conn);
   if (dtls_context)

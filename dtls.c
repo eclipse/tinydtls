@@ -134,6 +134,10 @@ static const unsigned char cert_asn1_header[] = {
 
 static dtls_context_t the_dtls_context;
 
+#ifdef WITH_CONTIKI
+PROCESS(dtls_retransmit_process, "DTLS retransmit process");
+#endif
+
 void
 dtls_init() {
   dtls_clock_init();
@@ -1094,7 +1098,7 @@ dtls_prepare_record(dtls_peer_t *peer,
      * seq_num(2+6) + type(1) + version(2) + length(2)
      */
 #define A_DATA_LEN 13
-    unsigned char N[DTLS_CCM_BLOCKSIZE];
+    unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
 
     if (security->cipher == TLS_PSK_WITH_AES_128_CCM_8) {
@@ -1135,10 +1139,10 @@ dtls_prepare_record(dtls_peer_t *peer,
       res += data_len_array[i];
     }
 
-    memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_local_iv(security, peer->role),
+    memset(nonce, 0, DTLS_CCM_BLOCKSIZE);
+    memcpy(nonce, dtls_kb_local_iv(security, peer->role),
 	   dtls_kb_iv_size(security, peer->role));
-    memcpy(N + dtls_kb_iv_size(security, peer->role), start, 8); /* epoch + seq_num */
+    memcpy(nonce + dtls_kb_iv_size(security, peer->role), start, 8); /* epoch + seq_num */
 
     cipher_context = security->write_cipher;
 
@@ -1147,7 +1151,7 @@ dtls_prepare_record(dtls_peer_t *peer,
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", N, DTLS_CCM_BLOCKSIZE, 0);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", nonce, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
 			  dtls_kb_local_write_key(security, peer->role),
 			  dtls_kb_key_size(security, peer->role), 0);
@@ -1161,7 +1165,7 @@ dtls_prepare_record(dtls_peer_t *peer,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
     
-    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8, N,
+    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8, nonce,
 		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
@@ -2758,7 +2762,7 @@ decrypt_verify(dtls_peer_t *peer,
      * seq_num(2+6) + type(1) + version(2) + length(2)
      */
 #define A_DATA_LEN 13
-    unsigned char N[DTLS_CCM_BLOCKSIZE];
+    unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
     long int len;
 
@@ -2766,12 +2770,12 @@ decrypt_verify(dtls_peer_t *peer,
     if (*clen < 16)		/* need at least IV and MAC */
       return -1;
 
-    memset(N, 0, DTLS_CCM_BLOCKSIZE);
-    memcpy(N, dtls_kb_remote_iv(security, peer->role),
+    memset(nonce, 0, DTLS_CCM_BLOCKSIZE);
+    memcpy(nonce, dtls_kb_remote_iv(security, peer->role),
 	   dtls_kb_iv_size(security, peer->role));
 
     /* read epoch and seq_num from message */
-    memcpy(N + dtls_kb_iv_size(security, peer->role), *cleartext, 8);
+    memcpy(nonce + dtls_kb_iv_size(security, peer->role), *cleartext, 8);
     *cleartext += 8;
     *clen -= 8;
 
@@ -2782,7 +2786,7 @@ decrypt_verify(dtls_peer_t *peer,
       return 0;
     }
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", N, DTLS_CCM_BLOCKSIZE, 0);
+    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", nonce, DTLS_CCM_BLOCKSIZE, 0);
     dtls_dsrv_hexdump_log(LOG_DEBUG, "key",
 			  dtls_kb_remote_write_key(security, peer->role),
 			  dtls_kb_key_size(security, peer->role), 0);
@@ -2797,7 +2801,7 @@ decrypt_verify(dtls_peer_t *peer,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, *clen - 8); /* length without nonce_explicit */
 
-    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext, N,
+    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext, nonce,
 		       A_DATA, A_DATA_LEN);
 
     ok = len >= 0;
@@ -3513,13 +3517,8 @@ void dtls_free_context(dtls_context_t *ctx) {
     }
   }
 #else /* WITH_CONTIKI */
-  int i;
-
-  p = (dtls_peer_t *)peer_storage.mem;
-  for (i = 0; i < peer_storage.num; ++i, ++p) {
-    if (peer_storage.count[i])
-      dtls_destory_peer(ctx, p, 1);
-  }
+  for (p = list_head(ctx->peers); p; p = list_item_next(p))
+    dtls_destory_peer(ctx, p, 1);
 #endif /* WITH_CONTIKI */
 }
 
