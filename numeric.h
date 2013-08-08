@@ -47,70 +47,106 @@
   }
 
 /* this one is for consistency... */
-#define dtls_int_to_uint8(Field,Value) do {			\
-    *(unsigned char*)(Field) = (Value) & 0xff;			\
-  } while(0)
+static inline int dtls_int_to_uint8(unsigned char *field, uint8_t value)
+{
+  field[0] = value & 0xff;
+  return 1;
+}
 
-#define dtls_int_to_uint16(Field,Value) do {			\
-    *(unsigned char*)(Field) = ((Value) >> 8) & 0xff;		\
-    *(((unsigned char*)(Field))+1) = ((Value) & 0xff);		\
-  } while(0)
+static inline int dtls_int_to_uint16(unsigned char *field, uint16_t value)
+{
+  field[0] = (value >> 8) & 0xff;
+  field[1] = value & 0xff;
+  return 2;
+}
 
-#define dtls_int_to_uint24(Field,Value) do {			\
-    *(unsigned char*)(Field) = ((Value) >> 16) & 0xff;		\
-    dtls_int_to_uint16((((unsigned char*)(Field))+1),Value);	\
-  } while(0)
+static inline int dtls_int_to_uint24(unsigned char *field, uint32_t value)
+{
+  field[0] = (value >> 16) & 0xff;
+  field[1] = (value >> 8) & 0xff;
+  field[2] = value & 0xff;
+  return 3;
+}
 
-#define dtls_int_to_uint32(Field,Value) do {				\
-    *(unsigned char*)(Field) = ((Value) >> 24) & 0xff;			\
-    *(((unsigned char*)(Field))+1) = ((Value) >> 16) & 0xff;		\
-    *(((unsigned char*)(Field))+2) = ((Value) >> 8) & 0xff;		\
-    *(((unsigned char*)(Field))+3) = (Value) & 0xff;			\
-  } while(0)
+static inline int dtls_int_to_uint32(unsigned char *field, uint32_t value)
+{
+  field[0] = (value >> 24) & 0xff;
+  field[1] = (value >> 16) & 0xff;
+  field[2] = (value >> 8) & 0xff;
+  field[3] = value & 0xff;
+  return 4;
+}
 
-#define dtls_ulong_to_uint48(Field,Value) do {				\
-    *(unsigned char*)(Field) = ((Value) >> 40) & 0xff;			\
-    *(((unsigned char*)(Field))+1) = ((Value) >> 32) & 0xff;		\
-    *(((unsigned char*)(Field))+2) = ((Value) >> 24) & 0xff;		\
-    *(((unsigned char*)(Field))+3) = ((Value) >> 16) & 0xff;		\
-    *(((unsigned char*)(Field))+4) = ((Value) >> 8) & 0xff;		\
-    *(((unsigned char*)(Field))+5) = (Value) & 0xff;			\
-  } while(0)
+static inline int dtls_int_to_uint48(unsigned char *field, uint64_t value)
+{
+  field[0] = (value >> 40) & 0xff;
+  field[1] = (value >> 32) & 0xff;
+  field[2] = (value >> 24) & 0xff;
+  field[3] = (value >> 16) & 0xff;
+  field[4] = (value >> 8) & 0xff;
+  field[5] = value & 0xff;
+  return 6;
+}
 
-#define dtls_ulong_to_uint64(Field,Value) do {				\
-    *(unsigned char*)(Field) = ((Value) >> 56) & 0xff;			\
-    *(((unsigned char*)(Field))+1) = ((Value) >> 48) & 0xff;		\
-    *(((unsigned char*)(Field))+2) = ((Value) >> 40) & 0xff;		\
-    *(((unsigned char*)(Field))+3) = ((Value) >> 32) & 0xff;		\
-    *(((unsigned char*)(Field))+4) = ((Value) >> 24) & 0xff;		\
-    *(((unsigned char*)(Field))+5) = ((Value) >> 16) & 0xff;		\
-    *(((unsigned char*)(Field))+6) = ((Value) >> 8) & 0xff;		\
-    *(((unsigned char*)(Field))+7) = (Value) & 0xff;			\
-  } while(0)
+static inline int dtls_int_to_uint64(unsigned char *field, uint64_t value)
+{
+  field[0] = (value >> 56) & 0xff;
+  field[1] = (value >> 48) & 0xff;
+  field[2] = (value >> 40) & 0xff;
+  field[3] = (value >> 32) & 0xff;
+  field[4] = (value >> 24) & 0xff;
+  field[5] = (value >> 16) & 0xff;
+  field[6] = (value >> 8) & 0xff;
+  field[7] = value & 0xff;
+  return 8;
+}
 
-#define dtls_uint8_to_int(Field) \
-  (*(unsigned char*)(Field) & 0xFF)
+static inline uint8_t dtls_uint8_to_int(const unsigned char *field)
+{
+  return (uint8_t)field[0];
+}
 
-#define dtls_uint16_to_int(Field) \
-  (((*(unsigned char*)(Field)) << 8) | (*(((unsigned char*)(Field))+1)))
+static inline uint16_t dtls_uint16_to_int(const unsigned char *field)
+{
+  return ((uint16_t)field[0] << 8)
+	 | (uint16_t)field[1];
+}
 
-#define dtls_uint24_to_int(Field)		\
-  (((*(((unsigned char*)(Field)))) << 16)	\
-   | ((*(((unsigned char*)(Field))+1)) << 8)	\
-   | ((*(((unsigned char*)(Field))+2))))
+static inline uint32_t dtls_uint24_to_int(const unsigned char *field)
+{
+  return ((uint32_t)field[0] << 16)
+	 | ((uint32_t)field[1] << 8)
+	 | (uint32_t)field[2];
+}
 
-#define dtls_uint32_to_int(Field)			\
-  ((*(unsigned char*)(Field)) << 24)		\
-  | ((*(((unsigned char*)(Field))+1)) << 16)	\
-  | ((*(((unsigned char*)(Field))+2)) << 8)	\
-  | ((*(((unsigned char*)(Field))+3)))
-  
-#define dtls_uint48_to_ulong(Field)			\
-  (((uint64_t) *(unsigned char*)(Field)) << 40)		\
-  | (((uint64_t) *(((unsigned char*)(Field))+1)) << 32)	\
-  | (((uint64_t) *(((unsigned char*)(Field))+2)) << 24)	\
-  | (((uint64_t) *(((unsigned char*)(Field))+3)) << 16)	\
-  | (((uint64_t) *(((unsigned char*)(Field))+4)) << 8)	\
-  | (((uint64_t) *(((unsigned char*)(n))+5)))
+static inline uint32_t dtls_uint32_to_int(const unsigned char *field)
+{
+  return ((uint32_t)field[0] << 24)
+	 | ((uint32_t)field[1] << 16)
+	 | ((uint32_t)field[2] << 8)
+	 | (uint32_t)field[3];
+}
+
+static inline uint64_t dtls_uint48_to_int(const unsigned char *field)
+{
+  return ((uint64_t)field[0] << 40)
+	 | ((uint64_t)field[1] << 32)
+	 | ((uint64_t)field[2] << 24)
+	 | ((uint64_t)field[3] << 16)
+	 | ((uint64_t)field[4] << 8)
+	 | (uint64_t)field[5];
+}
+
+static inline uint64_t dtls_uint64_to_int(const unsigned char *field)
+{
+  return ((uint64_t)field[0] << 56)
+	 | ((uint64_t)field[1] << 48)
+	 | ((uint64_t)field[2] << 40)
+	 | ((uint64_t)field[3] << 32)
+	 | ((uint64_t)field[4] << 24)
+	 | ((uint64_t)field[5] << 16)
+	 | ((uint64_t)field[6] << 8)
+	 | (uint64_t)field[7];
+}
 
 #endif /* _NUMERIC_H_ */

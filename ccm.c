@@ -99,7 +99,7 @@ add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, size_t la,
     } else {
       j = 10;
       dtls_int_to_uint16(B, 0xFFFF);
-      dtls_ulong_to_uint64(B+2, la);
+      dtls_int_to_uint64(B+2, la);
     }
 #else /* WITH_CONTIKI */
   /* With Contiki, we are building for small devices and thus
