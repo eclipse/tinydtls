@@ -134,6 +134,10 @@ static const unsigned char cert_asn1_header[] = {
 
 static dtls_context_t the_dtls_context;
 
+#ifdef WITH_CONTIKI
+PROCESS(dtls_retransmit_process, "DTLS retransmit process");
+#endif
+
 void
 dtls_init() {
   dtls_clock_init();
