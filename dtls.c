@@ -59,7 +59,7 @@
 #define dtls_get_version(H) dtls_uint16_to_int(&(H)->version)
 #define dtls_get_epoch(H) dtls_uint16_to_int(&(H)->epoch)
 #define dtls_get_sequence_number(H) dtls_uint48_to_ulong(&(H)->sequence_number)
-#define dtls_get_fragment_length(H) dtls_uint24_to_int(&(H)->fragment_length)
+#define dtls_get_fragment_length(H) dtls_uint24_to_int((H)->fragment_length)
 
 #ifndef WITH_CONTIKI
 #define HASH_FIND_PEER(head,sess,out)		\
@@ -2162,7 +2162,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     /* Set client random: First 4 bytes are the client's Unix timestamp,
      * followed by 28 bytes of generate random data. */
     dtls_ticks(&now);
-    dtls_int_to_uint32(&handshake->tmp.random.client, now / CLOCK_SECOND);
+    dtls_int_to_uint32(handshake->tmp.random.client, now / CLOCK_SECOND);
     prng(handshake->tmp.random.client + sizeof(uint32),
          DTLS_RANDOM_LENGTH - sizeof(uint32));
   }
