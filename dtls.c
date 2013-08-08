@@ -3513,13 +3513,8 @@ void dtls_free_context(dtls_context_t *ctx) {
     }
   }
 #else /* WITH_CONTIKI */
-  int i;
-
-  p = (dtls_peer_t *)peer_storage.mem;
-  for (i = 0; i < peer_storage.num; ++i, ++p) {
-    if (peer_storage.count[i])
-      dtls_destory_peer(ctx, p, 1);
-  }
+  for (p = list_head(ctx->peers); p; p = list_item_next(p))
+    dtls_destory_peer(ctx, p, 1);
 #endif /* WITH_CONTIKI */
 }
 
