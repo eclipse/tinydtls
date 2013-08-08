@@ -12,7 +12,7 @@
 #include "config.h"
 #include "global.h"
 #include "dtls.h"
-#include "time.h"
+#include "dtls_time.h"
 
 /**
  * \defgroup netq Network Packet Queue
