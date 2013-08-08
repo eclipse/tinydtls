@@ -233,7 +233,7 @@ static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
   int i;
 
   for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
-    *result = ntohl(((uint32_t *)key)[i]);
+    *result = dtls_uint32_to_int(&key[i * sizeof(uint32_t)]);
     result++;
   }
 }
