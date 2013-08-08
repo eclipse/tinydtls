@@ -177,10 +177,10 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   *p++ = '[';
 
   for (i=0; i < 8; i += 4) {
-    *p++ = hex[(addr->addr.u16[i] & 0xf000) >> 24];
-    *p++ = hex[(addr->addr.u16[i] & 0x0f00) >> 16];
-    *p++ = hex[(addr->addr.u16[i] & 0x00f0) >> 8];
-    *p++ = hex[(addr->addr.u16[i] & 0x000f)];
+    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0xf000) >> 24];
+    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x0f00) >> 16];
+    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x00f0) >> 8];
+    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x000f)];
     *p++ = ':';
   }
   *(p-1) = ']';
