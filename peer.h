@@ -97,9 +97,4 @@ inline int dtls_peer_is_connected(const dtls_peer_t *peer) {
   return peer->state == DTLS_STATE_CONNECTED;
 }
 
-#define CURRENT_CONFIG(Peer) (&(Peer)->security_params[(Peer)->config])
-#define OTHER_CONFIG(Peer) (&(Peer)->security_params[!((Peer)->config & 0x01)])
-
-#define SWITCH_CONFIG(Peer) ((Peer)->config = !((Peer)->config & 0x01))
-
 #endif /* _PEER_H_ */
