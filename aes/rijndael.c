@@ -26,7 +26,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/param.h>
+/* #include <sys/param.h> */
 /* #include <sys/systm.h> */
 
 #include "rijndael.h"
