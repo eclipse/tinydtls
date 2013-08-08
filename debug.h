@@ -27,6 +27,7 @@
 #define _DEBUG_H_
 
 #include "config.h"
+#include "global.h"
 #include <stdlib.h>
 
 struct __session_t;
@@ -57,7 +58,7 @@ void dump(unsigned char *buf, size_t len);
 
 void dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend);
 
-void dtls_dsrv_log_addr(log_t level, const char *name, const struct __session_t *addr);
+void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 
 #else /* NDEBUG */
 
