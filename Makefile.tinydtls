@@ -14,4 +14,4 @@ endif
 
 CFLAGS += -DDTLSv12 -DWITH_SHA256 
 
-tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c debug.c ecc.c
+tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c debug.c ecc.c dtls_time.c peer.c
