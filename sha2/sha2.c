@@ -102,9 +102,6 @@
 #define BIG_ENDIAN 4321
 #endif
 
-#ifdef BYTE_ORDER
-#undef BYTE_ORDER
-#endif
 #ifndef BYTE_ORDER
 #  ifdef WORDS_BIGENDIAN
 #    define BYTE_ORDER BIG_ENDIAN
