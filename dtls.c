@@ -35,11 +35,6 @@
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
 #include "uthash.h"
-#else /* WITH_CONTIKI */
-# ifndef NDEBUG
-#   define DEBUG DEBUG_PRINT
-#   include "net/uip-debug.h"
-#  endif /* NDEBUG */
 #endif /* WITH_CONTIKI */
 
 #include "debug.h"

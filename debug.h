@@ -30,6 +30,15 @@
 #include "global.h"
 #include <stdlib.h>
 
+#ifdef WITH_CONTIKI
+# ifndef DEBUG
+#  define DEBUG DEBUG_PRINT
+# endif /* DEBUG */
+#include "net/uip-debug.h"
+#else
+#define PRINTF(...)
+#endif
+
 struct __session_t;
 
 /** Pre-defined log levels akin to what is used in \b syslog. */
@@ -48,7 +57,11 @@ void dtls_set_log_level(log_t level);
  * Writes the given text to \c stdout. The text is output only when \p
  * level is below or equal to the log level that set by
  * set_log_level(). */
+#ifdef HAVE_VPRINTF
 void dsrv_log(log_t level, char *format, ...);
+#else
+#define dsrv_log(level, format, ...) PRINTF(format, ##__VA_ARGS__)
+#endif
 
 /** dumps packets in usual hexdump format */
 void hexdump(const unsigned char *packet, int length);
