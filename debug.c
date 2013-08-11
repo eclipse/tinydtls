@@ -193,11 +193,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   if (buf + len - p < 6)
     return 0;
 
-#ifdef HAVE_SNPRINTF
-  p += snprintf(p, buf + len - p + 1, ":%d", uip_htons(addr->port));
-#else /* HAVE_SNPRINTF */
-  /* @todo manual conversion of port number */
-#endif /* HAVE_SNPRINTF */
+  p += sprintf(p, ":%d", uip_htons(addr->port));
 
   return p - buf;
 # else /* WITH_CONTIKI */
