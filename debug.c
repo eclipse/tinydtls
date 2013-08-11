@@ -44,15 +44,6 @@
 #include "global.h"
 #include "debug.h"
 
-#ifdef WITH_CONTIKI
-# ifndef DEBUG
-#  define DEBUG DEBUG_PRINT
-# endif /* DEBUG */
-#include "net/uip-debug.h"
-#else
-#define PRINTF(...)
-#endif
-
 static int maxlog = LOG_WARN;	/* default maximum log level */
 
 log_t 
@@ -227,7 +218,7 @@ dsrv_log(log_t level, char *format, ...) {
   va_end(ap);
   fflush(log_fd);
 }
-#else /* WITH_CONTIKI */
+#elif defined (HAVE_VPRINTF) /* WITH_CONTIKI */
 void 
 dsrv_log(log_t level, char *format, ...) {
   static char timebuf[32];
@@ -243,11 +234,7 @@ dsrv_log(log_t level, char *format, ...) {
     PRINTF("%s ", loglevels[level]);
 
   va_start(ap, format);
-#ifdef HAVE_VPRINTF
   vprintf(format, ap);
-#else
-  PRINTF(format, ap);
-#endif
   va_end(ap);
 }
 #endif /* WITH_CONTIKI */
