@@ -28,8 +28,8 @@
  * @brief information about peers in a DTLS session
  */
 
-#ifndef _PEER_H_
-#define _PEER_H_
+#ifndef _DTLS_PEER_H_
+#define _DTLS_PEER_H_
 
 #include "config.h"
 #include "global.h"
@@ -97,4 +97,4 @@ static inline int dtls_peer_is_connected(const dtls_peer_t *peer) {
   return peer->state == DTLS_STATE_CONNECTED;
 }
 
-#endif /* _PEER_H_ */
+#endif /* _DTLS_PEER_H_ */

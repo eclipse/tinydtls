@@ -28,8 +28,8 @@
  * @brief Clock Handling
  */
 
-#ifndef _DTLS_TIME_H_
-#define _DTLS_TIME_H_
+#ifndef _DTLS_DTLS_TIME_H_
+#define _DTLS_DTLS_TIME_H_
 
 #include "config.h"
 
@@ -71,4 +71,4 @@ void dtls_ticks(dtls_tick_t *t);
 
 /** @} */
 
-#endif /* _DTLS_TIME_H_ */
+#endif /* _DTLS_DTLS_TIME_H_ */

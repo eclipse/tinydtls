@@ -28,8 +28,8 @@
  * @brief DTLS alert protocol
  */
 
-#ifndef _ALERT_H_
-#define _ALERT_H_
+#ifndef _DTLS_ALERT_H_
+#define _DTLS_ALERT_H_
 
 #include "config.h"
 
@@ -77,4 +77,4 @@ dtls_alert_fatal_create(dtls_alert_t desc)
   return dtls_alert_create(DTLS_ALERT_LEVEL_FATAL, desc);
 }
 
-#endif /* _ALERT_H_ */
+#endif /* _DTLS_ALERT_H_ */

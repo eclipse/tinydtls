@@ -23,8 +23,8 @@
  * SOFTWARE.
  */
 
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+#ifndef _DTLS_DEBUG_H_
+#define _DTLS_DEBUG_H_
 
 #include "config.h"
 #include "global.h"
@@ -107,4 +107,4 @@ dtls_dsrv_log_addr(log_t level, const char *name, const struct __session_t *addr
 #define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
 #define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
 
-#endif /* _DEBUG_H_ */
+#endif /* _DTLS_DEBUG_H_ */

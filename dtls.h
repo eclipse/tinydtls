@@ -29,8 +29,8 @@
  * @brief High level DTLS API and visible structures. 
  */
 
-#ifndef _DTLS_H_
-#define _DTLS_H_
+#ifndef _DTLS_DTLS_H_
+#define _DTLS_DTLS_H_
 
 #include <stdint.h>
 
@@ -412,7 +412,7 @@ dtls_peer_t *dtls_get_peer(const dtls_context_t *context,
 			   const session_t *session);
 
 
-#endif /* _DTLS_H_ */
+#endif /* _DTLS_DTLS_H_ */
 
 /**
  * @mainpage 
