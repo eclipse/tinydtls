@@ -23,8 +23,8 @@
  * SOFTWARE.
  */
 
-#ifndef _CCM_H_
-#define _CCM_H_
+#ifndef _DTLS_CCM_H_
+#define _DTLS_CCM_H_
 
 #include "config.h"
 #include "aes/rijndael.h"
@@ -67,4 +67,4 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la);
 
-#endif /* _CCM_H_ */
+#endif /* _DTLS_CCM_H_ */

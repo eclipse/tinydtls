@@ -23,8 +23,8 @@
  * SOFTWARE.
  */
 
-#ifndef _HMAC_H_
-#define _HMAC_H_
+#ifndef _DTLS_HMAC_H_
+#define _DTLS_HMAC_H_
 
 #include <sys/types.h>
 
@@ -151,4 +151,4 @@ int dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result);
 
 /**@}*/
 
-#endif /* _HMAC_H_ */
+#endif /* _DTLS_HMAC_H_ */

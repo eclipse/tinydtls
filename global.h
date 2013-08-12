@@ -23,8 +23,8 @@
  * SOFTWARE.
  */
 
-#ifndef _GLOBAL_H_
-#define _GLOBAL_H_
+#ifndef _DTLS_GLOBAL_H_
+#define _DTLS_GLOBAL_H_
 
 #include "config.h"
 
@@ -235,4 +235,4 @@ dtls_session_equals(const session_t *a, const session_t *b) {
   assert(a); assert(b);
   return _dtls_address_equals_impl(a, b);
 }
-#endif /* _GLOBAL_H_ */
+#endif /* _DTLS_GLOBAL_H_ */

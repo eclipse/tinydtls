@@ -24,8 +24,8 @@
  * SOFTWARE.
  */
 
-#ifndef _CRYPTO_H_
-#define _CRYPTO_H_
+#ifndef _DTLS_CRYPTO_H_
+#define _DTLS_CRYPTO_H_
 
 #include "config.h"
 
@@ -357,5 +357,5 @@ dtls_cipher_context_t *dtls_cipher_new(dtls_cipher_t code,
  */
 void dtls_cipher_free(dtls_cipher_context_t *cipher_context);
 
-#endif /* _CRYPTO_H_ */
+#endif /* _DTLS_CRYPTO_H_ */
 

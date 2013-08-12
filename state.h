@@ -28,8 +28,8 @@
  * @brief state information for DTLS FSM
  */
 
-#ifndef _STATE_H_
-#define _STATE_H_
+#ifndef _DTLS_STATE_H_
+#define _DTLS_STATE_H_
 
 #include "config.h"
 #include "global.h"
@@ -58,4 +58,4 @@ typedef struct {
   /* temporary storage for the final handshake hash */
   dtls_hash_ctx hs_hash;
 } dtls_hs_state_t;
-#endif /* _STATE_H_ */
+#endif /* _DTLS_STATE_H_ */

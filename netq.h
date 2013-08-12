@@ -6,8 +6,8 @@
  * LICENSE for terms of use.
  */
 
-#ifndef _NETQ_H_
-#define _NETQ_H_
+#ifndef _DTLS_NETQ_H_
+#define _DTLS_NETQ_H_
 
 #include "config.h"
 #include "global.h"
@@ -87,4 +87,4 @@ netq_t *netq_pop_first(netq_t **queue);
 
 /**@}*/
 
-#endif /* _NETQ_H_ */
+#endif /* _DTLS_NETQ_H_ */

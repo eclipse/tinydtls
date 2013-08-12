@@ -23,8 +23,8 @@
  * SOFTWARE.
  */
 
-#ifndef _NUMERIC_H_
-#define _NUMERIC_H_
+#ifndef _DTLS_NUMERIC_H_
+#define _DTLS_NUMERIC_H_
 
 #include <stdint.h>
 
@@ -149,4 +149,4 @@ static inline uint64_t dtls_uint64_to_int(const unsigned char *field)
 	 | (uint64_t)field[7];
 }
 
-#endif /* _NUMERIC_H_ */
+#endif /* _DTLS_NUMERIC_H_ */
