@@ -1334,8 +1334,8 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 }
 
 static inline int
-dtls_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
-	   dtls_alert_t description) {
+dtls_send_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
+		dtls_alert_t description) {
   uint8_t msg[] = { level, description };
 
   dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg));
@@ -1350,7 +1350,7 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   peer = dtls_get_peer(ctx, remote);
 
   if (peer) {
-    res = dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+    res = dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
     /* indicate tear down */
     peer->state = DTLS_STATE_CLOSING;
   }
@@ -3276,7 +3276,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
      * close_notify so, do not send that again. */
     if (peer->state != DTLS_STATE_CLOSING) {
       peer->state = DTLS_STATE_CLOSING;
-      dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+      dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
     } else
       peer->state = DTLS_STATE_CLOSED;
     break;
@@ -3305,14 +3305,14 @@ static int dtls_alert_send_from_err(dtls_context_t *ctx, dtls_peer_t *peer,
       peer = dtls_get_peer(ctx, session);
     }
     if (peer) {
-      return dtls_alert(ctx, peer, level, desc);
+      return dtls_send_alert(ctx, peer, level, desc);
     }
   } else if (err == -1) {
     if (!peer) {
       peer = dtls_get_peer(ctx, session);
     }
     if (peer) {
-      return dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
+      return dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
     }
   }
   return -1;
@@ -3423,7 +3423,7 @@ dtls_handle_message(dtls_context_t *ctx,
       info("** application data:\n");
       if (!peer) {
         warn("no peer available, send an alert\n");
-        dtls_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_UNEXPECTED_MESSAGE);
+        dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_UNEXPECTED_MESSAGE);
         return -1;
       }
       CALL(ctx, read, &peer->session, data, data_length);
