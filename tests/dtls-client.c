@@ -25,7 +25,12 @@
 static char buf[200];
 static size_t len = 0;
 
-static str output_file = { 0, NULL }; /* output file name */
+typedef struct {
+  size_t length;               /* length of string */
+  unsigned char *s;            /* string data */
+} dtls_str;
+
+static dtls_str output_file = { 0, NULL }; /* output file name */
 
 static dtls_context_t *dtls_context = NULL;
 

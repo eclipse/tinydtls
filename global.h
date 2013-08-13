@@ -130,13 +130,6 @@ typedef unsigned char uint24[3];
 typedef unsigned char uint32[4];
 typedef unsigned char uint48[6];
 
-#ifndef HAVE_STR
-typedef struct {
-  size_t length;		/* length of string */
-  unsigned char *s;		/* string data */
-} str;
-#endif
-
 #ifndef DTLS_MAX_BUF
 /** Maximum size of DTLS message. */
 #define DTLS_MAX_BUF 256 + 64
