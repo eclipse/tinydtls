@@ -449,29 +449,29 @@ known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
 static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 {
   dtls_debug("key_block (%d bytes):\n", dtls_kb_size(config, peer->role));
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_MAC_secret",
-			dtls_kb_client_mac_secret(config, peer->role),
-			dtls_kb_mac_secret_size(config, peer->role), 0);
+  dtls_debug_dump("  client_MAC_secret",
+		  dtls_kb_client_mac_secret(config, peer->role),
+		  dtls_kb_mac_secret_size(config, peer->role));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_MAC_secret",
-			dtls_kb_server_mac_secret(config, peer->role),
-			dtls_kb_mac_secret_size(config, peer->role), 0);
+  dtls_debug_dump("  server_MAC_secret",
+		  dtls_kb_server_mac_secret(config, peer->role),
+		  dtls_kb_mac_secret_size(config, peer->role));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_write_key",
-			dtls_kb_client_write_key(config, peer->role),
-			dtls_kb_key_size(config, peer->role), 0);
+  dtls_debug_dump("  client_write_key",
+		  dtls_kb_client_write_key(config, peer->role),
+		  dtls_kb_key_size(config, peer->role));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_write_key",
-			dtls_kb_server_write_key(config, peer->role),
-			dtls_kb_key_size(config, peer->role), 0);
+  dtls_debug_dump("  server_write_key",
+		  dtls_kb_server_write_key(config, peer->role),
+		  dtls_kb_key_size(config, peer->role));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  client_IV",
-			dtls_kb_client_iv(config, peer->role),
-			dtls_kb_iv_size(config, peer->role), 0);
+  dtls_debug_dump("  client_IV",
+		  dtls_kb_client_iv(config, peer->role),
+		  dtls_kb_iv_size(config, peer->role));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "  server_IV",
-			dtls_kb_server_iv(config, peer->role),
-			dtls_kb_iv_size(config, peer->role), 0);
+  dtls_debug_dump("  server_IV",
+		  dtls_kb_server_iv(config, peer->role),
+		  dtls_kb_iv_size(config, peer->role));
 }
 
 static int
@@ -499,7 +499,7 @@ calculate_key_block(dtls_context_t *ctx,
     pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
 						pre_master_secret);
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "psk", psk->key, psk->key_length, 1);
+    dtls_debug_hexdump("psk", psk->key, psk->key_length);
 
     break;
   }
@@ -516,12 +516,9 @@ calculate_key_block(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "client_random", handshake->tmp.random.client,
-			DTLS_RANDOM_LENGTH, 0);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "server_random", handshake->tmp.random.server,
-			DTLS_RANDOM_LENGTH, 0);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "pre_master_secret", pre_master_secret,
-			pre_master_len, 0);
+  dtls_debug_dump("client_random", handshake->tmp.random.client, DTLS_RANDOM_LENGTH);
+  dtls_debug_dump("server_random", handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
+  dtls_debug_dump("pre_master_secret", pre_master_secret, pre_master_len);
 
   dtls_prf(pre_master_secret, pre_master_len,
 	   PRF_LABEL(master), PRF_LABEL_SIZE(master),
@@ -530,8 +527,7 @@ calculate_key_block(dtls_context_t *ctx,
 	   master_secret,
 	   DTLS_MASTER_SECRET_LENGTH);
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "master_secret", master_secret,
-			DTLS_MASTER_SECRET_LENGTH, 0);
+  dtls_debug_dump("master_secret", master_secret, DTLS_MASTER_SECRET_LENGTH);
 
   /* create key_block from master_secret
    * key_block = PRF(master_secret,
@@ -954,7 +950,7 @@ check_client_keyexchange(dtls_context_t *ctx,
 
 static inline void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "add MAC data", data, length, 0);
+  dtls_debug_dump("add MAC data", data, length);
   dtls_hash_update(&peer->hs_state.hs_hash, data, length);
 }
 
@@ -1030,8 +1026,8 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	   buf, digest_length,
 	   b.verify_data, sizeof(b.verify_data));
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "d:", data + DTLS_HS_LENGTH, sizeof(b.verify_data), 0);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "v:", b.verify_data, sizeof(b.verify_data), 0);
+  dtls_debug_dump("d:", data + DTLS_HS_LENGTH, sizeof(b.verify_data));
+  dtls_debug_dump("v:", b.verify_data, sizeof(b.verify_data));
   return memcmp(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data));
 }
 
@@ -1147,10 +1143,9 @@ dtls_prepare_record(dtls_peer_t *peer,
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce:", nonce, DTLS_CCM_BLOCKSIZE, 0);
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "key:",
-			  dtls_kb_local_write_key(security, peer->role),
-			  dtls_kb_key_size(security, peer->role), 0);
+    dtls_debug_dump("nonce:", nonce, DTLS_CCM_BLOCKSIZE);
+    dtls_debug_dump("key:", dtls_kb_local_write_key(security, peer->role),
+		    dtls_kb_key_size(security, peer->role));
     
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
      * 
@@ -1168,7 +1163,7 @@ dtls_prepare_record(dtls_peer_t *peer,
       return res;
 
     res += 8;			/* increment res by size of nonce_explicit */
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "message:", start, res, 0);
+    dtls_debug_dump("message:", start, res);
   }
 
   /* fix length of fragment in sendbuf */
@@ -1289,9 +1284,8 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   /* if (peer && MUST_HASH(peer, type, buf, buflen)) */
   /*   update_hs_hash(peer, buf, buflen); */
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "send header", sendbuf,
-			sizeof(dtls_record_header_t), 1);
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "send unencrypted", buf, buflen, 1);
+  dtls_debug_hexdump("send header", sendbuf, sizeof(dtls_record_header_t));
+  dtls_debug_hexdump("send unencrypted", buf, buflen);
 
   if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
@@ -1412,7 +1406,7 @@ dtls_verify_peer(dtls_context_t *ctx,
   if (err < 0)
     return err;
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "create cookie", mycookie, len, 0);
+  dtls_debug_dump("create cookie", mycookie, len);
 
   assert(len == DTLS_COOKIE_LENGTH);
     
@@ -1423,7 +1417,7 @@ dtls_verify_peer(dtls_context_t *ctx,
     return err;
   }
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "compare with cookie", cookie, len, 0);
+  dtls_debug_dump("compare with cookie", cookie, len);
 
   /* check if cookies match */
   if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
@@ -1432,7 +1426,7 @@ dtls_verify_peer(dtls_context_t *ctx,
   }
 
   if (len > 0) {
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "invalid cookie", cookie, len, 0);
+    dtls_debug_dump("invalid cookie", cookie, len);
   } else {
     dtls_debug("cookie len is 0!\n");
   }
@@ -2114,7 +2108,7 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 	   hash, length,
 	   p, DTLS_FIN_LENGTH);
 
-  dtls_dsrv_hexdump_log(LOG_DEBUG, "server finished MAC", p, DTLS_FIN_LENGTH, 0);
+  dtls_debug_dump("server finished MAC", p, DTLS_FIN_LENGTH);
 
   p += DTLS_FIN_LENGTH;
 
@@ -2782,11 +2776,10 @@ decrypt_verify(dtls_peer_t *peer,
       return 0;
     }
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "nonce", nonce, DTLS_CCM_BLOCKSIZE, 0);
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "key",
-			  dtls_kb_remote_write_key(security, peer->role),
-			  dtls_kb_key_size(security, peer->role), 0);
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "ciphertext", *cleartext, *clen, 0);
+    dtls_debug_dump("nonce", nonce, DTLS_CCM_BLOCKSIZE);
+    dtls_debug_dump("key", dtls_kb_remote_write_key(security, peer->role),
+		    dtls_kb_key_size(security, peer->role));
+    dtls_debug_dump("ciphertext", *cleartext, *clen);
 
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
      * 
@@ -2809,7 +2802,7 @@ decrypt_verify(dtls_peer_t *peer,
 #endif
       *clen = len;
     }
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "cleartext", *cleartext, *clen, 0);
+    dtls_debug_dump("cleartext", *cleartext, *clen);
   }
 
   return ok;
@@ -3375,9 +3368,8 @@ dtls_handle_message(dtls_context_t *ctx,
       role = DTLS_SERVER;
     }
 
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive header", msg,
-			  sizeof(dtls_record_header_t), 1);
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "receive unencrypted", data, data_length, 1);
+    dtls_debug_hexdump("receive header", msg, sizeof(dtls_record_header_t));
+    dtls_debug_hexdump("receive unencrypted", data, data_length);
 
     /* Handle received record according to the first byte of the
      * message, i.e. the subprotocol. We currently do not support
@@ -3586,10 +3578,9 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 			      (uint8 **)&(node->data), &(node->length), 1,
 			      sendbuf, &len) > 0) {
 
-	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit header", sendbuf,
-			      sizeof(dtls_record_header_t), 1);
-	dtls_dsrv_hexdump_log(LOG_DEBUG, "retransmit unencrypted", node->data,
-			      node->length, 1);
+	dtls_debug_hexdump("retransmit header", sendbuf,
+			   sizeof(dtls_record_header_t));
+	dtls_debug_hexdump("retransmit unencrypted", node->data, node->length);
 
 	(void)CALL(context, write, &node->peer->session, sendbuf, len);
       }
