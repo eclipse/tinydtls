@@ -21,7 +21,6 @@
 #include "dtls.h" 
 
 #define DEFAULT_PORT 20220
-#define PRINTF(...) printf(__VA_ARGS__)
 
 static char buf[200];
 static size_t len = 0;
