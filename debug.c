@@ -44,7 +44,7 @@
 #include "global.h"
 #include "debug.h"
 
-static int maxlog = LOG_WARN;	/* default maximum log level */
+static int maxlog = DTLS_LOG_WARN;	/* default maximum log level */
 
 log_t 
 dtls_get_log_level() {
@@ -205,12 +205,12 @@ dsrv_log(log_t level, char *format, ...) {
   if (maxlog < level)
     return;
 
-  log_fd = level <= LOG_CRIT ? stderr : stdout;
+  log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
 
   if (print_timestamp(timebuf,sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level >= 0 && level <= LOG_DEBUG) 
+  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
     fprintf(log_fd, "%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -230,7 +230,7 @@ dsrv_log(log_t level, char *format, ...) {
   if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
     PRINTF("%s ", timebuf);
 
-  if (level >= 0 && level <= LOG_DEBUG) 
+  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
     PRINTF("%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -287,12 +287,12 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (maxlog < level)
     return;
 
-  log_fd = level <= LOG_CRIT ? stderr : stdout;
+  log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
 
   if (print_timestamp(timebuf, sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level >= 0 && level <= LOG_DEBUG) 
+  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
     fprintf(log_fd, "%s ", loglevels[level]);
 
   if (extend) {
@@ -333,7 +333,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
     PRINTF("%s ", timebuf);
 
-  if (level >= 0 && level <= LOG_DEBUG) 
+  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
     PRINTF("%s ", loglevels[level]);
 
   if (extend) {

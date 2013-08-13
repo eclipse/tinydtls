@@ -219,7 +219,7 @@ static dtls_handler_t cb = {
 int 
 main(int argc, char **argv) {
   dtls_context_t *the_context = NULL;
-  log_t log_level = LOG_WARN;
+  log_t log_level = DTLS_LOG_WARN;
   fd_set rfds, wfds;
   struct timeval timeout;
   int fd, opt, result;
