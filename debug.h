@@ -103,8 +103,12 @@ dtls_dsrv_log_addr(log_t level, const char *name, const struct __session_t *addr
 #endif /* NDEBUG */
 
 /* A set of convenience macros for common log levels. */
-#define info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
-#define warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
-#define debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
+#define dtls_emerg(...) dsrv_log(LOG_EMERG, __VA_ARGS__)
+#define dtls_alert(...) dsrv_log(LOG_ALERT, __VA_ARGS__)
+#define dtls_crit(...) dsrv_log(LOG_CRIT, __VA_ARGS__)
+#define dtls_warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
+#define dtls_notice(...) dsrv_log(LOG_NOTICE, __VA_ARGS__)
+#define dtls_info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
+#define dtls_debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
 
 #endif /* _DTLS_DEBUG_H_ */

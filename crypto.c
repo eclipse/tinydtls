@@ -411,7 +411,7 @@ dtls_cipher_new(dtls_cipher_t cipher,
 
   cipher_context = dtls_cipher_context_new();
   if (!cipher_context) {
-    warn("cannot allocate cipher_context\r\n");
+    dtls_warn("cannot allocate cipher_context\r\n");
     return NULL;
   }
 
@@ -422,13 +422,13 @@ dtls_cipher_new(dtls_cipher_t cipher,
     
     if (rijndael_set_key_enc_only(&ccm_ctx->ctx, key, 8 * keylen) < 0) {
       /* cleanup everything in case the key has the wrong size */
-      warn("cannot set rijndael key\n");
+      dtls_warn("cannot set rijndael key\n");
       goto error;
     }
     break;
   }
   default:
-    warn("unknown cipher %04x\n", cipher);
+    dtls_warn("unknown cipher %04x\n", cipher);
     goto error;
   }
   

@@ -212,7 +212,7 @@ PROCESS_THREAD(udp_server_process, ev, data)
   serial_line_init();
 
   if (!dtls_context) {
-    dsrv_log(LOG_EMERG, "cannot create context\n");
+    dtls_emerg("cannot create context\n");
     PROCESS_EXIT();
   }
 

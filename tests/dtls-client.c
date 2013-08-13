@@ -261,7 +261,7 @@ main(int argc, char **argv) {
       output_file.s = (unsigned char *)malloc(output_file.length + 1);
       
       if (!output_file.s) {
-	dsrv_log(LOG_CRIT, "cannot set output file: insufficient memory\n");
+	dtls_crit("cannot set output file: insufficient memory\n");
 	exit(-1);
       } else {
 	/* copy filename including trailing zero */
@@ -288,7 +288,7 @@ main(int argc, char **argv) {
   /* resolve destination address where server should be sent */
   res = resolve_address(argv[optind++], &dst.addr.sa);
   if (res < 0) {
-    dsrv_log(LOG_EMERG, "failed to resolve address\n");
+    dtls_emerg("failed to resolve address\n");
     exit(-1);
   }
   dst.size = res;
@@ -302,17 +302,17 @@ main(int argc, char **argv) {
   fd = socket(dst.addr.sa.sa_family, SOCK_DGRAM, 0);
 
   if (fd < 0) {
-    dsrv_log(LOG_ALERT, "socket: %s\n", strerror(errno));
+    dtls_alert("socket: %s\n", strerror(errno));
     return 0;
   }
 
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on) ) < 0) {
-    dsrv_log(LOG_ALERT, "setsockopt SO_REUSEADDR: %s\n", strerror(errno));
+    dtls_alert("setsockopt SO_REUSEADDR: %s\n", strerror(errno));
   }
 #if 0
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    dsrv_log(LOG_ALERT, "fcntl: %s\n", strerror(errno));
+    dtls_alert("fcntl: %s\n", strerror(errno));
     goto error;
   }
 #endif
@@ -322,17 +322,17 @@ main(int argc, char **argv) {
 #else /* IPV6_RECVPKTINFO */
   if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
   }
 
   if (signal(SIGINT, dtls_handle_signal) == SIG_ERR) {
-    dsrv_log(LOG_ALERT, "An error occurred while setting a signal handler.\n");
+    dtls_alert("An error occurred while setting a signal handler.\n");
     return EXIT_FAILURE;
   }
 
   dtls_context = dtls_new_context(&fd);
   if (!dtls_context) {
-    dsrv_log(LOG_EMERG, "cannot create context\n");
+    dtls_emerg("cannot create context\n");
     exit(-1);
   }
 

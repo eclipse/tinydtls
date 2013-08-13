@@ -677,7 +677,7 @@ PROCESS_THREAD(server_process, ev, data)
 
   dtls_context = dtls_new_context(server_conn);
   if (!dtls_context) {
-    dsrv_log(LOG_EMERG, "cannot create context\n");
+    dtls_emerg("cannot create context\n");
     PROCESS_EXIT();
   }
 

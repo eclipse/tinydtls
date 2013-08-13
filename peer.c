@@ -82,7 +82,7 @@ dtls_new_peer(const session_t *session) {
     peer->security_params.compression = TLS_COMPRESSION_NULL;
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
-    debug("DTLSv12: initialize HASH_SHA256\n");
+    dtls_debug("DTLSv12: initialize HASH_SHA256\n");
     /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
     /* FIXME: we use the default SHA256 here, might need to support other 
               hash functions as well */

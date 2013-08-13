@@ -142,7 +142,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
-    dsrv_log(LOG_DEBUG, "got %d bytes from port %d\n", len, 
+    dtls_debug("got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
   }
 
@@ -263,17 +263,17 @@ main(int argc, char **argv) {
   fd = socket(listen_addr.sin6_family, SOCK_DGRAM, 0);
 
   if (fd < 0) {
-    dsrv_log(LOG_ALERT, "socket: %s\n", strerror(errno));
+    dtls_alert("socket: %s\n", strerror(errno));
     return 0;
   }
 
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on) ) < 0) {
-    dsrv_log(LOG_ALERT, "setsockopt SO_REUSEADDR: %s\n", strerror(errno));
+    dtls_alert("setsockopt SO_REUSEADDR: %s\n", strerror(errno));
   }
 #if 0
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    dsrv_log(LOG_ALERT, "fcntl: %s\n", strerror(errno));
+    dtls_alert("fcntl: %s\n", strerror(errno));
     goto error;
   }
 #endif
@@ -283,11 +283,11 @@ main(int argc, char **argv) {
 #else /* IPV6_RECVPKTINFO */
   if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dsrv_log(LOG_ALERT, "setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
   }
 
   if (bind(fd, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0) {
-    dsrv_log(LOG_ALERT, "bind: %s\n", strerror(errno));
+    dtls_alert("bind: %s\n", strerror(errno));
     goto error;
   }
 

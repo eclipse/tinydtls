@@ -97,7 +97,7 @@ netq_node_new() {
 
 #ifndef NDEBUG
   if (!node)
-    dsrv_log(LOG_WARN, "netq_node_new: malloc\n");
+    dtls_warn("netq_node_new: malloc\n");
 #endif
 
   if (node)
