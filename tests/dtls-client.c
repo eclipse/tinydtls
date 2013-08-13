@@ -148,7 +148,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
-    dtls_dsrv_log_addr(LOG_DEBUG, "peer", &session);
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "peer", &session);
     dtls_debug_dump("bytes from peer", buf, len);
   }
 
@@ -241,7 +241,7 @@ main(int argc, char **argv) {
   struct timeval timeout;
   unsigned short port = DEFAULT_PORT;
   char port_str[NI_MAXSERV] = "0";
-  log_t log_level = LOG_WARN;
+  log_t log_level = DTLS_LOG_WARN;
   int fd, result;
   int on = 1;
   int opt, res;

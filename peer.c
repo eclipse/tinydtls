@@ -76,7 +76,7 @@ dtls_new_peer(const session_t *session) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
-    dtls_dsrv_log_addr(LOG_DEBUG, "dtls_new_peer", session);
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
     peer->security_params.cipher = TLS_NULL_WITH_NULL_NULL;
     peer->security_params.compression = TLS_COMPRESSION_NULL;

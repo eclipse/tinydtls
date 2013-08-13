@@ -3330,7 +3330,7 @@ dtls_handle_message(dtls_context_t *ctx,
 
   if (!peer) {
     dtls_debug("dtls_handle_message: PEER NOT FOUND\n");
-    dtls_dsrv_log_addr(LOG_DEBUG, "peer addr", session);
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "peer addr", session);
   } else {
     dtls_debug("dtls_handle_message: FOUND PEER\n");
   }

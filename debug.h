@@ -42,8 +42,8 @@
 struct __session_t;
 
 /** Pre-defined log levels akin to what is used in \b syslog. */
-typedef enum { LOG_EMERG=0, LOG_ALERT, LOG_CRIT, LOG_WARN, 
-       LOG_NOTICE, LOG_INFO, LOG_DEBUG
+typedef enum { DTLS_LOG_EMERG=0, DTLS_LOG_ALERT, DTLS_LOG_CRIT, DTLS_LOG_WARN, 
+       DTLS_LOG_NOTICE, DTLS_LOG_INFO, DTLS_LOG_DEBUG
 } log_t;
 
 #ifndef NDEBUG
@@ -77,7 +77,7 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 
 static inline log_t dtls_get_log_level()
 {
-  return LOG_EMERG;
+  return DTLS_LOG_EMERG;
 }
 
 static inline void dtls_set_log_level(log_t level)
@@ -103,14 +103,14 @@ dtls_dsrv_log_addr(log_t level, const char *name, const struct __session_t *addr
 #endif /* NDEBUG */
 
 /* A set of convenience macros for common log levels. */
-#define dtls_emerg(...) dsrv_log(LOG_EMERG, __VA_ARGS__)
-#define dtls_alert(...) dsrv_log(LOG_ALERT, __VA_ARGS__)
-#define dtls_crit(...) dsrv_log(LOG_CRIT, __VA_ARGS__)
-#define dtls_warn(...) dsrv_log(LOG_WARN, __VA_ARGS__)
-#define dtls_notice(...) dsrv_log(LOG_NOTICE, __VA_ARGS__)
-#define dtls_info(...) dsrv_log(LOG_INFO, __VA_ARGS__)
-#define dtls_debug(...) dsrv_log(LOG_DEBUG, __VA_ARGS__)
-#define dtls_debug_hexdump(name, buf, length) dtls_dsrv_hexdump_log(LOG_DEBUG, name, buf, length, 1)
-#define dtls_debug_dump(name, buf, length) dtls_dsrv_hexdump_log(LOG_DEBUG, name, buf, length, 0)
+#define dtls_emerg(...) dsrv_log(DTLS_LOG_EMERG, __VA_ARGS__)
+#define dtls_alert(...) dsrv_log(DTLS_LOG_ALERT, __VA_ARGS__)
+#define dtls_crit(...) dsrv_log(DTLS_LOG_CRIT, __VA_ARGS__)
+#define dtls_warn(...) dsrv_log(DTLS_LOG_WARN, __VA_ARGS__)
+#define dtls_notice(...) dsrv_log(DTLS_LOG_NOTICE, __VA_ARGS__)
+#define dtls_info(...) dsrv_log(DTLS_LOG_INFO, __VA_ARGS__)
+#define dtls_debug(...) dsrv_log(DTLS_LOG_DEBUG, __VA_ARGS__)
+#define dtls_debug_hexdump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 1)
+#define dtls_debug_dump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 0)
 
 #endif /* _DTLS_DEBUG_H_ */
