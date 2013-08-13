@@ -149,7 +149,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     return -1;
   } else {
     dtls_dsrv_log_addr(LOG_DEBUG, "peer", &session);
-    dtls_dsrv_hexdump_log(LOG_DEBUG, "bytes from peer", buf, len, 0);
+    dtls_debug_dump("bytes from peer", buf, len);
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
