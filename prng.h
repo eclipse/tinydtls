@@ -30,16 +30,25 @@
  * a better PRNG on your specific platform.
  */
 static inline int
-dtls_prng_impl(unsigned char *buf, size_t len) {
+dtls_prng(unsigned char *buf, size_t len) {
   while (len--)
     *buf++ = rand() & 0xFF;
   return 1;
+}
+
+static inline void
+dtls_prng_init(unsigned short seed) {
+	srand(seed);
 }
 #else /* WITH_CONTIKI */
 #include <string.h>
 
 #ifdef HAVE_PRNG
-extern int contiki_prng_impl(unsigned char *buf, size_t len);
+static inline int
+dtls_prng(unsigned char *buf, size_t len)
+{
+	return contiki_prng_impl(buf, len);
+}
 #else
 /**
  * Fills \p buf with \p len random bytes. This is the default
@@ -47,7 +56,7 @@ extern int contiki_prng_impl(unsigned char *buf, size_t len);
  * a better PRNG on your specific platform.
  */
 static inline int
-contiki_prng_impl(unsigned char *buf, size_t len) {
+dtls_prng(unsigned char *buf, size_t len) {
   unsigned short v = random_rand();
   while (len > sizeof(v)) {
     memcpy(buf, &v, sizeof(v));
@@ -61,28 +70,11 @@ contiki_prng_impl(unsigned char *buf, size_t len) {
 }
 #endif /* HAVE_PRNG */
 
-#define prng(Buf,Length) contiki_prng_impl((Buf), (Length))
-#define prng_init(Value) random_init((unsigned short)(Value))
+static inline void
+dtls_prng_init(unsigned short seed) {
+	random_init(seed);
+}
 #endif /* WITH_CONTIKI */
-
-#ifndef prng
-/** 
- * Fills \p Buf with \p Length bytes of random data. 
- * 
- * @hideinitializer
- */
-#define prng(Buf,Length) dtls_prng_impl((Buf), (Length))
-#endif
-
-#ifndef prng_init
-/** 
- * Called to set the PRNG seed. You may want to re-define this to
- * allow for a better PRNG.
- *
- * @hideinitializer
- */
-#define prng_init(Value) srand((unsigned long)(Value))
-#endif
 
 /** @} */
 

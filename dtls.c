@@ -41,6 +41,7 @@
 #include "numeric.h"
 #include "netq.h"
 #include "dtls.h"
+#include "prng.h"
 
 #ifdef WITH_SHA256
 #  include "sha2/sha2.h"
@@ -1594,7 +1595,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
    * followed by 28 bytes of generate random data. */
   dtls_ticks(&now);
   dtls_int_to_uint32(handshake->tmp.random.server, now / CLOCK_SECOND);
-  prng(handshake->tmp.random.server + 4, 28);
+  dtls_prng(handshake->tmp.random.server + 4, 28);
 
   memcpy(p, handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
   p += DTLS_RANDOM_LENGTH;
@@ -2158,7 +2159,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
      * followed by 28 bytes of generate random data. */
     dtls_ticks(&now);
     dtls_int_to_uint32(handshake->tmp.random.client, now / CLOCK_SECOND);
-    prng(handshake->tmp.random.client + sizeof(uint32),
+    dtls_prng(handshake->tmp.random.client + sizeof(uint32),
          DTLS_RANDOM_LENGTH - sizeof(uint32));
   }
   /* we must use the same Client Random as for the previous request */
@@ -3452,7 +3453,7 @@ dtls_new_context(void *app_data) {
   dtls_ticks(&now);
 #ifdef WITH_CONTIKI
   /* FIXME: need something better to init PRNG here */
-  prng_init(now);
+  dtls_prng_init(now);
 #else /* WITH_CONTIKI */
   if (!urandom) {
     dsrv_log(LOG_EMERG, "cannot initialize PRNG\n");
@@ -3465,7 +3466,7 @@ dtls_new_context(void *app_data) {
   }
 
   fclose(urandom);
-  prng_init((unsigned long)*buf);
+  dtls_prng_init((unsigned long)*buf);
 #endif /* WITH_CONTIKI */
 
   c = &the_dtls_context;
@@ -3486,7 +3487,7 @@ dtls_new_context(void *app_data) {
   PROCESS_CONTEXT_END(&coap_retransmit_process);
 #endif /* WITH_CONTIKI */
 
-  if (prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
+  if (dtls_prng(c->cookie_secret, DTLS_COOKIE_SECRET_LENGTH))
     c->cookie_secret_age = now;
   else 
     goto error;
