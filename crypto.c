@@ -36,6 +36,7 @@
 #include "crypto.h"
 #include "ccm.h"
 #include "ecc/ecc.h"
+#include "prng.h"
 
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
@@ -315,7 +316,7 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
   uint32_t pub_y[8];
 
   do {
-    prng((unsigned char *)priv, key_size);
+    dtls_prng((unsigned char *)priv, key_size);
   } while (!ecc_is_valid_key(priv));
 
   ecc_gen_pub_key(priv, pub_x, pub_y);
@@ -338,7 +339,7 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
   dtls_ec_key_to_uint32(priv_key, key_size, priv);
   dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
   do {
-    prng((unsigned char *)rand, key_size);
+    dtls_prng((unsigned char *)rand, key_size);
     ret = ecc_ecdsa_sign(priv, hash, rand, point_r, point_s);
   } while (ret);
 }

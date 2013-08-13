@@ -33,7 +33,6 @@
 
 #include "aes/rijndael.h"
 
-#include "prng.h"
 #include "global.h"
 #include "numeric.h"
 #include "hmac.h"
