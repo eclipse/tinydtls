@@ -1014,7 +1014,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   if (peer->role == DTLS_CLIENT) {
     label = PRF_LABEL(server);
     label_size = PRF_LABEL_SIZE(server);
-  } else { /* client */
+  } else { /* server */
     label = PRF_LABEL(client);
     label_size = PRF_LABEL_SIZE(client);
   }
@@ -3526,7 +3526,7 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
     return 0;
   }
     
-  /* set peer role to server: */
+  /* set local peer role to client, remote is server */
   peer->role = DTLS_CLIENT;
 
   dtls_add_peer(ctx, peer);
