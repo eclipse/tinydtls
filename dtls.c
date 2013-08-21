@@ -405,10 +405,10 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
 
   if (peer) {
     /* increment handshake message sequence counter by 1 */
-    inc_uint(uint16, peer->hs_state.mseq);
+    peer->hs_state.mseq++;
   
     /* and copy the result to buf */
-    memcpy(buf, &peer->hs_state.mseq, sizeof(uint16));
+    dtls_int_to_uint16(buf, peer->hs_state.mseq);
   } else {
     memset(buf, 0, sizeof(uint16));    
   }
