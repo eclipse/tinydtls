@@ -36,16 +36,6 @@
 #define max(A,B) ((A) < (B) ? (B) : (A))
 #endif
 
-/**
- * Increments given \p Var of type \p Type by \c 1.
- *
- * \hideinitializer
- */
-#define inc_uint(Type,Var) {			\
-    int i = sizeof(Type);			\
-    while (i && !++((Var)[--i]));		\
-  }
-
 /* this one is for consistency... */
 static inline int dtls_int_to_uint8(unsigned char *field, uint8_t value)
 {
