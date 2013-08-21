@@ -38,8 +38,12 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
-  dtls_cipher_free(peer->security_params.read_cipher);
-  dtls_cipher_free(peer->security_params.write_cipher);
+  int i;
+
+  for (i = 0; i < 2 ; i++) {
+    dtls_cipher_free(peer->security_params[i].read_cipher);
+    dtls_cipher_free(peer->security_params[i].write_cipher);
+  }
 
   free(peer);
 }
@@ -60,8 +64,12 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
-  dtls_cipher_free(peer->security_params.read_cipher);
-  dtls_cipher_free(peer->security_params.write_cipher);
+  int i;
+
+  for (i = 0; i < 2 ; i++) {
+    dtls_cipher_free(peer->security_params[i].read_cipher);
+    dtls_cipher_free(peer->security_params[i].write_cipher);
+  }
 
   memb_free(&peer_storage, peer);
 }
@@ -70,6 +78,7 @@ dtls_free_peer(dtls_peer_t *peer) {
 dtls_peer_t *
 dtls_new_peer(const session_t *session) {
   dtls_peer_t *peer;
+  int i;
 
   peer = dtls_malloc_peer();
   if (peer) {
@@ -78,8 +87,10 @@ dtls_new_peer(const session_t *session) {
 
     dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "dtls_new_peer", session);
     /* initially allow the NULL cipher */
-    peer->security_params.cipher = TLS_NULL_WITH_NULL_NULL;
-    peer->security_params.compression = TLS_COMPRESSION_NULL;
+    for (i = 0; i < 2 ; i++) {
+      peer->security_params[i].cipher = TLS_NULL_WITH_NULL_NULL;
+      peer->security_params[i].compression = TLS_COMPRESSION_NULL;
+    }
 
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
     dtls_debug("DTLSv12: initialize HASH_SHA256\n");

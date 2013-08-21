@@ -806,7 +806,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   int i, j;
   int ok;
   dtls_handshake_parameters_t *config = &peer->handshake_params;
-  dtls_security_parameters_t *security = &peer->security_params;
+  dtls_security_parameters_t *security = dtls_security_params(peer);
 
   assert(config);
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
@@ -1074,7 +1074,7 @@ dtls_prepare_record(dtls_peer_t *peer,
   uint8 *p, *start;
   int res;
   int i;
-  dtls_security_parameters_t *security = &peer->security_params;
+  dtls_security_parameters_t *security = (peer) ? dtls_security_params(peer) : NULL;
   
   if (*rlen < DTLS_RH_LENGTH) {
     dtls_alert("The sendbuf (%i bytes) is too small\n", *rlen);
@@ -1084,7 +1084,7 @@ dtls_prepare_record(dtls_peer_t *peer,
   p = dtls_set_record_header(type, peer, sendbuf);
   start = p;
 
-  if (!peer || security->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (!security || security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite */
 
     res = 0;
@@ -2680,7 +2680,7 @@ check_server_hellodone(dtls_context_t *ctx,
   int res;
   const dtls_ecdsa_key_t *ecdsa_key;
   dtls_handshake_parameters_t *handshake = &peer->handshake_params;
-  dtls_security_parameters_t *security = &peer->security_params;
+  dtls_security_parameters_t *security = dtls_security_params_other(peer);
 
   /* calculate master key, send CCS */
 
@@ -2720,19 +2720,19 @@ check_server_hellodone(dtls_context_t *ctx,
     }
   }
 
-  /* and switch cipher suite */
-  res = dtls_send_ccs(ctx, peer);
-  if (res < 0) {
-    dtls_debug("cannot send CCS message\n");
-    return res;
-  }
-
   res = calculate_key_block(ctx, handshake, security,
 			    &peer->session, peer->role);
   if (res < 0) {
     return res;
   }
 
+  res = dtls_send_ccs(ctx, peer);
+  if (res < 0) {
+    dtls_debug("cannot send CCS message\n");
+    return res;
+  }
+
+  /* and switch cipher suite */
   peer->epoch++;
   peer->rseq = 0;
 
@@ -2746,7 +2746,8 @@ decrypt_verify(dtls_peer_t *peer,
 	       uint8 *packet, size_t length,
 	       uint8 **cleartext, size_t *clen) {
   int ok = 0;
-  dtls_security_parameters_t *security = &peer->security_params;
+  dtls_record_header_t *header = DTLS_RECORD_HEADER(packet);
+  dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));;
   
   *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
   *clen = length - sizeof(dtls_record_header_t);
@@ -3181,7 +3182,8 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   int err;
   dtls_handshake_parameters_t *handshake = &peer->handshake_params;
-  dtls_security_parameters_t *security = &peer->security_params;
+  dtls_security_parameters_t *security = dtls_security_params_other(peer);
+  dtls_record_header_t *header = DTLS_RECORD_HEADER(record_header);
 
   /* A CCS message is handled after a KeyExchange message was
    * received from the client. When security parameters have been
@@ -3197,21 +3199,24 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   if (data_length < 1 || data[0] != 1)
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
-  /* send change cipher spec message and switch to new configuration */
-  err = dtls_send_ccs(ctx, peer);
-  if (err < 0) {
-    dtls_warn("cannot send CCS message\n");
-    return err;
-  }
+  /* Just change the cipher when we are on the same epoch */
+  if (dtls_get_epoch(header) == peer->epoch) {
+    err = calculate_key_block(ctx, handshake, security,
+			      &peer->session, peer->role);
+    if (err < 0) {
+      return err;
+    }
 
-  err = calculate_key_block(ctx, handshake, security,
-			    &peer->session, peer->role);
-  if (err < 0) {
-    return err;
+    /* send change cipher spec message and switch to new configuration */
+    err = dtls_send_ccs(ctx, peer);
+    if (err < 0) {
+      dtls_warn("cannot send CCS message\n");
+      return err;
+    }
+
+    peer->epoch++;
+    peer->rseq = 0;
   }
-  
-  peer->epoch++;
-  peer->rseq = 0;
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
