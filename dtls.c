@@ -3575,6 +3575,9 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
   if (node->retransmit_cnt < DTLS_DEFAULT_MAX_RETRANSMIT) {
       unsigned char sendbuf[DTLS_MAX_BUF];
       size_t len = sizeof(sendbuf);
+      int err;
+      unsigned char *data = node->data;
+      size_t length = node->length;
 
       node->retransmit_cnt++;
       node->t += (node->timeout << node->retransmit_cnt);
@@ -3582,16 +3585,17 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       
       dtls_debug("** retransmit packet\n");
       
-      if (dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, 
-			      (uint8 **)&(node->data), &(node->length), 1,
-			      sendbuf, &len) > 0) {
-
-	dtls_debug_hexdump("retransmit header", sendbuf,
-			   sizeof(dtls_record_header_t));
-	dtls_debug_hexdump("retransmit unencrypted", node->data, node->length);
-
-	(void)CALL(context, write, &node->peer->session, sendbuf, len);
+      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, &data, &length,
+				1, sendbuf, &len);
+      if (err < 0) {
+	dtls_warn("can not retransmit package, err: %i\n", err);
+	return;
       }
+      dtls_debug_hexdump("retransmit header", sendbuf,
+			 sizeof(dtls_record_header_t));
+      dtls_debug_hexdump("retransmit unencrypted", node->data, node->length);
+
+      (void)CALL(context, write, &node->peer->session, sendbuf, len);
       return;
   }
 
