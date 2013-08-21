@@ -151,6 +151,11 @@ dtls_init() {
    ? (Context)->h->which((Context), ##__VA_ARGS__)			\
    : -1)
 
+static int
+dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
+		unsigned char type, uint8 *buf_array[], size_t buf_len_array[],
+		size_t buf_array_len);
+
 /** 
  * Sends the fragment of length \p buflen given in \p buf to the
  * specified \p peer. The data will be MAC-protected and encrypted
@@ -165,8 +170,11 @@ dtls_init() {
  * \param buflen The actual length of \p buf.
  * \return Less than zero on error, the number of bytes written otherwise.
  */
-static int dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
-	      uint8 *buf, size_t buflen);
+static int
+dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
+	  uint8 *buf, size_t buflen) {
+  return dtls_send_multi(ctx, peer, &peer->session, type, &buf, &buflen, 1);
+}
 
 /**
  * Stops ongoing retransmissions of handshake messages for @p peer.
@@ -1185,8 +1193,6 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   uint8 *data_array[2];
   size_t data_len_array[2];
   int i = 0;
-  uint8 sendbuf[DTLS_MAX_BUF];
-  size_t len = sizeof(sendbuf);
 
   dtls_set_handshake_header(header_type, (add_hash) ? peer : NULL, data_length, 0,
 			    data_length, buf);
@@ -1206,13 +1212,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     data_len_array[i] = data_length;
     i++;
   }
-  i = dtls_prepare_record(peer, DTLS_CT_HANDSHAKE, data_array, data_len_array,
-			  i, sendbuf, &len);
-  if (i < 0) {
-    return i;
-  }
-
-  return CALL(ctx, write, session, sendbuf, len);
+  return dtls_send_multi(ctx, peer, session, DTLS_CT_HANDSHAKE, data_array, data_len_array, i);
 }
 
 static int
@@ -1262,9 +1262,9 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
  *   bytes that have been sent otherwise.
  */
 static int
-dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
+dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 	  unsigned char type,
-	  uint8 *buf, size_t buflen) {
+	  uint8 *buf_array[], size_t buf_len_array[], size_t buf_array_len) {
   
   /* We cannot use ctx->sendbuf here as it is reserved for collecting
    * the input for this function, i.e. buf == ctx->sendbuf.
@@ -1275,8 +1275,10 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   unsigned char sendbuf[DTLS_MAX_BUF];
   size_t len = sizeof(sendbuf);
   int res;
+  int i;
+  size_t overall_len = 0;
 
-  res = dtls_prepare_record(peer, type, &buf, &buflen, 1, sendbuf, &len);
+  res = dtls_prepare_record(peer, type, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
 
   if (res < 0)
     return res;
@@ -1285,9 +1287,12 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
   /*   update_hs_hash(peer, buf, buflen); */
 
   dtls_debug_hexdump("send header", sendbuf, sizeof(dtls_record_header_t));
-  dtls_debug_hexdump("send unencrypted", buf, buflen);
+  for (i = 0; i < buf_array_len; i++) {
+    dtls_debug_hexdump("send unencrypted", buf_array[i], buf_len_array[i]);
+    overall_len += buf_len_array[i];
+  }
 
-  if (type == DTLS_CT_HANDSHAKE && buf[0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
+  if (type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
     netq_t *n = netq_node_new();
     if (n) {
@@ -1297,8 +1302,11 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
       n->retransmit_cnt = 0;
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
-      n->length = buflen;
-      memcpy(n->data, buf, buflen);
+      n->length = 0;
+      for (i = 0; i < buf_array_len; i++) {
+        memcpy(n->data + n->length, buf_array[i], buf_len_array[i]);
+        n->length += buf_len_array[i];
+      }
 
       if (!netq_insert_node((netq_t **)ctx->sendqueue, n)) {
 	dtls_warn("cannot add packet to retransmit buffer\n");
@@ -1319,12 +1327,12 @@ dtls_send(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* FIXME: copy to peer's sendqueue (after fragmentation if
    * necessary) and initialize retransmit timer */
-  res = CALL(ctx, write, &peer->session, sendbuf, len);
+  res = CALL(ctx, write, session, sendbuf, len);
 
   /* Guess number of bytes application data actually sent:
    * dtls_prepare_record() tells us in len the number of bytes to
    * send, res will contain the bytes actually sent. */
-  return res <= 0 ? res : buflen - (len - res);
+  return res <= 0 ? res : overall_len - (len - res);
 }
 
 static inline int
