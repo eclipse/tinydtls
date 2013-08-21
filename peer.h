@@ -62,9 +62,24 @@ typedef struct dtls_peer_t {
 
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
-  dtls_security_parameters_t security_params;
+  dtls_security_parameters_t security_params[2];
   dtls_handshake_parameters_t handshake_params;
 } dtls_peer_t;
+
+static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)
+{
+  return &peer->security_params[epoch % 2];
+}
+
+static inline dtls_security_parameters_t *dtls_security_params(dtls_peer_t *peer)
+{
+  return dtls_security_params_epoch(peer, peer->epoch);
+}
+
+static inline dtls_security_parameters_t *dtls_security_params_other(dtls_peer_t *peer)
+{
+  return dtls_security_params_epoch(peer, peer->epoch + 1);
+}
 
 void peer_init();
 
