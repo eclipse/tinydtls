@@ -371,11 +371,11 @@ dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
     dtls_int_to_uint16(buf, peer->epoch);
     buf += sizeof(uint16);
 
-    memcpy(buf, &peer->rseq, sizeof(uint48));
+    dtls_int_to_uint48(buf, peer->rseq);
     buf += sizeof(uint48);
 
     /* increment record sequence counter by 1 */
-    inc_uint(uint48, peer->rseq);
+    peer->rseq++;
   } else {
     memset(buf, 0, sizeof(uint16) + sizeof(uint48));
     buf += sizeof(uint16) + sizeof(uint48);
@@ -2734,7 +2734,7 @@ check_server_hellodone(dtls_context_t *ctx,
   }
 
   peer->epoch++;
-  memset(peer->rseq, 0, sizeof(peer->rseq));
+  peer->rseq = 0;
 
   dtls_debug_keyblock(security);
 
@@ -3115,7 +3115,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       /* Initialize record sequence number to 1 for new peers. The first
        * record with sequence number 0 is a stateless Hello Verify Request.
        */
-      peer->rseq[5] = 1;
+      peer->rseq = 1;
       dtls_add_peer(ctx, peer);
     }
 
@@ -3219,7 +3219,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   }
   
   peer->epoch++;
-  memset(peer->rseq, 0, sizeof(peer->rseq));
+  peer->rseq = 0;
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
