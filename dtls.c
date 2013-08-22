@@ -1075,6 +1075,11 @@ dtls_prepare_record(dtls_peer_t *peer,
   int i;
   dtls_security_parameters_t *security = &peer->security_params;
   
+  if (*rlen < DTLS_RH_LENGTH) {
+    dtls_alert("The sendbuf (%i bytes) is too small\n", *rlen);
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+  }
+
   p = dtls_set_record_header(type, peer, sendbuf);
   start = p;
 
@@ -1084,7 +1089,7 @@ dtls_prepare_record(dtls_peer_t *peer,
     res = 0;
     for (i = 0; i < data_array_len; i++) {
       /* check the minimum that we need for packets that are not encrypted */
-      if (*rlen < (p - start) + data_len_array[i]) {
+      if (*rlen < res + DTLS_RH_LENGTH + data_len_array[i]) {
         dtls_debug("dtls_prepare_record: send buffer too small\n");
         return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
       }
@@ -1132,7 +1137,7 @@ dtls_prepare_record(dtls_peer_t *peer,
 
     for (i = 0; i < data_array_len; i++) {
       /* check the minimum that we need for packets that are not encrypted */
-      if (*rlen < res + data_len_array[i]) {
+      if (*rlen < res + DTLS_RH_LENGTH + data_len_array[i]) {
         dtls_debug("dtls_prepare_record: send buffer too small\n");
         return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
       }
