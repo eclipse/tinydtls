@@ -152,7 +152,7 @@ dtls_init() {
    : -1)
 
 static int
-dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
+dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session, uint16_t epoch,
 		unsigned char type, uint8 *buf_array[], size_t buf_len_array[],
 		size_t buf_array_len);
 
@@ -173,7 +173,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 static int
 dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	  uint8 *buf, size_t buflen) {
-  return dtls_send_multi(ctx, peer, &peer->session, type, &buf, &buflen, 1);
+  return dtls_send_multi(ctx, peer, &peer->session, peer->epoch, type, &buf, &buflen, 1);
 }
 
 /**
@@ -1204,6 +1204,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   uint8 *data_array[2];
   size_t data_len_array[2];
   int i = 0;
+  uint16_t epoch = peer ? peer->epoch : 0;
 
   dtls_set_handshake_header(header_type, (add_hash) ? peer : NULL, data_length, 0,
 			    data_length, buf);
@@ -1223,7 +1224,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     data_len_array[i] = data_length;
     i++;
   }
-  return dtls_send_multi(ctx, peer, session, DTLS_CT_HANDSHAKE, data_array, data_len_array, i);
+  return dtls_send_multi(ctx, peer, session, epoch, DTLS_CT_HANDSHAKE, data_array, data_len_array, i);
 }
 
 static int
@@ -1274,7 +1275,7 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
  */
 static int
 dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
-	  unsigned char type,
+		uint16_t epoch, unsigned char type,
 	  uint8 *buf_array[], size_t buf_len_array[], size_t buf_array_len) {
   
   /* We cannot use ctx->sendbuf here as it is reserved for collecting
@@ -1289,7 +1290,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   int i;
   size_t overall_len = 0;
 
-  res = dtls_prepare_record(peer, type, peer->epoch, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
+  res = dtls_prepare_record(peer, type, epoch, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
 
   if (res < 0)
     return res;
