@@ -3364,7 +3364,8 @@ dtls_handle_message(dtls_context_t *ctx,
     dtls_debug("got packet %d (%d bytes)\n", msg[0], rlen);
     if (peer) {
       /* skip packet if it is from a different epoch */
-      if (dtls_get_epoch(header) != peer->epoch) {
+      if (dtls_get_epoch(header) != peer->epoch &&
+	  dtls_get_epoch(header) != peer->epoch - 1) {
 	dtls_warn("got packet from wrong epoch\n");
 	goto next;
       }
