@@ -3018,15 +3018,20 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       /* send ServerFinished */
       update_hs_hash(peer, data, data_length);
 
-      if (dtls_send_finished(ctx, peer, PRF_LABEL(server),
-			     PRF_LABEL_SIZE(server)) > 0) {
-        peer->state = DTLS_STATE_CONNECTED;
-      } else  if (role == DTLS_CLIENT) {
-        dtls_warn("sending server Finished failed\n");
+      /* send change cipher spec message and switch to new configuration */
+      err = dtls_send_ccs(ctx, peer, peer->epoch - 1);
+      if (err < 0) {
+        dtls_warn("cannot send CCS message\n");
+        return err;
       }
-    } else {
-      peer->state = DTLS_STATE_CONNECTED;
+
+      err = dtls_send_finished(ctx, peer, PRF_LABEL(server), PRF_LABEL_SIZE(server));
+      if (err < 0) {
+        dtls_warn("sending server Finished failed\n");
+        return err;
+      }
     }
+    peer->state = DTLS_STATE_CONNECTED;
 
     break;
 
@@ -3212,13 +3217,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     err = calculate_key_block(ctx, handshake, security,
 			      &peer->session, peer->role);
     if (err < 0) {
-      return err;
-    }
-
-    /* send change cipher spec message and switch to new configuration */
-    err = dtls_send_ccs(ctx, peer, peer->epoch);
-    if (err < 0) {
-      dtls_warn("cannot send CCS message\n");
       return err;
     }
 
