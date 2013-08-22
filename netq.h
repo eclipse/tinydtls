@@ -39,6 +39,7 @@ typedef struct netq_t {
   unsigned int timeout;		/**< randomized timeout value */
 
   dtls_peer_t *peer;		/**< remote address */
+  uint16_t epoch;
 
   size_t length;		/**< actual length of data */
   netq_packet_t data;		/**< the datagram to send */

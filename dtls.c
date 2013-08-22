@@ -1313,6 +1313,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       n->retransmit_cnt = 0;
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
+      n->epoch = peer->epoch;
       n->length = 0;
       for (i = 0; i < buf_array_len; i++) {
         memcpy(n->data + n->length, buf_array[i], buf_len_array[i]);
@@ -3591,7 +3592,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       
       dtls_debug("** retransmit packet\n");
       
-      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, node->peer->epoch, &data, &length,
+      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, node->epoch, &data, &length,
 				1, sendbuf, &len);
       if (err < 0) {
 	dtls_warn("can not retransmit package, err: %i\n", err);
