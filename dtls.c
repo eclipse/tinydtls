@@ -368,15 +368,18 @@ dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
   buf += sizeof(uint16);
 
   if (peer) {
-    memcpy(buf, &peer->epoch, sizeof(uint16) + sizeof(uint48));
+    dtls_int_to_uint16(buf, peer->epoch);
+    buf += sizeof(uint16);
+
+    memcpy(buf, &peer->rseq, sizeof(uint48));
+    buf += sizeof(uint48);
 
     /* increment record sequence counter by 1 */
     inc_uint(uint48, peer->rseq);
   } else {
     memset(buf, 0, sizeof(uint16) + sizeof(uint48));
+    buf += sizeof(uint16) + sizeof(uint48);
   }
-
-  buf += sizeof(uint16) + sizeof(uint48);
 
   memset(buf, 0, sizeof(uint16));
   return buf + sizeof(uint16);
@@ -2730,7 +2733,7 @@ check_server_hellodone(dtls_context_t *ctx,
     return res;
   }
 
-  inc_uint(uint16, peer->epoch);
+  peer->epoch++;
   memset(peer->rseq, 0, sizeof(peer->rseq));
 
   dtls_debug_keyblock(security);
@@ -3215,7 +3218,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     return err;
   }
   
-  inc_uint(uint16, peer->epoch);
+  peer->epoch++;
   memset(peer->rseq, 0, sizeof(peer->rseq));
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
@@ -3354,13 +3357,15 @@ dtls_handle_message(dtls_context_t *ctx,
   while ((rlen = is_record(msg,msglen))) {
     dtls_peer_type role;
     dtls_state_t state;
+    dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
 
     dtls_debug("got packet %d (%d bytes)\n", msg[0], rlen);
     if (peer) {
       /* skip packet if it is from a different epoch */
-      if (memcmp(DTLS_RECORD_HEADER(msg)->epoch,
-		 peer->epoch, sizeof(uint16)) != 0)
-        goto next;
+      if (dtls_get_epoch(header) != peer->epoch) {
+	dtls_warn("got packet from wrong epoch\n");
+	goto next;
+      }
 
       if (!decrypt_verify(peer, msg, rlen, &data, &data_length)) {
         dtls_info("decrypt_verify() failed\n");
