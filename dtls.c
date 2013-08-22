@@ -359,7 +359,8 @@ is_record(uint8 *msg, int msglen) {
  * \return pointer to the next byte after the written header
  */ 
 static inline uint8 *
-dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
+dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
+		       uint16_t epoch, uint8 *buf) {
   
   dtls_int_to_uint8(buf, type);
   buf += sizeof(uint8);
@@ -367,15 +368,15 @@ dtls_set_record_header(uint8 type, dtls_peer_t *peer, uint8 *buf) {
   dtls_int_to_uint16(buf, DTLS_VERSION);
   buf += sizeof(uint16);
 
-  if (peer) {
-    dtls_int_to_uint16(buf, peer->epoch);
+  if (security) {
+    dtls_int_to_uint16(buf, epoch);
     buf += sizeof(uint16);
 
-    dtls_int_to_uint48(buf, peer->rseq);
+    dtls_int_to_uint48(buf, security->rseq);
     buf += sizeof(uint48);
 
     /* increment record sequence counter by 1 */
-    peer->rseq++;
+    security->rseq++;
   } else {
     memset(buf, 0, sizeof(uint16) + sizeof(uint48));
     buf += sizeof(uint16) + sizeof(uint48);
@@ -531,6 +532,7 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
 
   config->cipher = handshake->cipher;
   config->compression = handshake->compression;
+  config->rseq = 0;
 
   return 0;
 error:
@@ -1067,21 +1069,21 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
  */
 static int
 dtls_prepare_record(dtls_peer_t *peer,
-		    unsigned char type,
+		    unsigned char type, uint16_t epoch,
 		    uint8 *data_array[], size_t data_len_array[],
 		    size_t data_array_len,
 		    uint8 *sendbuf, size_t *rlen) {
   uint8 *p, *start;
   int res;
   int i;
-  dtls_security_parameters_t *security = (peer) ? dtls_security_params(peer) : NULL;
+  dtls_security_parameters_t *security = (peer) ? dtls_security_params_epoch(peer, epoch) : NULL;
   
   if (*rlen < DTLS_RH_LENGTH) {
     dtls_alert("The sendbuf (%i bytes) is too small\n", *rlen);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  p = dtls_set_record_header(type, peer, sendbuf);
+  p = dtls_set_record_header(type, security, epoch, sendbuf);
   start = p;
 
   if (!security || security->cipher == TLS_NULL_WITH_NULL_NULL) {
@@ -1287,7 +1289,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   int i;
   size_t overall_len = 0;
 
-  res = dtls_prepare_record(peer, type, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
+  res = dtls_prepare_record(peer, type, peer->epoch, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
 
   if (res < 0)
     return res;
@@ -2734,7 +2736,6 @@ check_server_hellodone(dtls_context_t *ctx,
 
   /* and switch cipher suite */
   peer->epoch++;
-  peer->rseq = 0;
 
   /* Client Finished */
   dtls_debug("send Finished\n");
@@ -3099,6 +3100,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     }
 
     if (!peer) {
+      dtls_security_parameters_t *security;
 
       /* msg contains a Client Hello with a valid cookie, so we can
        * safely create the server state machine and continue with
@@ -3113,7 +3115,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       /* Initialize record sequence number to 1 for new peers. The first
        * record with sequence number 0 is a stateless Hello Verify Request.
        */
-      peer->rseq = 1;
+      security = dtls_security_params(peer);
+      security->rseq = 1;
       dtls_add_peer(ctx, peer);
     }
 
@@ -3215,7 +3218,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     }
 
     peer->epoch++;
-    peer->rseq = 0;
   }
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
@@ -3589,7 +3591,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       
       dtls_debug("** retransmit packet\n");
       
-      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, &data, &length,
+      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, node->peer->epoch, &data, &length,
 				1, sendbuf, &len);
       if (err < 0) {
 	dtls_warn("can not retransmit package, err: %i\n", err);
