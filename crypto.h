@@ -95,6 +95,7 @@ typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
+  uint64_t rseq;	     /**< sequence number of last record sent */
 
   /** 
    * The key block generated from PRF applied to client and server

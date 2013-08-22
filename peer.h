@@ -58,7 +58,6 @@ typedef struct dtls_peer_t {
   dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
   dtls_state_t state;        /**< DTLS engine state */
   uint16_t epoch;	     /**< counter for cipher state changes*/
-  uint64_t rseq;	     /**< sequence number of last record sent */
 
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
