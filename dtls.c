@@ -47,14 +47,14 @@
 #  include "sha2/sha2.h"
 #endif
 
-#define dtls_set_version(H,V) dtls_int_to_uint16(&(H)->version, (V))
+#define dtls_set_version(H,V) dtls_int_to_uint16((H)->version, (V))
 #define dtls_set_content_type(H,V) ((H)->content_type = (V) & 0xff)
 #define dtls_set_length(H,V)  ((H)->length = (V))
 
 #define dtls_get_content_type(H) ((H)->content_type & 0xff)
-#define dtls_get_version(H) dtls_uint16_to_int(&(H)->version)
-#define dtls_get_epoch(H) dtls_uint16_to_int(&(H)->epoch)
-#define dtls_get_sequence_number(H) dtls_uint48_to_ulong(&(H)->sequence_number)
+#define dtls_get_version(H) dtls_uint16_to_int((H)->version)
+#define dtls_get_epoch(H) dtls_uint16_to_int((H)->epoch)
+#define dtls_get_sequence_number(H) dtls_uint48_to_ulong((H)->sequence_number)
 #define dtls_get_fragment_length(H) dtls_uint24_to_int((H)->fragment_length)
 
 #ifndef WITH_CONTIKI
