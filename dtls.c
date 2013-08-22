@@ -1989,11 +1989,14 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 }
 
 static inline int 
-dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
+dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer, uint16_t epoch) {
   uint8 buf[1];
+  size_t len = 1;
+  uint8 *buf_array = buf;
+
   buf[0] = 1;
 
-  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, buf, 1);
+  return dtls_send_multi(ctx, peer, &peer->session, epoch, DTLS_CT_CHANGE_CIPHER_SPEC, &buf_array, &len, 1);
 }
 
     
@@ -2730,7 +2733,7 @@ check_server_hellodone(dtls_context_t *ctx,
     return res;
   }
 
-  res = dtls_send_ccs(ctx, peer);
+  res = dtls_send_ccs(ctx, peer, peer->epoch);
   if (res < 0) {
     dtls_debug("cannot send CCS message\n");
     return res;
@@ -3213,7 +3216,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     }
 
     /* send change cipher spec message and switch to new configuration */
-    err = dtls_send_ccs(ctx, peer);
+    err = dtls_send_ccs(ctx, peer, peer->epoch);
     if (err < 0) {
       dtls_warn("cannot send CCS message\n");
       return err;
