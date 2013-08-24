@@ -85,13 +85,13 @@ send_to_peer(struct dtls_context_t *ctx,
 
   PRINTF("send to ");
   PRINT6ADDR(&conn->ripaddr);
-  PRINTF("\n");
+  PRINTF(":%u\n", uip_ntohs(conn->rport));
 
   uip_udp_packet_send(conn, data, len);
 
   /* Restore server connection to allow data from any node */
   /* FIXME: do we want this at all? */
-  memset(&conn->ripaddr, 0, sizeof(client_conn->ripaddr));
+  memset(&conn->ripaddr, 0, sizeof(conn->ripaddr));
   memset(&conn->rport, 0, sizeof(conn->rport));
 
   return len;
