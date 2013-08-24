@@ -3314,6 +3314,7 @@ static int dtls_alert_send_from_err(dtls_context_t *ctx, dtls_peer_t *peer,
       peer = dtls_get_peer(ctx, session);
     }
     if (peer) {
+      peer->state = DTLS_STATE_CLOSING;
       return dtls_send_alert(ctx, peer, level, desc);
     }
   } else if (err == -1) {
@@ -3321,6 +3322,7 @@ static int dtls_alert_send_from_err(dtls_context_t *ctx, dtls_peer_t *peer,
       peer = dtls_get_peer(ctx, session);
     }
     if (peer) {
+      peer->state = DTLS_STATE_CLOSING;
       return dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
     }
   }
