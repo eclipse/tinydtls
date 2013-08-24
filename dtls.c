@@ -2738,8 +2738,6 @@ check_server_hellodone(dtls_context_t *ctx,
   peer->epoch++;
   peer->rseq = 0;
 
-  dtls_debug_keyblock(security);
-
   /* Client Finished */
   dtls_debug("send Finished\n");
   return dtls_send_finished(ctx, peer, PRF_LABEL(client), PRF_LABEL_SIZE(client));
@@ -3219,8 +3217,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   peer->rseq = 0;
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
-
-  dtls_debug_keyblock(security);
 
   return 0;
 }  
