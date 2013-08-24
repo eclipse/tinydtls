@@ -162,7 +162,7 @@ set_connection_address(uip_ipaddr_t *ipaddr)
     PRINTF("UDP client failed to parse address '%s'\n", QUOTEME(UDP_CONNECTION_ADDR));
   }
 #elif UIP_CONF_ROUTER
-  uip_ip6addr(ipaddr,0xaaaa,0,0,0,0x0212,0x7404,0x0004,0x0404);
+  uip_ip6addr(ipaddr,0xaaaa,0,0,0,0x0200,0x0000,0x0000,0x0001);
 #else
   uip_ip6addr(ipaddr,0xfe80,0,0,0,0x6466,0x6666,0x6666,0x6666);
 #endif /* UDP_CONNECTION_ADDR */
