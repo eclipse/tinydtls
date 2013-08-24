@@ -75,6 +75,10 @@ send_to_peer(struct dtls_context_t *ctx,
   uip_ipaddr_copy(&conn->ripaddr, &session->addr);
   conn->rport = session->port;
 
+  PRINTF("send to ");
+  PRINT6ADDR(&conn->ripaddr);
+  PRINTF(":%u\n", uip_ntohs(conn->rport));
+
   uip_udp_packet_send(conn, data, len);
 
   /* Restore server connection to allow data from any node */
