@@ -3435,7 +3435,7 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_info("** application data:\n");
       if (!peer) {
         dtls_warn("no peer available, send an alert\n");
-        dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_UNEXPECTED_MESSAGE);
+        // TODO: should we send a alert here?
         return -1;
       }
       CALL(ctx, read, &peer->session, data, data_length);
