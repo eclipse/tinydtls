@@ -485,11 +485,66 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 		  dtls_kb_iv_size(config, peer->role));
 }
 
+/**
+ * Releases the storage allocated for read_cipher and write_cipher and
+ * sets both fields to NULL.
+ */
+static void
+invalidate_ciphers(dtls_security_parameters_t *config) {
+  if (config->read_cipher) {
+    dtls_cipher_free(config->read_cipher);
+    config->read_cipher = NULL;
+  }
+  
+  if (config->write_cipher) {
+    dtls_cipher_free(config->write_cipher);
+    config->write_cipher = NULL;
+  }
+}
+
+static int
+init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
+{
+  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
+  dtls_cipher_free(config->read_cipher);
+
+  assert(handshake->cipher != TLS_NULL_WITH_NULL_NULL);
+  config->read_cipher = dtls_cipher_new(handshake->cipher,
+					dtls_kb_remote_write_key(config, role),
+					dtls_kb_key_size(config, role));
+
+  if (!config->read_cipher) {
+    dtls_warn("cannot create read cipher\n");
+    goto error;
+  }
+
+  dtls_cipher_free(config->write_cipher);
+  
+  config->write_cipher = dtls_cipher_new(handshake->cipher,
+					 dtls_kb_local_write_key(config, role),
+					 dtls_kb_key_size(config, role));
+
+  if (!config->write_cipher) {
+    dtls_warn("cannot create write cipher\n");
+    goto error;
+  }
+
+  config->cipher = handshake->cipher;
+  config->compression = handshake->compression;
+
+  return 0;
+error:
+
+  invalidate_ciphers(config);
+  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+}
+
 static int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_handshake_parameters_t *handshake,
 		    dtls_security_parameters_t *security,
-		    session_t *session) {
+		    session_t *session,
+		    dtls_peer_type role) {
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
   pre_master_secret = security->key_block;
@@ -550,65 +605,12 @@ calculate_key_block(dtls_context_t *ctx,
 	   handshake->tmp.random.server, DTLS_RANDOM_LENGTH,
 	   handshake->tmp.random.client, DTLS_RANDOM_LENGTH,
 	   security->key_block,
-	   dtls_kb_size(security, peer->role));
+	   dtls_kb_size(security, role));
 
   memcpy(handshake->tmp.master_secret, master_secret, DTLS_MASTER_SECRET_LENGTH);
   dtls_debug_keyblock(security);
-  return 0;
-}
 
-/**
- * Releases the storage allocated for read_cipher and write_cipher and
- * sets both fields to NULL.
- */
-static void
-invalidate_ciphers(dtls_security_parameters_t *config) {
-  if (config->read_cipher) {
-    dtls_cipher_free(config->read_cipher);
-    config->read_cipher = NULL;
-  }
-  
-  if (config->write_cipher) {
-    dtls_cipher_free(config->write_cipher);
-    config->write_cipher = NULL;
-  }
-}
-
-static int
-init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
-{
-  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
-  dtls_cipher_free(config->read_cipher);
-
-  assert(handshake->cipher != TLS_NULL_WITH_NULL_NULL);
-  config->read_cipher = dtls_cipher_new(handshake->cipher,
-					dtls_kb_remote_write_key(config, role),
-					dtls_kb_key_size(config, role));
-
-  if (!config->read_cipher) {
-    dtls_warn("cannot create read cipher\n");
-    goto error;
-  }
-
-  dtls_cipher_free(config->write_cipher);
-  
-  config->write_cipher = dtls_cipher_new(handshake->cipher,
-					 dtls_kb_local_write_key(config, role),
-					 dtls_kb_key_size(config, role));
-
-  if (!config->write_cipher) {
-    dtls_warn("cannot create write cipher\n");
-    goto error;
-  }
-
-  config->cipher = handshake->cipher;
-  config->compression = handshake->compression;
-
-  return 0;
-error:
-
-  invalidate_ciphers(config);
-  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+  return init_cipher(handshake, security, role);
 }
 
 /* TODO: add a generic method which iterates over a list and searches for a specific key */
@@ -2728,12 +2730,7 @@ check_server_hellodone(dtls_context_t *ctx,
   }
 
   res = calculate_key_block(ctx, handshake, security,
-			    &peer->session);
-  if (res < 0) {
-    return res;
-  }
-
-  res = init_cipher(handshake, security, peer->role);
+			    &peer->session, peer->role);
   if (res < 0) {
     return res;
   }
@@ -3213,12 +3210,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   err = calculate_key_block(ctx, handshake, security,
-			    &peer->session);
-  if (err < 0) {
-    return err;
-  }
-
-  err = init_cipher(handshake, security, peer->role);
+			    &peer->session, peer->role);
   if (err < 0) {
     return err;
   }
