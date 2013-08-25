@@ -175,7 +175,7 @@ void ecdsaTest() {
 	assert(ret == 0);
 
 	ret = ecc_ecdsa_validate(pub_x, pub_y, ecdsaTestMessage, tempx, tempy);
-	assert(ret);
+	assert(!ret);
 
 
 	ret = ecc_ecdsa_sign(ecdsaTestSecret, ecdsaTestMessage, ecdsaTestRand2, tempx, tempy);
@@ -184,7 +184,7 @@ void ecdsaTest() {
 	assert(ret == 0);
 
 	ret = ecc_ecdsa_validate(pub_x, pub_y, ecdsaTestMessage, tempx, tempy);
-	assert(ret);
+	assert(!ret);
 }
 
 int main(int argc, char const *argv[])
