@@ -38,6 +38,7 @@
 
 //big number functions
 #include "ecc.h"
+#include <string.h>
 
 static uint32_t add( const uint32_t *x, const uint32_t *y, uint32_t *result, uint8_t length){
 	uint64_t d = 0; //carry
@@ -105,33 +106,18 @@ const uint32_t ecc_g_point_y[8] = { 0x37BF51F5, 0xCBB64068, 0x6B315ECE, 0x2BCE33
 
 
 static void setZero(uint32_t *A, const int length){
-	int i;
-
-	for (i = 0; i < length; ++i)
-	{
-		A[i] = 0;
-	}
+	memset(A, 0x0, length * sizeof(uint32_t));
 }
 
 /*
  * copy one array to another
  */
 static void copy(const uint32_t *from, uint32_t *to, uint8_t length){
-	int i;
-	for (i = 0; i < length; ++i)
-	{
-		to[i] = from[i];
-	}
+	memcpy(to, from, length * sizeof(uint32_t));
 }
 
 static int isSame(const uint32_t *A, const uint32_t *B, uint8_t length){
-	int i;
-
-	for(i = 0; i < length; i++){
-		if (A[i] != B[i])
-			return 0;
-	}
-	return 1;
+	return !memcmp(A, B, length * sizeof(uint32_t));
 }
 
 //is A greater than B?
