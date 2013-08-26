@@ -80,6 +80,9 @@ netq_t *netq_node_new();
  */
 netq_t *netq_head(netq_t **queue);
 
+netq_t *netq_next(netq_t *p);
+void netq_remove(netq_t **queue, netq_t *p);
+
 /**
  * Removes the first item in given queue and returns a pointer to the
  * removed element. If queue is empty when netq_pop_first() is called,
