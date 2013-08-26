@@ -132,7 +132,7 @@ typedef unsigned char uint48[6];
 
 #ifndef DTLS_MAX_BUF
 /** Maximum size of DTLS message. */
-#define DTLS_MAX_BUF 256 + 64
+#define DTLS_MAX_BUF 200
 #endif
 
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT

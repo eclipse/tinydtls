@@ -27,7 +27,7 @@
 #endif
 
 /** The maximum buffer size to hold DTLS messages */
-#define DTLS_MAX_BUF 100
+#define DTLS_MAX_BUF 200
 
 #include "contiki-conf.h"
 
