@@ -1466,6 +1466,8 @@ dtls_verify_peer(dtls_context_t *ctx,
 
   p += DTLS_COOKIE_LENGTH;
 
+  /* TODO use the same record sequence number as in the ClientHello,
+     see 4.2.1. Denial-of-Service Countermeasures */
   err = dtls_send_handshake_msg_hash(ctx, peer, session,
 				     DTLS_HT_HELLO_VERIFY_REQUEST,
 				     buf, p - buf, 0);
@@ -1690,6 +1692,8 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   assert(p - buf <= sizeof(buf));
 
+  /* TODO use the same record sequence number as in the ClientHello,
+     see 4.2.1. Denial-of-Service Countermeasures */
   return dtls_send_handshake_msg(ctx, peer, DTLS_HT_SERVER_HELLO,
 				 buf, p - buf);
 }
@@ -2864,21 +2868,12 @@ dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
 }
 
 static int
-handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
+handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 		 const dtls_peer_type role, const dtls_state_t state,
 		 uint8 *data, size_t data_length) {
 
   int err = 0;
 
-  if (data_length < DTLS_HS_LENGTH) {
-    dtls_warn("handshake message too short\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-
-  if (!peer && data[0] != DTLS_HT_CLIENT_HELLO) {
-    dtls_warn("If there is no peer only ClientHello is allowed\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  }
   /* The following switch construct handles the given message with
    * respect to the current internal state for this peer. In case of
    * error, it is left with return 0. */
@@ -3126,6 +3121,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
       }
       peer->role = DTLS_SERVER;
+      LIST_STRUCT_INIT(&peer->handshake_params, reorder_queue);
       peer->hs_state.mseq_r = dtls_uint16_to_int(hs_header->message_seq);
       peer->hs_state.mseq_s = 1;
 
@@ -3199,6 +3195,103 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   }
 
   return err;
+}
+      
+static int
+handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
+		 const dtls_peer_type role, const dtls_state_t state,
+		 uint8 *data, size_t data_length)
+{
+  dtls_handshake_header_t *hs_header;
+  int res;
+
+  if (data_length < DTLS_HS_LENGTH) {
+    dtls_warn("handshake message too short\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  hs_header = DTLS_HANDSHAKE_HEADER(data);
+
+  if (!peer) {
+    if (hs_header->msg_type != DTLS_HT_CLIENT_HELLO) {
+      dtls_warn("If there is no peer only ClientHello is allowed\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+    }
+    return handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
+  }
+
+  if (dtls_uint16_to_int(hs_header->message_seq) < peer->hs_state.mseq_r) {
+    dtls_warn("The message sequence number is too small, expected %i, got: %i\n",
+	      peer->hs_state.mseq_r, dtls_uint16_to_int(hs_header->message_seq));
+    return 0;
+  } else if (dtls_uint16_to_int(hs_header->message_seq) > peer->hs_state.mseq_r) {
+    /* A package in between is missing, buffer this package. */
+    netq_t *n;
+
+    /* TODO: only add packages that are not too new. */
+    if (data_length > DTLS_MAX_BUF) {
+      dtls_warn("the package is too big to buffer for reoder\n");
+      return 0;
+    }
+
+    netq_t *node = netq_head((netq_t **)peer->handshake_params.reorder_queue);
+    while (node) {
+      dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
+      if (dtls_uint16_to_int(node_header->message_seq) == dtls_uint16_to_int(hs_header->message_seq)) {
+        dtls_warn("a package with this sequence number is already stored\n");
+        return 0;
+      }
+      node = netq_next(node);
+    }
+
+    n = netq_node_new();
+    if (!n) {
+      dtls_warn("no space in reoder buffer\n");
+      return 0;
+    }
+
+    n->peer = peer;
+    n->length = data_length;
+    memcpy(n->data, data, data_length);
+
+    if (!netq_insert_node((netq_t **)peer->handshake_params.reorder_queue, n)) {
+      dtls_warn("cannot add packet to reoder buffer\n");
+      netq_node_free(n);
+    }
+    dtls_info("Added package for reordering\n");
+    return 0;
+  } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->hs_state.mseq_r) {
+    /* Found the expected package, use this an all the buffered packages */
+    int next = 1;
+
+    res = handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
+    if (res < 0)
+      return res;
+
+    /* We do not know in which order the packages are in the list just search the list for every package. */
+    while (next) {
+      next = 0;
+      netq_t *node = netq_head((netq_t **)peer->handshake_params.reorder_queue);
+      while (node) {
+        dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
+
+        if (dtls_uint16_to_int(node_header->message_seq) == peer->hs_state.mseq_r) {
+          netq_remove((netq_t **)peer->handshake_params.reorder_queue, node);
+          next = 1;
+          res = handle_handshake_msg(ctx, peer, session, role, peer->state, node->data, node->length);
+          if (res < 0) {
+            return res;
+          }
+
+          break;
+        } else {
+          node = netq_next(node);
+        }
+      }
+    }
+    return res;
+  }
+  assert(0);
+  return 0;
 }
 
 static int
@@ -3562,6 +3655,7 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   /* send ClientHello with empty Cookie */
   peer->hs_state.mseq_r = 0;
   peer->hs_state.mseq_s = 0;
+  LIST_STRUCT_INIT(&peer->handshake_params, reorder_queue);
   res = dtls_send_client_hello(ctx, peer, NULL, 0);
   if (res < 0)
     dtls_warn("cannot send ClientHello\n");

@@ -83,6 +83,22 @@ netq_head(netq_t **queue) {
   return list_head((list_t)queue);
 }
 
+netq_t *
+netq_next(netq_t *p) {
+  if (!p)
+    return NULL;
+
+  return list_item_next(p);
+}
+
+void
+netq_remove(netq_t **queue, netq_t *p) {
+  if (!queue || !p)
+    return;
+
+  list_remove((list_t)queue, p);
+}
+
 netq_t *netq_pop_first(netq_t **queue) {
   if (!queue)
     return NULL;

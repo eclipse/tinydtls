@@ -30,6 +30,7 @@
 #include "config.h"
 
 #include <stdlib.h>		/* for rand() and srand() */
+#include "t_list.h"
 
 #include "aes/rijndael.h"
 
@@ -118,6 +119,7 @@ typedef struct {
     /** the session's master secret */
     uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   } tmp;
+  LIST_STRUCT(reorder_queue);	/**< the packets to reorder */
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
