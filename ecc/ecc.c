@@ -516,7 +516,7 @@ void ecc_ec_mult(const uint32_t *px, const uint32_t *py, const uint32_t *secret,
 		ec_double(Qx, Qy, tempx, tempy);
 		copy(tempx, Qx,arrayLength);
 		copy(tempy, Qy,arrayLength);
-		if ((((secret[i/32])>>(i%32)) & 0x01) == 1){ //<- TODO quark, muss anders gemacht werden
+		if (((secret[i / 32]) & ((uint32_t)1 << (i % 32)))) {
 			ec_add(Qx, Qy, px, py, tempx, tempy); //eccAdd
 			copy(tempx, Qx,arrayLength);
 			copy(tempy, Qy,arrayLength);
