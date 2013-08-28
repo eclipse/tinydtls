@@ -36,10 +36,14 @@
  * for ECDH and ECDSA.
  */
 #include <assert.h>
-#include "ecc.h"
-#include "test_helper.h"
 #include <string.h>
 #include <stdio.h>
+#include "ecc.h"
+#include "test_helper.h"
+
+#ifdef CONTIKI
+#include "contiki.h"
+#endif /* CONTIKI */
 
 //arbitrary test values and results
 uint32_t null[8] = {	0x00000000,0x00000000,0x00000000,0x00000000,
@@ -232,6 +236,35 @@ void fieldInvTest(){
 
 // }
 
+#ifdef CONTIKI
+PROCESS(ecc_filed_test, "ECC field test");
+AUTOSTART_PROCESSES(&ecc_filed_test);
+PROCESS_THREAD(ecc_filed_test, ev, d)
+{
+	PROCESS_BEGIN();
+
+	nullEverything();
+	//randomStuff();
+	nullEverything();
+	fieldAddTest();
+	nullEverything();
+	fieldSubTest();
+	nullEverything();
+	fieldMultTest();
+	nullEverything();
+	fieldModPTest();
+	nullEverything();
+	fieldModOTest();
+	nullEverything();
+	fieldInvTest();
+	nullEverything();
+	//rShiftTest();
+	//isOneTest();
+	printf("%s\n", "All Tests succesfull!");
+
+	PROCESS_END();
+}
+#else /* CONTIKI */
 int main(int argc, char const *argv[])
 {
 	nullEverything();
@@ -254,3 +287,4 @@ int main(int argc, char const *argv[])
 	printf("%s\n", "All Tests succesfull!");
 	return 0;
 }
+#endif /* CONTIKI */
