@@ -35,13 +35,20 @@
  * architectures. It provides basic operations on the secp256r1 curve and support
  * for ECDH and ECDSA.
  */
-#include "ecc.h"
-#include "test_helper.h"
-#include <assert.h>
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <string.h>
+#include <assert.h>
+
+#include "ecc.h"
+#include "test_helper.h"
+
+#ifdef CONTIKI
+#include "contiki.h"
+#else
+#include <time.h>
+#endif /* CONTIKI */
 
 //These are testvalues taken from the NIST P-256 definition
 //6b17d1f2 e12c4247 f8bce6e5 63a440f2 77037d81 2deb33a0 f4a13945 d898c296
@@ -187,6 +194,24 @@ void ecdsaTest() {
 	assert(!ret);
 }
 
+#ifdef CONTIKI
+PROCESS(ecc_filed_test, "ECC test");
+AUTOSTART_PROCESSES(&ecc_filed_test);
+PROCESS_THREAD(ecc_filed_test, ev, d)
+{
+	PROCESS_BEGIN();
+
+	srand(1234);
+	addTest();
+	doubleTest();
+	multTest();
+	eccdhTest();
+	ecdsaTest();
+	printf("%s\n", "All Tests successful.");
+
+	PROCESS_END();
+}
+#else /* CONTIKI */
 int main(int argc, char const *argv[])
 {
 	srand(time(NULL));
@@ -198,3 +223,4 @@ int main(int argc, char const *argv[])
 	printf("%s\n", "All Tests successful.");
 	return 0;
 }
+#endif /* CONTIKI */

@@ -33,6 +33,7 @@ AC_ARG_WITH(contiki,
   [AS_HELP_STRING([--with-contiki],[build libtinydtls for the Contiki OS])],
   [cp -p Makefile.contiki Makefile
    cp -p config.h.contiki config.h
+   cp -p ecc/Makefile.contiki ecc/Makefile
    AC_MSG_NOTICE([Contiki build prepared])
    exit 0], 
   [])

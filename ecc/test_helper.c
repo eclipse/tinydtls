@@ -65,3 +65,15 @@ const uint32_t ecc_prime_m[8] = {0xffffffff, 0xffffffff, 0xffffffff, 0x00000000,
 /* This is added after an static byte addition if the answer has a carry in MSB*/
 const uint32_t ecc_prime_r[8] = {0x00000001, 0x00000000, 0x00000000, 0xffffffff,
 				 0xffffffff, 0xffffffff, 0xfffffffe, 0x00000000};
+
+#ifdef CONTIKI
+void
+test_assert(const char *file, int lineno)
+{
+  printf("Assertion failed: file %s, line %d.\n", file, lineno);
+  /*
+   * loop for a while;
+   * call _reset_vector__();
+   */
+}
+#endif
