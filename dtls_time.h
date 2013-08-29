@@ -32,6 +32,7 @@
 #define _DTLS_DTLS_TIME_H_
 
 #include "config.h"
+#include <stdint.h>
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -58,7 +59,7 @@ typedef clock_time_t dtls_tick_t;
 # define CLOCK_SECOND 1000
 #endif
 
-typedef unsigned int dtls_tick_t; 
+typedef uint32_t dtls_tick_t;
 
 #endif /* WITH_CONTIKI */
 
