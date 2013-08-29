@@ -40,6 +40,7 @@ typedef struct netq_t {
 
   dtls_peer_t *peer;		/**< remote address */
   uint16_t epoch;
+  uint8_t type;
 
   size_t length;		/**< actual length of data */
   netq_packet_t data;		/**< the datagram to send */
