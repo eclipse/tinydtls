@@ -1304,7 +1304,8 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     overall_len += buf_len_array[i];
   }
 
-  if (type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) {
+  if ((type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) ||
+      type == DTLS_CT_CHANGE_CIPHER_SPEC) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
     netq_t *n = netq_node_new();
     if (n) {
@@ -1315,6 +1316,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
       n->epoch = peer->epoch;
+      n->type = type;
       n->length = 0;
       for (i = 0; i < buf_array_len; i++) {
         memcpy(n->data + n->length, buf_array[i], buf_len_array[i]);
@@ -3595,7 +3597,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       
       dtls_debug("** retransmit packet\n");
       
-      err = dtls_prepare_record(node->peer, DTLS_CT_HANDSHAKE, node->epoch, &data, &length,
+      err = dtls_prepare_record(node->peer, node->type, node->epoch, &data, &length,
 				1, sendbuf, &len);
       if (err < 0) {
 	dtls_warn("can not retransmit package, err: %i\n", err);
