@@ -64,7 +64,7 @@ netq_insert_node(netq_t **queue, netq_t *node) {
   assert(node);
 
   p = (netq_t *)list_head((list_t)queue);
-  while(p && p->t <= node->t)
+  while(p && p->t <= node->t && list_item_next(p))
     p = list_item_next(p);
 
   if (p)
