@@ -3575,9 +3575,11 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       int err;
       unsigned char *data = node->data;
       size_t length = node->length;
+      dtls_tick_t now;
 
+      dtls_ticks(&now);
       node->retransmit_cnt++;
-      node->t += (node->timeout << node->retransmit_cnt);
+      node->t = now + (node->timeout << node->retransmit_cnt);
       netq_insert_node((netq_t **)context->sendqueue, node);
       
       dtls_debug("** retransmit packet\n");
