@@ -990,7 +990,6 @@ clear_hs_hash(dtls_peer_t *peer) {
  *
  * \param ctx    The current DTLS context.
  * \param peer   The remote peer of the security association.
- * \param record The message record header.
  * \param rlen   The actual length of \p record.
  * \param data   The cleartext payload of the message.
  * \param data_length Actual length of \p data.
@@ -998,7 +997,7 @@ clear_hs_hash(dtls_peer_t *peer) {
  */
 static int
 check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
-	       uint8 *record, uint8 *data, size_t data_length) {
+	       uint8 *data, size_t data_length) {
   size_t digest_length, label_size;
   const unsigned char *label;
   unsigned char buf[DTLS_HMAC_MAX];
@@ -1408,7 +1407,6 @@ static int
 dtls_verify_peer(dtls_context_t *ctx, 
 		 dtls_peer_t *peer, 
 		 session_t *session,
-		 uint8 *record, 
 		 uint8 *data, size_t data_length)
 {
   uint8 buf[DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH];
@@ -2859,7 +2857,7 @@ dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
 static int
 handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 		 const dtls_peer_type role, const dtls_state_t state,
-		 uint8 *record_header, uint8 *data, size_t data_length) {
+		 uint8 *data, size_t data_length) {
 
   int err = 0;
 
@@ -3004,7 +3002,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
 
-    err = check_finished(ctx, peer, record_header, data, data_length);
+    err = check_finished(ctx, peer, data, data_length);
     if (err < 0) {
       dtls_warn("error in check_finished err: %i\n", err);
       return err;
@@ -3088,8 +3086,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
        Anything else will be rejected. Fragementation is not allowed
        here as it would require peer state as well.
     */
-    err = dtls_verify_peer(ctx, peer, session, record_header, data,
-			   data_length);
+    err = dtls_verify_peer(ctx, peer, session, data, data_length);
     if (err < 0) {
       dtls_warn("error in dtls_verify_peer err: %i\n", err);
       return err;
@@ -3406,7 +3403,7 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_HANDSHAKE:
-      err = handle_handshake(ctx, peer, session, role, state, msg, data, data_length);
+      err = handle_handshake(ctx, peer, session, role, state, data, data_length);
       if (err < 0) {
 	dtls_warn("error while handling handshake package\n");
 	dtls_alert_send_from_err(ctx, peer, session, err);
