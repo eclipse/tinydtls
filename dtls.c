@@ -2982,7 +2982,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       dtls_warn("error in check_server_hellodone err: %i\n", err);
       return err;
     }
-    peer->state = DTLS_STATE_WAIT_SERVERFINISHED;
+    peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
     /* update_hs_hash(peer, data, data_length); */
 
     break;
@@ -3006,8 +3006,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     /* expect a Finished message from server */
 
     dtls_debug("DTLS_HT_FINISHED\n");
-    if ((role == DTLS_CLIENT && state != DTLS_STATE_WAIT_SERVERFINISHED) ||
-        (role == DTLS_SERVER && state != DTLS_STATE_WAIT_FINISHED)) {
+    if (state != DTLS_STATE_WAIT_FINISHED) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
 
@@ -3061,7 +3060,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 	ctx && ctx->h && ctx->h->verify_ecdsa_key)
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
-      peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
+      peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
     break;
 
   case DTLS_HT_CERTIFICATE_VERIFY:
@@ -3078,7 +3077,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     }
 
     update_hs_hash(peer, data, data_length);
-    peer->state = DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC;
+    peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
     break;
 
   case DTLS_HT_CLIENT_HELLO:
@@ -3206,7 +3205,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
    * by ourself, the security context is switched and the record
    * sequence number is reset. */
   
-  if (!peer || peer->state != DTLS_STATE_WAIT_CLIENTCHANGECIPHERSPEC) {
+  if (!peer || peer->state != DTLS_STATE_WAIT_CHANGECIPHERSPEC) {
     dtls_warn("expected ChangeCipherSpec during handshake\n");
     return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
   }
