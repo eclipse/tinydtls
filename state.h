@@ -50,7 +50,8 @@ typedef enum {
 } dtls_state_t;
 
 typedef struct {
-  uint16_t mseq;	     /**< handshake message sequence number counter */
+  uint16_t mseq_s;	     /**< send handshake message sequence number counter */
+  uint16_t mseq_r;	     /**< received handshake message sequence number counter */
 
   /** pending config that is updated during handshake */
   /* FIXME: dtls_security_parameters_t pending_config; */

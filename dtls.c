@@ -405,11 +405,11 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
   buf += sizeof(uint24);
 
   if (peer) {
-    /* increment handshake message sequence counter by 1 */
-    peer->hs_state.mseq++;
-  
     /* and copy the result to buf */
-    dtls_int_to_uint16(buf, peer->hs_state.mseq);
+    dtls_int_to_uint16(buf, peer->hs_state.mseq_s);
+
+    /* increment handshake message sequence counter by 1 */
+    peer->hs_state.mseq_s++;
   } else {
     memset(buf, 0, sizeof(uint16));    
   }
@@ -1206,7 +1206,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   int i = 0;
   uint16_t epoch = peer ? peer->epoch : 0;
 
-  dtls_set_handshake_header(header_type, (add_hash) ? peer : NULL, data_length, 0,
+  dtls_set_handshake_header(header_type, peer, data_length, 0,
 			    data_length, buf);
 
   if (add_hash) {
@@ -3032,9 +3032,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         return err;
       }
     }
+    peer->hs_state.mseq_r = 0;
+    peer->hs_state.mseq_s = 0;
     peer->state = DTLS_STATE_CONNECTED;
 
-    break;
+    /* return here to not increase the message receive counter */
+    return err;
 
   /************************************************************************
    * Server states
@@ -3107,11 +3110,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
     if (err > 0) {
       dtls_debug("server hello verify was sent\n");
-      return err;
+      break;
     }
 
     if (!peer) {
       dtls_security_parameters_t *security;
+      dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
 
       /* msg contains a Client Hello with a valid cookie, so we can
        * safely create the server state machine and continue with
@@ -3122,6 +3126,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
       }
       peer->role = DTLS_SERVER;
+      peer->hs_state.mseq_r = dtls_uint16_to_int(hs_header->message_seq);
+      peer->hs_state.mseq_s = 1;
 
       /* Initialize record sequence number to 1 for new peers. The first
        * record with sequence number 0 is a stateless Hello Verify Request.
@@ -3176,15 +3182,20 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
     /* send ClientHello with empty Cookie */
     err = dtls_send_client_hello(ctx, peer, NULL, 0);
-    if (err < 0)
+    if (err < 0) {
       dtls_warn("cannot send ClientHello\n");
-    else
-      peer->state = DTLS_STATE_CLIENTHELLO;
+      return err;
+    }
+    peer->state = DTLS_STATE_CLIENTHELLO;
+    break;
 
-    return err;
   default:
     dtls_crit("unhandled message %d\n", data[0]);
     return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+  }
+
+  if (peer && err >= 0) {
+    peer->hs_state.mseq_r++;
   }
 
   return err;
@@ -3549,6 +3560,8 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_add_peer(ctx, peer);
 
   /* send ClientHello with empty Cookie */
+  peer->hs_state.mseq_r = 0;
+  peer->hs_state.mseq_s = 0;
   res = dtls_send_client_hello(ctx, peer, NULL, 0);
   if (res < 0)
     dtls_warn("cannot send ClientHello\n");
