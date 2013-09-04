@@ -3311,7 +3311,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
   
   if (!peer || peer->state != DTLS_STATE_WAIT_CHANGECIPHERSPEC) {
     dtls_warn("expected ChangeCipherSpec during handshake\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+    return 0;
   }
 
   if (data_length < 1 || data[0] != 1)
