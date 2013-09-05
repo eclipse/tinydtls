@@ -35,12 +35,12 @@ typedef struct netq_t {
   struct netq_t *next;
 
   clock_time_t t;	        /**< when to send PDU for the next time */
-  unsigned char retransmit_cnt;	/**< retransmission counter, will be removed when zero */
   unsigned int timeout;		/**< randomized timeout value */
 
   dtls_peer_t *peer;		/**< remote address */
   uint16_t epoch;
   uint8_t type;
+  unsigned char retransmit_cnt;	/**< retransmission counter, will be removed when zero */
 
   size_t length;		/**< actual length of data */
   netq_packet_t data;		/**< the datagram to send */
