@@ -59,8 +59,6 @@ typedef struct dtls_peer_t {
   dtls_state_t state;        /**< DTLS engine state */
   uint16_t epoch;	     /**< counter for cipher state changes*/
 
-  dtls_hs_state_t hs_state;  /**< handshake protocol status */
-
   dtls_security_parameters_t security_params[2];
   dtls_handshake_parameters_t handshake_params;
 } dtls_peer_t;

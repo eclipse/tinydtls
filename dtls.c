@@ -406,10 +406,10 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
 
   if (peer) {
     /* and copy the result to buf */
-    dtls_int_to_uint16(buf, peer->hs_state.mseq_s);
+    dtls_int_to_uint16(buf, peer->handshake_params.hs_state.mseq_s);
 
     /* increment handshake message sequence counter by 1 */
-    peer->hs_state.mseq_s++;
+    peer->handshake_params.hs_state.mseq_s++;
   } else {
     memset(buf, 0, sizeof(uint16));    
   }
@@ -966,24 +966,25 @@ check_client_keyexchange(dtls_context_t *ctx,
 static inline void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
   dtls_debug_dump("add MAC data", data, length);
-  dtls_hash_update(&peer->hs_state.hs_hash, data, length);
+  dtls_hash_update(&peer->handshake_params.hs_state.hs_hash, data, length);
 }
 
 static void
 copy_hs_hash(dtls_peer_t *peer, dtls_hash_ctx *hs_hash) {
-  memcpy(hs_hash, &peer->hs_state.hs_hash, sizeof(peer->hs_state.hs_hash));
+  memcpy(hs_hash, &peer->handshake_params.hs_state.hs_hash,
+	 sizeof(peer->handshake_params.hs_state.hs_hash));
 }
 
 static inline size_t
 finalize_hs_hash(dtls_peer_t *peer, uint8 *buf) {
-  return dtls_hash_finalize(buf, &peer->hs_state.hs_hash);
+  return dtls_hash_finalize(buf, &peer->handshake_params.hs_state.hs_hash);
 }
 
 static inline void
 clear_hs_hash(dtls_peer_t *peer) {
   assert(peer);
   dtls_debug("clear MAC\n");
-  dtls_hash_init(&peer->hs_state.hs_hash);
+  dtls_hash_init(&peer->handshake_params.hs_state.hs_hash);
 }
 
 /** 
@@ -1017,13 +1018,13 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   } b;
 
   /* temporarily store hash status for roll-back after finalize */
-  memcpy(b.statebuf, &peer->hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
+  memcpy(b.statebuf, &peer->handshake_params.hs_state.hs_hash, DTLS_HASH_CTX_SIZE);
 
   digest_length = finalize_hs_hash(peer, buf);
   /* clear_hash(); */
 
   /* restore hash status */
-  memcpy(&peer->hs_state.hs_hash, b.statebuf, DTLS_HASH_CTX_SIZE);
+  memcpy(&peer->handshake_params.hs_state.hs_hash, b.statebuf, DTLS_HASH_CTX_SIZE);
 
   if (peer->role == DTLS_CLIENT) {
     label = PRF_LABEL(server);
@@ -3026,8 +3027,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         return err;
       }
     }
-    peer->hs_state.mseq_r = 0;
-    peer->hs_state.mseq_s = 0;
+    peer->handshake_params.hs_state.mseq_r = 0;
+    peer->handshake_params.hs_state.mseq_s = 0;
     dtls_debug("Handshake complete\n");
     peer->state = DTLS_STATE_CONNECTED;
 
@@ -3122,8 +3123,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       }
       peer->role = DTLS_SERVER;
       LIST_STRUCT_INIT(&peer->handshake_params, reorder_queue);
-      peer->hs_state.mseq_r = dtls_uint16_to_int(hs_header->message_seq);
-      peer->hs_state.mseq_s = 1;
+      peer->handshake_params.hs_state.mseq_r = dtls_uint16_to_int(hs_header->message_seq);
+      peer->handshake_params.hs_state.mseq_s = 1;
 
       /* Initialize record sequence number to 1 for new peers. The first
        * record with sequence number 0 is a stateless Hello Verify Request.
@@ -3191,7 +3192,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   }
 
   if (peer && err >= 0) {
-    peer->hs_state.mseq_r++;
+    peer->handshake_params.hs_state.mseq_r++;
   }
 
   return err;
@@ -3219,11 +3220,11 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     return handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
   }
 
-  if (dtls_uint16_to_int(hs_header->message_seq) < peer->hs_state.mseq_r) {
+  if (dtls_uint16_to_int(hs_header->message_seq) < peer->handshake_params.hs_state.mseq_r) {
     dtls_warn("The message sequence number is too small, expected %i, got: %i\n",
-	      peer->hs_state.mseq_r, dtls_uint16_to_int(hs_header->message_seq));
+	      peer->handshake_params.hs_state.mseq_r, dtls_uint16_to_int(hs_header->message_seq));
     return 0;
-  } else if (dtls_uint16_to_int(hs_header->message_seq) > peer->hs_state.mseq_r) {
+  } else if (dtls_uint16_to_int(hs_header->message_seq) > peer->handshake_params.hs_state.mseq_r) {
     /* A package in between is missing, buffer this package. */
     netq_t *n;
 
@@ -3259,7 +3260,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     }
     dtls_info("Added package for reordering\n");
     return 0;
-  } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->hs_state.mseq_r) {
+  } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->handshake_params.hs_state.mseq_r) {
     /* Found the expected package, use this an all the buffered packages */
     int next = 1;
 
@@ -3274,7 +3275,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       while (node) {
         dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
 
-        if (dtls_uint16_to_int(node_header->message_seq) == peer->hs_state.mseq_r) {
+        if (dtls_uint16_to_int(node_header->message_seq) == peer->handshake_params.hs_state.mseq_r) {
           netq_remove(peer->handshake_params.reorder_queue, node);
           next = 1;
           res = handle_handshake_msg(ctx, peer, session, role, peer->state, node->data, node->length);
@@ -3654,8 +3655,8 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   dtls_add_peer(ctx, peer);
 
   /* send ClientHello with empty Cookie */
-  peer->hs_state.mseq_r = 0;
-  peer->hs_state.mseq_s = 0;
+  peer->handshake_params.hs_state.mseq_r = 0;
+  peer->handshake_params.hs_state.mseq_s = 0;
   LIST_STRUCT_INIT(&peer->handshake_params, reorder_queue);
   res = dtls_send_client_hello(ctx, peer, NULL, 0);
   if (res < 0)

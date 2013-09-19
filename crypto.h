@@ -35,6 +35,7 @@
 #include "aes/rijndael.h"
 
 #include "global.h"
+#include "state.h"
 #include "numeric.h"
 #include "hmac.h"
 #include "ccm.h"
@@ -120,6 +121,7 @@ typedef struct {
     uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   } tmp;
   LIST_STRUCT(reorder_queue);	/**< the packets to reorder */
+  dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
