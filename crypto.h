@@ -332,5 +332,11 @@ int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
 				 unsigned char *buf);
 
+
+dtls_handshake_parameters_t *dtls_handshake_new();
+
+void dtls_handshake_free(dtls_handshake_parameters_t *handshake);
+void crypto_init();
+
 #endif /* _DTLS_CRYPTO_H_ */
 

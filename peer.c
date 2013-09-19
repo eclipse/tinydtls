@@ -38,6 +38,7 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
+  dtls_handshake_free(peer->handshake_params);
   free(peer);
 }
 #else /* WITH_CONTIKI */
@@ -57,6 +58,7 @@ dtls_malloc_peer() {
 
 void
 dtls_free_peer(dtls_peer_t *peer) {
+  dtls_handshake_free(peer->handshake_params);
   memb_free(&peer_storage, peer);
 }
 #endif /* WITH_CONTIKI */
@@ -77,13 +79,6 @@ dtls_new_peer(const session_t *session) {
       peer->security_params[i].cipher = TLS_NULL_WITH_NULL_NULL;
       peer->security_params[i].compression = TLS_COMPRESSION_NULL;
     }
-
-    /* initialize the handshake hash wrt. the hard-coded DTLS version */
-    dtls_debug("DTLSv12: initialize HASH_SHA256\n");
-    /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
-    /* FIXME: we use the default SHA256 here, might need to support other 
-              hash functions as well */
-    dtls_hash_init(&peer->handshake_params.hs_state.hs_hash);
   }
   
   return peer;

@@ -60,7 +60,7 @@ typedef struct dtls_peer_t {
   uint16_t epoch;	     /**< counter for cipher state changes*/
 
   dtls_security_parameters_t security_params[2];
-  dtls_handshake_parameters_t handshake_params;
+  dtls_handshake_parameters_t *handshake_params;
 } dtls_peer_t;
 
 static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)
