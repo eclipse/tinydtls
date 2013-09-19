@@ -138,7 +138,6 @@ void
 dtls_init() {
   dtls_clock_init();
   netq_init();
-  crypto_init();
   peer_init();
 }
 
@@ -486,59 +485,14 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 		  dtls_kb_iv_size(config, peer->role));
 }
 
-/**
- * Releases the storage allocated for read_cipher and write_cipher and
- * sets both fields to NULL.
- */
-static void
-invalidate_ciphers(dtls_security_parameters_t *config) {
-  if (config->read_cipher) {
-    dtls_cipher_free(config->read_cipher);
-    config->read_cipher = NULL;
-  }
-  
-  if (config->write_cipher) {
-    dtls_cipher_free(config->write_cipher);
-    config->write_cipher = NULL;
-  }
-}
-
 static int
 init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
 {
-  /* set crypto context for TLS_PSK_WITH_AES_128_CCM_8 */
-  dtls_cipher_free(config->read_cipher);
-
-  assert(handshake->cipher != TLS_NULL_WITH_NULL_NULL);
-  config->read_cipher = dtls_cipher_new(handshake->cipher,
-					dtls_kb_remote_write_key(config, role),
-					dtls_kb_key_size(config, role));
-
-  if (!config->read_cipher) {
-    dtls_warn("cannot create read cipher\n");
-    goto error;
-  }
-
-  dtls_cipher_free(config->write_cipher);
-  
-  config->write_cipher = dtls_cipher_new(handshake->cipher,
-					 dtls_kb_local_write_key(config, role),
-					 dtls_kb_key_size(config, role));
-
-  if (!config->write_cipher) {
-    dtls_warn("cannot create write cipher\n");
-    goto error;
-  }
-
   config->cipher = handshake->cipher;
   config->compression = handshake->compression;
   config->rseq = 0;
 
   return 0;
-error:
-
-  invalidate_ciphers(config);
-  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 }
 
 static int
@@ -1103,8 +1057,6 @@ dtls_prepare_record(dtls_peer_t *peer,
       res += data_len_array[i];
     }
   } else { /* TLS_PSK_WITH_AES_128_CCM_8 */   
-    dtls_cipher_context_t *cipher_context;
-
     /** 
      * length of additional_data for the AEAD cipher which consists of
      * seq_num(2+6) + type(1) + version(2) + length(2)
@@ -1156,13 +1108,6 @@ dtls_prepare_record(dtls_peer_t *peer,
 	   dtls_kb_iv_size(security, peer->role));
     memcpy(nonce + dtls_kb_iv_size(security, peer->role), start, 8); /* epoch + seq_num */
 
-    cipher_context = security->write_cipher;
-
-    if (!cipher_context) {
-      dtls_warn("no write_cipher available!\n");
-      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
-    }
-
     dtls_debug_dump("nonce:", nonce, DTLS_CCM_BLOCKSIZE);
     dtls_debug_dump("key:", dtls_kb_local_write_key(security, peer->role),
 		    dtls_kb_key_size(security, peer->role));
@@ -1176,7 +1121,9 @@ dtls_prepare_record(dtls_peer_t *peer,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
     
-    res = dtls_encrypt(cipher_context, start + 8, res - 8, start + 8, nonce,
+    res = dtls_encrypt(start + 8, res - 8, start + 8, nonce,
+		       dtls_kb_local_write_key(security, peer->role),
+		       dtls_kb_key_size(security, peer->role),
 		       A_DATA, A_DATA_LEN);
 
     if (res < 0)
@@ -2774,7 +2721,6 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     /* no cipher suite selected */
     return clen;
   } else {			/* TLS_PSK_WITH_AES_128_CCM_8 */   
-    dtls_cipher_context_t *cipher_context;
     /** 
      * length of additional_data for the AEAD cipher which consists of
      * seq_num(2+6) + type(1) + version(2) + length(2)
@@ -2795,13 +2741,6 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     *cleartext += 8;
     clen -= 8;
 
-    cipher_context = security->read_cipher;
-    
-    if (!cipher_context) {
-      dtls_warn("no read_cipher available!\n");
-      return 0;
-    }
-
     dtls_debug_dump("nonce", nonce, DTLS_CCM_BLOCKSIZE);
     dtls_debug_dump("key", dtls_kb_remote_write_key(security, peer->role),
 		    dtls_kb_key_size(security, peer->role));
@@ -2816,7 +2755,9 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, clen - 8); /* length without nonce_explicit */
 
-    clen = dtls_decrypt(cipher_context, *cleartext, clen, *cleartext, nonce,
+    clen = dtls_decrypt(*cleartext, *clen, *cleartext, nonce,
+		       dtls_kb_remote_write_key(security, peer->role),
+		       dtls_kb_key_size(security, peer->role),
 		       A_DATA, A_DATA_LEN);
     if (clen < 0)
       dtls_warn("decryption failed\n");

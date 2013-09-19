@@ -59,10 +59,6 @@
 #define DTLS_MASTER_SECRET_LENGTH 48
 #define DTLS_RANDOM_LENGTH 32
 
-#ifndef DTLS_CIPHER_CONTEXT_MAX
-#define DTLS_CIPHER_CONTEXT_MAX 4
-#endif
-
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
@@ -106,9 +102,6 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
-
-  dtls_cipher_context_t *read_cipher;  /**< decryption context */
-  dtls_cipher_context_t *write_cipher; /**< encryption context */
 } dtls_security_parameters_t;
 
 typedef struct {
@@ -180,8 +173,6 @@ typedef struct {
 
 /* just for consistency */
 #define dtls_kb_digest_size(Param, Role) DTLS_MAC_LENGTH
-
-void crypto_init();
 
 /** 
  * Expands the secret and key to a block of DTLS_HMAC_MAX 
@@ -258,10 +249,10 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
  */
-int dtls_encrypt(dtls_cipher_context_t *ctx, 
-		 const unsigned char *src, size_t length,
+int dtls_encrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
 		 unsigned char *nounce,
+		 unsigned char *key, size_t keylen,
 		 const unsigned char *aad, size_t aad_length);
 
 /** 
@@ -282,10 +273,10 @@ int dtls_encrypt(dtls_cipher_context_t *ctx,
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
  */
-int dtls_decrypt(dtls_cipher_context_t *ctx, 
-		 const unsigned char *src, size_t length,
+int dtls_decrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
 		 unsigned char *nounce,
+		 unsigned char *key, size_t keylen,
 		 const unsigned char *a_data, size_t a_data_length);
 
 /* helper functions */
@@ -340,26 +331,6 @@ int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 
 int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
 				 unsigned char *buf);
-
-/**
- * Creates a new dtls_cipher_context_t object for given @c cipher.
- * The storage allocated for this object must be released using 
- * dtls_cipher_free().
- *
- * @param code  Code of the requested cipher (host byte order)
- * @param key     The encryption and decryption key.
- * @param keylen  Actual length of @p key.
- * @return A new dtls_cipher_context_t object or @c NULL in case
- *         something went wrong (e.g. insufficient memory or wrong
- *         key length)
- */
-dtls_cipher_context_t *dtls_cipher_new(dtls_cipher_t code,
-				       unsigned char *key, size_t keylen);
-
-/** 
- * Releases the storage allocated by dtls_cipher_new() for @p cipher_context 
- */
-void dtls_cipher_free(dtls_cipher_context_t *cipher_context);
 
 #endif /* _DTLS_CRYPTO_H_ */
 

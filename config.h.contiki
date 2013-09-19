@@ -16,11 +16,6 @@
 #  define DTLS_PEER_MAX 1
 #endif
 
-#ifndef DTLS_CIPHER_CONTEXT_MAX
-/** The maximum number of cipher contexts that can be used in parallel. */
-#  define DTLS_CIPHER_CONTEXT_MAX (2 * DTLS_PEER_MAX)
-#endif
-
 #ifndef DTLS_HASH_MAX
 /** The maximum number of hash functions that can be used in parallel. */
 #  define DTLS_HASH_MAX (3 * DTLS_PEER_MAX)

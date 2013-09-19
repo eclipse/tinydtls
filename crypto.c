@@ -39,42 +39,31 @@
 #include "prng.h"
 
 #ifndef WITH_CONTIKI
-#include <stdlib.h>
-
-static inline dtls_cipher_context_t *
-dtls_cipher_context_new() {
-  return (dtls_cipher_context_t *)malloc(sizeof(dtls_cipher_context_t));
-}
-
-static inline void
-dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
-  free(ctx);
-}
-#else /* WITH_CONTIKI */
-MEMB(cipher_storage, dtls_cipher_context_t, DTLS_CIPHER_CONTEXT_MAX);
-
-static inline dtls_cipher_context_t *
-dtls_cipher_context_new() {
-  return (dtls_cipher_context_t *)memb_alloc(&cipher_storage);
-}
-
-static inline void
-dtls_cipher_context_free(dtls_cipher_context_t *ctx) {
-  if (ctx)
-    memb_free(&cipher_storage, ctx);
-}
-#endif /* WITH_CONTIKI */
-
-void crypto_init() {
-  dtls_hmac_storage_init();
-
-#ifdef WITH_CONTIKI
-  memb_init(&cipher_storage);
-#endif /* WITH_CONTIKI */
-}
+#include <pthread.h>
+#endif
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
+
+static struct dtls_cipher_context_t cipher_context;
+#ifndef WITH_CONTIKI
+static pthread_mutex_t cipher_context_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+static struct dtls_cipher_context_t *dtls_cipher_context_get(void)
+{
+#ifndef WITH_CONTIKI
+  pthread_mutex_lock(&cipher_context_mutex);
+#endif
+  return &cipher_context;
+}
+
+static void dtls_cipher_context_release(void)
+{
+#ifndef WITH_CONTIKI
+  pthread_mutex_unlock(&cipher_context_mutex);
+#endif
+}
 
 size_t
 dtls_p_hash(dtls_hashfunc_t h,
@@ -404,74 +393,55 @@ dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 				    sizeof(sha256hash), result_r, result_s);
 }
 
-dtls_cipher_context_t *
-dtls_cipher_new(dtls_cipher_t cipher,
-		unsigned char *key, size_t keylen) {
-  dtls_cipher_context_t *cipher_context = NULL;
+int 
+dtls_encrypt(const unsigned char *src, size_t length,
+	     unsigned char *buf,
+	     unsigned char *nounce,
+	     unsigned char *key, size_t keylen,
+	     const unsigned char *aad, size_t la)
+{
+  int ret;
+  struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
 
-  cipher_context = dtls_cipher_context_new();
-  if (!cipher_context) {
-    dtls_warn("cannot allocate cipher_context\r\n");
-    return NULL;
-  }
-
-  switch (cipher) {
-  case TLS_PSK_WITH_AES_128_CCM_8:
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
-    aes128_ccm_t *ccm_ctx = &cipher_context->data;
-    
-    if (rijndael_set_key_enc_only(&ccm_ctx->ctx, key, 8 * keylen) < 0) {
-      /* cleanup everything in case the key has the wrong size */
-      dtls_warn("cannot set rijndael key\n");
-      goto error;
-    }
-    break;
-  }
-  default:
-    dtls_warn("unknown cipher %04x\n", cipher);
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
+  if (ret < 0) {
+    /* cleanup everything in case the key has the wrong size */
+    dtls_warn("cannot set rijndael key\n");
     goto error;
   }
-  
-  return cipher_context;
- error:
-  dtls_cipher_context_free(cipher_context);
-  return NULL;
-}
 
-void 
-dtls_cipher_free(dtls_cipher_context_t *cipher_context) {
-  dtls_cipher_context_free(cipher_context);
-}
+  if (src != buf)
+    memmove(buf, src, length);
+  ret = dtls_ccm_encrypt(&ctx->data, src, length, buf, nounce, aad, la);
 
-int 
-dtls_encrypt(dtls_cipher_context_t *ctx, 
-	     const unsigned char *src, size_t length,
-	     unsigned char *buf,
-	     unsigned char *nounce,
-	     const unsigned char *aad, size_t la) {
-  if (ctx) {
-    if (src != buf)
-      memmove(buf, src, length);
-    return dtls_ccm_encrypt(&ctx->data, src, length, buf, nounce,
-			    aad, la);
-  }
-
-  return -1;
+error:
+  dtls_cipher_context_release();
+  return ret;
 }
 
 int 
-dtls_decrypt(dtls_cipher_context_t *ctx, 
-	     const unsigned char *src, size_t length,
+dtls_decrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
 	     unsigned char *nounce,
-	     const unsigned char *aad, size_t la) {
-  if (ctx) {
-    if (src != buf)
-      memmove(buf, src, length);
-    return dtls_ccm_decrypt(&ctx->data, src, length, buf, nounce,
-			    aad, la);
+	     unsigned char *key, size_t keylen,
+	     const unsigned char *aad, size_t la)
+{
+  int ret;
+  struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
+
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
+  if (ret < 0) {
+    /* cleanup everything in case the key has the wrong size */
+    dtls_warn("cannot set rijndael key\n");
+    goto error;
   }
 
-  return -1;
+  if (src != buf)
+    memmove(buf, src, length);
+  ret = dtls_ccm_decrypt(&ctx->data, src, length, buf, nounce, aad, la);
+
+error:
+  dtls_cipher_context_release();
+  return ret;
 }
 
