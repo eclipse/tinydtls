@@ -97,7 +97,7 @@ dtls_new_peer(const session_t *session) {
     /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
     /* FIXME: we use the default SHA256 here, might need to support other 
               hash functions as well */
-    dtls_hash_init(&peer->hs_state.hs_hash);
+    dtls_hash_init(&peer->handshake_params.hs_state.hs_hash);
   }
   
   return peer;
