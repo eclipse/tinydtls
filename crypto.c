@@ -37,6 +37,7 @@
 #include "ccm.h"
 #include "ecc/ecc.h"
 #include "prng.h"
+#include "netq.h"
 
 #ifndef WITH_CONTIKI
 #include <pthread.h>
@@ -63,6 +64,68 @@ static void dtls_cipher_context_release(void)
 #ifndef WITH_CONTIKI
   pthread_mutex_unlock(&cipher_context_mutex);
 #endif
+}
+
+#ifndef WITH_CONTIKI
+void crypto_init()
+{
+}
+
+static dtls_handshake_parameters_t *dtls_handshake_malloc() {
+  return malloc(sizeof(dtls_handshake_parameters_t));
+}
+
+static void dtls_handshake_dealloc(dtls_handshake_parameters_t *handshake) {
+  free(handshake);
+}
+#else /* WITH_CONTIKI */
+
+#include "memb.h"
+MEMB(handshake_storage, dtls_handshake_parameters_t, DTLS_HANDSHAKE_MAX);
+
+void crypto_init() {
+  memb_init(&handshake_storage);
+}
+
+static dtls_handshake_parameters_t *dtls_handshake_malloc() {
+  return memb_alloc(&handshake_storage);
+}
+
+static void dtls_handshake_dealloc(dtls_handshake_parameters_t *handshake) {
+  memb_free(&handshake_storage, handshake);
+}
+#endif /* WITH_CONTIKI */
+
+dtls_handshake_parameters_t *dtls_handshake_new()
+{
+  dtls_handshake_parameters_t *handshake;
+
+  handshake = dtls_handshake_malloc();
+  if (!handshake) {
+    dtls_crit("can not allocate a handshake struct\n");
+    return NULL;
+  }
+
+  memset(handshake, 0, sizeof(*handshake));
+
+  if (handshake) {
+    /* initialize the handshake hash wrt. the hard-coded DTLS version */
+    dtls_debug("DTLSv12: initialize HASH_SHA256\n");
+    /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
+    /* FIXME: we use the default SHA256 here, might need to support other 
+              hash functions as well */
+    dtls_hash_init(&handshake->hs_state.hs_hash);
+  }
+  return handshake;
+}
+
+void dtls_handshake_free(dtls_handshake_parameters_t *handshake)
+{
+  if (!handshake)
+    return;
+
+  netq_delete_all(handshake->reorder_queue);
+  dtls_handshake_dealloc(handshake);
 }
 
 size_t
