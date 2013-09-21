@@ -78,13 +78,23 @@ static dtls_handshake_parameters_t *dtls_handshake_malloc() {
 static void dtls_handshake_dealloc(dtls_handshake_parameters_t *handshake) {
   free(handshake);
 }
+
+static dtls_security_parameters_t *dtls_security_malloc() {
+  return malloc(sizeof(dtls_security_parameters_t));
+}
+
+static void dtls_security_dealloc(dtls_security_parameters_t *security) {
+  free(security);
+}
 #else /* WITH_CONTIKI */
 
 #include "memb.h"
 MEMB(handshake_storage, dtls_handshake_parameters_t, DTLS_HANDSHAKE_MAX);
+MEMB(security_storage, dtls_security_parameters_t, DTLS_SECURITY_MAX);
 
 void crypto_init() {
   memb_init(&handshake_storage);
+  memb_init(&security_storage);
 }
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc() {
@@ -93,6 +103,14 @@ static dtls_handshake_parameters_t *dtls_handshake_malloc() {
 
 static void dtls_handshake_dealloc(dtls_handshake_parameters_t *handshake) {
   memb_free(&handshake_storage, handshake);
+}
+
+static dtls_security_parameters_t *dtls_security_malloc() {
+  return memb_alloc(&security_storage);
+}
+
+static void dtls_security_dealloc(dtls_security_parameters_t *security) {
+  memb_free(&security_storage, security);
 }
 #endif /* WITH_CONTIKI */
 
@@ -126,6 +144,33 @@ void dtls_handshake_free(dtls_handshake_parameters_t *handshake)
 
   netq_delete_all(handshake->reorder_queue);
   dtls_handshake_dealloc(handshake);
+}
+
+dtls_security_parameters_t *dtls_security_new()
+{
+  dtls_security_parameters_t *security;
+
+  security = dtls_security_malloc();
+  if (!security) {
+    dtls_crit("can not allocate a security struct\n");
+    return NULL;
+  }
+
+  memset(security, 0, sizeof(*security));
+
+  if (security) {
+    security->cipher = TLS_NULL_WITH_NULL_NULL;
+    security->compression = TLS_COMPRESSION_NULL;
+  }
+  return security;
+}
+
+void dtls_security_free(dtls_security_parameters_t *security)
+{
+  if (!security)
+    return;
+
+  dtls_security_dealloc(security);
 }
 
 size_t

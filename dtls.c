@@ -499,14 +499,20 @@ init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *
 static int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_handshake_parameters_t *handshake,
-		    dtls_security_parameters_t *security,
+		    dtls_peer_t *peer,
 		    session_t *session,
 		    dtls_peer_type role) {
   unsigned char *pre_master_secret;
   size_t pre_master_len = 0;
-  pre_master_secret = security->key_block;
+  dtls_security_parameters_t *security = dtls_security_params_next(peer);
   uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   int err;
+
+  if (!security) {
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+  }
+
+  pre_master_secret = security->key_block;
 
   switch (handshake->cipher) {
   case TLS_PSK_WITH_AES_128_CCM_8: {
@@ -790,7 +796,7 @@ dtls_update_parameters(dtls_context_t *ctx,
     /* Looks like we do not have a cipher nor compression. This is ok
      * for renegotiation, but not for the initial handshake. */
 
-    if (security->cipher == TLS_NULL_WITH_NULL_NULL)
+    if (!security || security->cipher == TLS_NULL_WITH_NULL_NULL)
       goto error;
 
     config->cipher = security->cipher;
@@ -821,8 +827,11 @@ dtls_update_parameters(dtls_context_t *ctx,
 
   if (data_length < sizeof(uint8)) { 
     /* no compression specified, take the current compression method */
-    config->compression = security->compression;
-    goto error;
+    if (security)
+      config->compression = security->compression;
+    else
+      config->compression = TLS_COMPRESSION_NULL;
+    return 0;
   }
 
   i = dtls_uint8_to_int(data);
@@ -2642,7 +2651,6 @@ check_server_hellodone(dtls_context_t *ctx,
   int res;
   const dtls_ecdsa_key_t *ecdsa_key;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
-  dtls_security_parameters_t *security = dtls_security_params_other(peer);
 
   /* calculate master key, send CCS */
 
@@ -2682,7 +2690,7 @@ check_server_hellodone(dtls_context_t *ctx,
     }
   }
 
-  res = calculate_key_block(ctx, handshake, security,
+  res = calculate_key_block(ctx, handshake, peer,
 			    &peer->session, peer->role);
   if (res < 0) {
     return res;
@@ -2756,7 +2764,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, clen - 8); /* length without nonce_explicit */
 
-    clen = dtls_decrypt(*cleartext, *clen, *cleartext, nonce,
+    clen = dtls_decrypt(*cleartext, clen, *cleartext, nonce,
 		       dtls_kb_remote_write_key(security, peer->role),
 		       dtls_kb_key_size(security, peer->role),
 		       A_DATA, A_DATA_LEN);
@@ -2766,6 +2774,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
 #ifndef NDEBUG
       printf("decrypt_verify(): found %i bytes cleartext\n", clen);
 #endif
+      dtls_security_params_free_other(peer);
     }
     dtls_debug_dump("cleartext", *cleartext, clen);
   }
@@ -3267,7 +3276,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   int err;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
-  dtls_security_parameters_t *security = dtls_security_params_other(peer);
   dtls_record_header_t *header = DTLS_RECORD_HEADER(record_header);
 
   /* A CCS message is handled after a KeyExchange message was
@@ -3286,7 +3294,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* Just change the cipher when we are on the same epoch */
   if (dtls_get_epoch(header) == peer->epoch) {
-    err = calculate_key_block(ctx, handshake, security,
+    err = calculate_key_block(ctx, handshake, peer,
 			      &peer->session, peer->role);
     if (err < 0) {
       return err;

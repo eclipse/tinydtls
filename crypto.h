@@ -336,6 +336,10 @@ int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
 dtls_handshake_parameters_t *dtls_handshake_new();
 
 void dtls_handshake_free(dtls_handshake_parameters_t *handshake);
+
+dtls_security_parameters_t *dtls_security_new();
+
+void dtls_security_free(dtls_security_parameters_t *security);
 void crypto_init();
 
 #endif /* _DTLS_CRYPTO_H_ */

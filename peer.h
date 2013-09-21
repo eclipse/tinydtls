@@ -59,13 +59,13 @@ typedef struct dtls_peer_t {
   dtls_state_t state;        /**< DTLS engine state */
   uint16_t epoch;	     /**< counter for cipher state changes*/
 
-  dtls_security_parameters_t security_params[2];
+  dtls_security_parameters_t *security_params[2];
   dtls_handshake_parameters_t *handshake_params;
 } dtls_peer_t;
 
 static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)
 {
-  return &peer->security_params[epoch % 2];
+  return peer->security_params[epoch % 2];
 }
 
 static inline dtls_security_parameters_t *dtls_security_params(dtls_peer_t *peer)
@@ -73,9 +73,29 @@ static inline dtls_security_parameters_t *dtls_security_params(dtls_peer_t *peer
   return dtls_security_params_epoch(peer, peer->epoch);
 }
 
-static inline dtls_security_parameters_t *dtls_security_params_other(dtls_peer_t *peer)
+static inline dtls_security_parameters_t *dtls_security_params_next(dtls_peer_t *peer)
 {
+  dtls_security_parameters_t* security = dtls_security_params_epoch(peer, peer->epoch + 1);
+
+  if (security)
+    dtls_security_free(security);
+
+  peer->security_params[(peer->epoch  + 1) % 2] = dtls_security_new();
+  if (!peer->security_params[(peer->epoch  + 1) % 2]) {
+    return NULL;
+  }
   return dtls_security_params_epoch(peer, peer->epoch + 1);
+}
+
+static inline void dtls_security_params_free_other(dtls_peer_t *peer)
+{
+  dtls_security_parameters_t* security = dtls_security_params_epoch(peer, peer->epoch + 1);
+
+  if (!security)
+    return;
+
+  dtls_security_free(security);
+  peer->security_params[(peer->epoch  + 1) % 2] = NULL;
 }
 
 void peer_init();
