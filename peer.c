@@ -39,6 +39,8 @@ dtls_malloc_peer() {
 void
 dtls_free_peer(dtls_peer_t *peer) {
   dtls_handshake_free(peer->handshake_params);
+  dtls_security_free(peer->security_params[0]);
+  dtls_security_free(peer->security_params[1]);
   free(peer);
 }
 #else /* WITH_CONTIKI */
@@ -59,6 +61,8 @@ dtls_malloc_peer() {
 void
 dtls_free_peer(dtls_peer_t *peer) {
   dtls_handshake_free(peer->handshake_params);
+  dtls_security_free(peer->security_params[0]);
+  dtls_security_free(peer->security_params[1]);
   memb_free(&peer_storage, peer);
 }
 #endif /* WITH_CONTIKI */
@@ -66,20 +70,19 @@ dtls_free_peer(dtls_peer_t *peer) {
 dtls_peer_t *
 dtls_new_peer(const session_t *session) {
   dtls_peer_t *peer;
-  int i;
 
   peer = dtls_malloc_peer();
   if (peer) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
 
-    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "dtls_new_peer", session);
-    /* initially allow the NULL cipher */
-    for (i = 0; i < 2 ; i++) {
-      peer->security_params[i].cipher = TLS_NULL_WITH_NULL_NULL;
-      peer->security_params[i].compression = TLS_COMPRESSION_NULL;
+    if (!peer->security_params[0]) {
+      dtls_free_peer(peer);
+      return NULL;
     }
+
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "dtls_new_peer", session);
   }
-  
+
   return peer;
 }
