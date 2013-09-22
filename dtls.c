@@ -2754,19 +2754,24 @@ check_server_hellodone(dtls_context_t *ctx,
 }
 
 static int
-decrypt_verify(dtls_peer_t *peer,
-	       uint8 *packet, size_t length,
-	       uint8 **cleartext, size_t *clen) {
-  int ok = 0;
+decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
+	       uint8 **cleartext)
+{
   dtls_record_header_t *header = DTLS_RECORD_HEADER(packet);
-  dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));;
+  dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
+  int clen;
   
   *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
-  *clen = length - sizeof(dtls_record_header_t);
+  clen = length - sizeof(dtls_record_header_t);
+
+  if (!security) {
+    dtls_alert("No security context for epoch: %i\n", dtls_get_epoch(header));
+    return -1;
+  }
 
   if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite selected */
-    return 1;
+    return clen;
   } else {			/* TLS_PSK_WITH_AES_128_CCM_8 */   
     dtls_cipher_context_t *cipher_context;
     /** 
@@ -2776,10 +2781,8 @@ decrypt_verify(dtls_peer_t *peer,
 #define A_DATA_LEN 13
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
-    long int len;
 
-
-    if (*clen < 16)		/* need at least IV and MAC */
+    if (clen < 16)		/* need at least IV and MAC */
       return -1;
 
     memset(nonce, 0, DTLS_CCM_BLOCKSIZE);
@@ -2789,7 +2792,7 @@ decrypt_verify(dtls_peer_t *peer,
     /* read epoch and seq_num from message */
     memcpy(nonce + dtls_kb_iv_size(security, peer->role), *cleartext, 8);
     *cleartext += 8;
-    *clen -= 8;
+    clen -= 8;
 
     cipher_context = security->read_cipher;
     
@@ -2801,7 +2804,7 @@ decrypt_verify(dtls_peer_t *peer,
     dtls_debug_dump("nonce", nonce, DTLS_CCM_BLOCKSIZE);
     dtls_debug_dump("key", dtls_kb_remote_write_key(security, peer->role),
 		    dtls_kb_key_size(security, peer->role));
-    dtls_debug_dump("ciphertext", *cleartext, *clen);
+    dtls_debug_dump("ciphertext", *cleartext, clen);
 
     /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
      * 
@@ -2810,24 +2813,20 @@ decrypt_verify(dtls_peer_t *peer,
      */
     memcpy(A_DATA, &DTLS_RECORD_HEADER(packet)->epoch, 8); /* epoch and seq_num */
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
-    dtls_int_to_uint16(A_DATA + 11, *clen - 8); /* length without nonce_explicit */
+    dtls_int_to_uint16(A_DATA + 11, clen - 8); /* length without nonce_explicit */
 
-    len = dtls_decrypt(cipher_context, *cleartext, *clen, *cleartext, nonce,
+    clen = dtls_decrypt(cipher_context, *cleartext, clen, *cleartext, nonce,
 		       A_DATA, A_DATA_LEN);
-
-    ok = len >= 0;
-    if (!ok)
+    if (clen < 0)
       dtls_warn("decryption failed\n");
     else {
 #ifndef NDEBUG
-      printf("decrypt_verify(): found %ld bytes cleartext\n", len);
+      printf("decrypt_verify(): found %i bytes cleartext\n", clen);
 #endif
-      *clen = len;
     }
-    dtls_debug_dump("cleartext", *cleartext, *clen);
+    dtls_debug_dump("cleartext", *cleartext, clen);
   }
-
-  return ok;
+  return clen;
 }
 
 static int
@@ -3440,7 +3439,7 @@ dtls_handle_message(dtls_context_t *ctx,
   dtls_peer_t *peer = NULL;
   unsigned int rlen;		/* record length */
   uint8 *data; 			/* (decrypted) payload */
-  size_t data_length;		/* length of decrypted payload 
+  int data_length;		/* length of decrypted payload 
 				   (without MAC and padding) */
   int err;
 
@@ -3476,7 +3475,8 @@ dtls_handle_message(dtls_context_t *ctx,
 	goto next;
       }
 
-      if (!decrypt_verify(peer, msg, rlen, &data, &data_length)) {
+      data_length = decrypt_verify(peer, msg, rlen, &data);
+      if (data_length < 0) {
         dtls_info("decrypt_verify() failed\n");
         goto next;
       }
