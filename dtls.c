@@ -231,7 +231,7 @@ dtls_write(struct dtls_context_t *ctx,
 }
 
 static int
-dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
+dtls_get_cookie(uint8 *msg, size_t msglen, uint8 **cookie) {
   /* To access the cookie, we have to determine the session id's
    * length and skip the whole thing. */
   if (msglen < DTLS_HS_LENGTH + DTLS_CH_LENGTH + sizeof(uint8))
@@ -258,7 +258,7 @@ dtls_get_cookie(uint8 *msg, int msglen, uint8 **cookie) {
 static int
 dtls_create_cookie(dtls_context_t *ctx, 
 		   session_t *session,
-		   uint8 *msg, int msglen,
+		   uint8 *msg, size_t msglen,
 		   uint8 *cookie, int *clen) {
   unsigned char buf[DTLS_HMAC_MAX];
   size_t len, e;
@@ -331,7 +331,7 @@ static char const content_types[] = {
  * 
  */
 static unsigned int
-is_record(uint8 *msg, int msglen) {
+is_record(uint8 *msg, size_t msglen) {
   unsigned int rlen = 0;
 
   if (msglen >= DTLS_RH_LENGTH	/* FIXME allow empty records? */
@@ -653,7 +653,7 @@ static int
 dtls_check_tls_extension(dtls_peer_t *peer,
 			 uint8 *data, size_t data_length, int client_hello)
 {
-  int i, j;
+  uint16_t i, j;
   int ext_elliptic_curve = 0;
   int ext_client_cert_type = 0;
   int ext_server_cert_type = 0;
@@ -1040,7 +1040,7 @@ dtls_prepare_record(dtls_peer_t *peer,
 		    uint8 *sendbuf, size_t *rlen) {
   uint8 *p, *start;
   int res;
-  int i;
+  unsigned int i;
   dtls_security_parameters_t *security = (peer) ? dtls_security_params_epoch(peer, epoch) : NULL;
   
   if (*rlen < DTLS_RH_LENGTH) {
@@ -1245,7 +1245,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   unsigned char sendbuf[DTLS_MAX_BUF];
   size_t len = sizeof(sendbuf);
   int res;
-  int i;
+  unsigned int i;
   size_t overall_len = 0;
 
   res = dtls_prepare_record(peer, type, epoch, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
@@ -2536,7 +2536,7 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
 			      uint8 *data, size_t data_length)
 {
   dtls_handshake_parameters_t *config = peer->handshake_params;
-  int len;
+  uint16_t len;
 
   update_hs_hash(peer, data, data_length);
 
@@ -2572,7 +2572,7 @@ check_certificate_request(dtls_context_t *ctx,
 			  dtls_peer_t *peer,
 			  uint8 *data, size_t data_length)
 {
-  int i;
+  unsigned int i;
   int auth_alg;
   int sig_alg;
   int hash_alg;
