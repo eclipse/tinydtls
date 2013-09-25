@@ -57,7 +57,6 @@ typedef struct dtls_peer_t {
 
   dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
   dtls_state_t state;        /**< DTLS engine state */
-  uint16_t epoch;	     /**< counter for cipher state changes*/
 
   dtls_security_parameters_t *security_params[2];
   dtls_handshake_parameters_t *handshake_params;
@@ -65,37 +64,51 @@ typedef struct dtls_peer_t {
 
 static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)
 {
-  return peer->security_params[epoch % 2];
+  if (peer->security_params[0] && peer->security_params[0]->epoch == epoch) {
+    return peer->security_params[0];
+  } else if (peer->security_params[1] && peer->security_params[1]->epoch == epoch) {
+    return peer->security_params[1];
+  } else {
+    return NULL;
+  }
 }
 
 static inline dtls_security_parameters_t *dtls_security_params(dtls_peer_t *peer)
 {
-  return dtls_security_params_epoch(peer, peer->epoch);
+  return peer->security_params[0];
 }
 
 static inline dtls_security_parameters_t *dtls_security_params_next(dtls_peer_t *peer)
 {
-  dtls_security_parameters_t* security = dtls_security_params_epoch(peer, peer->epoch + 1);
+  if (peer->security_params[1])
+    dtls_security_free(peer->security_params[1]);
 
-  if (security)
-    dtls_security_free(security);
-
-  peer->security_params[(peer->epoch  + 1) % 2] = dtls_security_new();
-  if (!peer->security_params[(peer->epoch  + 1) % 2]) {
+  peer->security_params[1] = dtls_security_new();
+  if (!peer->security_params[1]) {
     return NULL;
   }
-  return dtls_security_params_epoch(peer, peer->epoch + 1);
+  peer->security_params[1]->epoch = peer->security_params[0]->epoch + 1;
+  return peer->security_params[1];
 }
 
 static inline void dtls_security_params_free_other(dtls_peer_t *peer)
 {
-  dtls_security_parameters_t* security = dtls_security_params_epoch(peer, peer->epoch + 1);
+  dtls_security_parameters_t * security0 = peer->security_params[0];
+  dtls_security_parameters_t * security1 = peer->security_params[1];
 
-  if (!security)
+  if (!security0 || !security1 || security0->epoch < security1->epoch)
     return;
 
-  dtls_security_free(security);
-  peer->security_params[(peer->epoch  + 1) % 2] = NULL;
+  dtls_security_free(security1);
+  peer->security_params[1] = NULL;
+}
+
+static inline void dtls_security_params_switch(dtls_peer_t *peer)
+{
+  dtls_security_parameters_t * security = peer->security_params[1];
+
+  peer->security_params[1] = peer->security_params[0];
+  peer->security_params[0] = security;
 }
 
 void peer_init();

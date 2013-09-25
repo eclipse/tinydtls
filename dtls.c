@@ -173,7 +173,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session, uint
 static int
 dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	  uint8 *buf, size_t buflen) {
-  return dtls_send_multi(ctx, peer, &peer->session, peer->epoch, type, &buf, &buflen, 1);
+  return dtls_send_multi(ctx, peer, &peer->session, dtls_security_params(peer)->epoch, type, &buf, &buflen, 1);
 }
 
 /**
@@ -1162,7 +1162,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   uint8 *data_array[2];
   size_t data_len_array[2];
   int i = 0;
-  uint16_t epoch = peer ? peer->epoch : 0;
+  uint16_t epoch = peer ? dtls_security_params(peer)->epoch : 0;
 
   dtls_set_handshake_header(header_type, peer, data_length, 0,
 			    data_length, buf);
@@ -1273,7 +1273,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       n->retransmit_cnt = 0;
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
-      n->epoch = peer->epoch;
+      n->epoch = epoch;
       n->type = type;
       n->length = 0;
       for (i = 0; i < buf_array_len; i++) {
@@ -1953,14 +1953,10 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 }
 
 static inline int 
-dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer, uint16_t epoch) {
-  uint8 buf[1];
-  size_t len = 1;
-  uint8 *buf_array = buf;
+dtls_send_ccs(dtls_context_t *ctx, dtls_peer_t *peer) {
+  uint8 buf[1] = {1};
 
-  buf[0] = 1;
-
-  return dtls_send_multi(ctx, peer, &peer->session, epoch, DTLS_CT_CHANGE_CIPHER_SPEC, &buf_array, &len, 1);
+  return dtls_send(ctx, peer, DTLS_CT_CHANGE_CIPHER_SPEC, buf, 1);
 }
 
     
@@ -2696,14 +2692,14 @@ check_server_hellodone(dtls_context_t *ctx,
     return res;
   }
 
-  res = dtls_send_ccs(ctx, peer, peer->epoch);
+  res = dtls_send_ccs(ctx, peer);
   if (res < 0) {
     dtls_debug("cannot send CCS message\n");
     return res;
   }
 
   /* and switch cipher suite */
-  peer->epoch++;
+  dtls_security_params_switch(peer);
 
   /* Client Finished */
   dtls_debug("send Finished\n");
@@ -2973,11 +2969,13 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       update_hs_hash(peer, data, data_length);
 
       /* send change cipher spec message and switch to new configuration */
-      err = dtls_send_ccs(ctx, peer, peer->epoch - 1);
+      err = dtls_send_ccs(ctx, peer);
       if (err < 0) {
         dtls_warn("cannot send CCS message\n");
         return err;
       }
+
+      dtls_security_params_switch(peer);
 
       err = dtls_send_finished(ctx, peer, PRF_LABEL(server), PRF_LABEL_SIZE(server));
       if (err < 0) {
@@ -3276,7 +3274,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 {
   int err;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
-  dtls_record_header_t *header = DTLS_RECORD_HEADER(record_header);
 
   /* A CCS message is handled after a KeyExchange message was
    * received from the client. When security parameters have been
@@ -3293,14 +3290,12 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
   /* Just change the cipher when we are on the same epoch */
-  if (dtls_get_epoch(header) == peer->epoch) {
+  if (peer->role == DTLS_SERVER) {
     err = calculate_key_block(ctx, handshake, peer,
 			      &peer->session, peer->role);
     if (err < 0) {
       return err;
     }
-
-    peer->epoch++;
   }
   
   peer->state = DTLS_STATE_WAIT_FINISHED;
@@ -3439,17 +3434,9 @@ dtls_handle_message(dtls_context_t *ctx,
   while ((rlen = is_record(msg,msglen))) {
     dtls_peer_type role;
     dtls_state_t state;
-    dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
 
     dtls_debug("got packet %d (%d bytes)\n", msg[0], rlen);
     if (peer) {
-      /* skip packet if it is from a different epoch */
-      if (dtls_get_epoch(header) != peer->epoch &&
-	  dtls_get_epoch(header) != peer->epoch - 1) {
-	dtls_warn("got packet from wrong epoch\n");
-	goto next;
-      }
-
       data_length = decrypt_verify(peer, msg, rlen, &data);
       if (data_length < 0) {
         dtls_info("decrypt_verify() failed\n");
