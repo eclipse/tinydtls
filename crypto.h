@@ -93,6 +93,7 @@ typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
+  uint16_t epoch;	     /**< counter for cipher state changes*/
   uint64_t rseq;	     /**< sequence number of last record sent */
 
   /** 
