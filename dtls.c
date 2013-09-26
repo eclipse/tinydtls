@@ -152,9 +152,10 @@ dtls_init() {
    : -1)
 
 static int
-dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session, uint16_t epoch,
-		unsigned char type, uint8 *buf_array[], size_t buf_len_array[],
-		size_t buf_array_len);
+dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
+		dtls_security_parameters_t *security , session_t *session,
+		unsigned char type, uint8 *buf_array[],
+		size_t buf_len_array[], size_t buf_array_len);
 
 /** 
  * Sends the fragment of length \p buflen given in \p buf to the
@@ -173,7 +174,8 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session, uint
 static int
 dtls_send(dtls_context_t *ctx, dtls_peer_t *peer, unsigned char type,
 	  uint8 *buf, size_t buflen) {
-  return dtls_send_multi(ctx, peer, &peer->session, dtls_security_params(peer)->epoch, type, &buf, &buflen, 1);
+  return dtls_send_multi(ctx, peer, dtls_security_params(peer), &peer->session,
+			 type, &buf, &buflen, 1);
 }
 
 /**
@@ -360,7 +362,7 @@ is_record(uint8 *msg, size_t msglen) {
  */ 
 static inline uint8 *
 dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
-		       uint16_t epoch, uint8 *buf) {
+		       uint8 *buf) {
   
   dtls_int_to_uint8(buf, type);
   buf += sizeof(uint8);
@@ -369,7 +371,7 @@ dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
   buf += sizeof(uint16);
 
   if (security) {
-    dtls_int_to_uint16(buf, epoch);
+    dtls_int_to_uint16(buf, security->epoch);
     buf += sizeof(uint16);
 
     dtls_int_to_uint48(buf, security->rseq);
@@ -1033,22 +1035,21 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
  * \return Less than zero on error, or greater than zero success.
  */
 static int
-dtls_prepare_record(dtls_peer_t *peer,
-		    unsigned char type, uint16_t epoch,
+dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
+		    unsigned char type,
 		    uint8 *data_array[], size_t data_len_array[],
 		    size_t data_array_len,
 		    uint8 *sendbuf, size_t *rlen) {
   uint8 *p, *start;
   int res;
   unsigned int i;
-  dtls_security_parameters_t *security = (peer) ? dtls_security_params_epoch(peer, epoch) : NULL;
   
   if (*rlen < DTLS_RH_LENGTH) {
     dtls_alert("The sendbuf (%i bytes) is too small\n", *rlen);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  p = dtls_set_record_header(type, security, epoch, sendbuf);
+  p = dtls_set_record_header(type, security, sendbuf);
   start = p;
 
   if (!security || security->cipher == TLS_NULL_WITH_NULL_NULL) {
@@ -1162,7 +1163,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   uint8 *data_array[2];
   size_t data_len_array[2];
   int i = 0;
-  uint16_t epoch = peer ? dtls_security_params(peer)->epoch : 0;
+  dtls_security_parameters_t *security = peer ? dtls_security_params(peer) : NULL;
 
   dtls_set_handshake_header(header_type, peer, data_length, 0,
 			    data_length, buf);
@@ -1182,7 +1183,8 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     data_len_array[i] = data_length;
     i++;
   }
-  return dtls_send_multi(ctx, peer, session, epoch, DTLS_CT_HANDSHAKE, data_array, data_len_array, i);
+  return dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
+			 data_array, data_len_array, i);
 }
 
 static int
@@ -1232,10 +1234,11 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
  *   bytes that have been sent otherwise.
  */
 static int
-dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
-		uint16_t epoch, unsigned char type,
-	  uint8 *buf_array[], size_t buf_len_array[], size_t buf_array_len) {
-  
+dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
+		dtls_security_parameters_t *security , session_t *session,
+		unsigned char type, uint8 *buf_array[],
+		size_t buf_len_array[], size_t buf_array_len)
+{
   /* We cannot use ctx->sendbuf here as it is reserved for collecting
    * the input for this function, i.e. buf == ctx->sendbuf.
    *
@@ -1248,7 +1251,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   unsigned int i;
   size_t overall_len = 0;
 
-  res = dtls_prepare_record(peer, type, epoch, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
+  res = dtls_prepare_record(peer, security, type, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
 
   if (res < 0)
     return res;
@@ -1273,7 +1276,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       n->retransmit_cnt = 0;
       n->timeout = 2 * CLOCK_SECOND;
       n->peer = peer;
-      n->epoch = epoch;
+      n->epoch = (security) ? security->epoch : 0;
       n->type = type;
       n->length = 0;
       for (i = 0; i < buf_array_len; i++) {
@@ -3662,6 +3665,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       unsigned char *data = node->data;
       size_t length = node->length;
       dtls_tick_t now;
+      dtls_security_parameters_t *security = dtls_security_params_epoch(node->peer, node->epoch);
 
       dtls_ticks(&now);
       node->retransmit_cnt++;
@@ -3670,7 +3674,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       
       dtls_debug("** retransmit packet\n");
       
-      err = dtls_prepare_record(node->peer, node->type, node->epoch, &data, &length,
+      err = dtls_prepare_record(node->peer, security, node->type, &data, &length,
 				1, sendbuf, &len);
       if (err < 0) {
 	dtls_warn("can not retransmit package, err: %i\n", err);
