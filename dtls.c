@@ -3029,6 +3029,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     }
     peer->hs_state.mseq_r = 0;
     peer->hs_state.mseq_s = 0;
+    dtls_debug("Handshake complete\n");
     peer->state = DTLS_STATE_CONNECTED;
 
     /* return here to not increase the message receive counter */
