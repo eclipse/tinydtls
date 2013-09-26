@@ -1323,7 +1323,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         n->length += buf_len_array[i];
       }
 
-      if (!netq_insert_node((netq_t **)ctx->sendqueue, n)) {
+      if (!netq_insert_node(ctx->sendqueue, n)) {
 	dtls_warn("cannot add packet to retransmit buffer\n");
 	netq_node_free(n);
 #ifdef WITH_CONTIKI
@@ -3233,7 +3233,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return 0;
     }
 
-    netq_t *node = netq_head((netq_t **)peer->handshake_params.reorder_queue);
+    netq_t *node = netq_head(peer->handshake_params.reorder_queue);
     while (node) {
       dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
       if (dtls_uint16_to_int(node_header->message_seq) == dtls_uint16_to_int(hs_header->message_seq)) {
@@ -3253,7 +3253,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     n->length = data_length;
     memcpy(n->data, data, data_length);
 
-    if (!netq_insert_node((netq_t **)peer->handshake_params.reorder_queue, n)) {
+    if (!netq_insert_node(peer->handshake_params.reorder_queue, n)) {
       dtls_warn("cannot add packet to reoder buffer\n");
       netq_node_free(n);
     }
@@ -3270,12 +3270,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     /* We do not know in which order the packages are in the list just search the list for every package. */
     while (next) {
       next = 0;
-      netq_t *node = netq_head((netq_t **)peer->handshake_params.reorder_queue);
+      netq_t *node = netq_head(peer->handshake_params.reorder_queue);
       while (node) {
         dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
 
         if (dtls_uint16_to_int(node_header->message_seq) == peer->hs_state.mseq_r) {
-          netq_remove((netq_t **)peer->handshake_params.reorder_queue, node);
+          netq_remove(peer->handshake_params.reorder_queue, node);
           next = 1;
           res = handle_handshake_msg(ctx, peer, session, role, peer->state, node->data, node->length);
           if (res < 0) {
@@ -3699,7 +3699,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       dtls_ticks(&now);
       node->retransmit_cnt++;
       node->t = now + (node->timeout << node->retransmit_cnt);
-      netq_insert_node((netq_t **)context->sendqueue, node);
+      netq_insert_node(context->sendqueue, node);
       
       dtls_debug("** retransmit packet\n");
       
@@ -3727,16 +3727,15 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 
 static void
 dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer) {
-  void *node;
-  node = list_head((list_t)context->sendqueue); 
+  netq_t *node;
+  node = list_head(context->sendqueue); 
 
   while (node) {
-    if (dtls_session_equals(&((netq_t *)node)->peer->session,
-			    &peer->session)) {
-      void *tmp = node;
+    if (dtls_session_equals(&node->peer->session, &peer->session)) {
+      netq_t *tmp = node;
       node = list_item_next(node);
-      list_remove((list_t)context->sendqueue, tmp);
-      netq_node_free((netq_t *)tmp);
+      list_remove(context->sendqueue, tmp);
+      netq_node_free(tmp);
     } else
       node = list_item_next(node);    
   }
@@ -3745,13 +3744,13 @@ dtls_stop_retransmission(dtls_context_t *context, dtls_peer_t *peer) {
 void
 dtls_check_retransmit(dtls_context_t *context, clock_time_t *next) {
   dtls_tick_t now;
-  netq_t *node = netq_head((netq_t **)context->sendqueue);
+  netq_t *node = netq_head(context->sendqueue);
 
   dtls_ticks(&now);
   while (node && node->t <= now) {
-    netq_pop_first((netq_t **)context->sendqueue);
+    netq_pop_first(context->sendqueue);
     dtls_retransmit(context, node);
-    node = netq_head((netq_t **)context->sendqueue);
+    node = netq_head(context->sendqueue);
   }
 
   if (next && node)

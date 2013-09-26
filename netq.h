@@ -62,14 +62,14 @@ void netq_init();
  * @param node  The new item to add.
  * @return @c 0 on error, or non-zero if the new item was added.
  */
-int netq_insert_node(netq_t **queue, netq_t *node);
+int netq_insert_node(list_t queue, netq_t *node);
 
 /** Destroys specified node and releases any memory that was allocated
  * for the associated datagram. */
 void netq_node_free(netq_t *node);
 
 /** Removes all items from given queue and frees the allocated storage */
-void netq_delete_all(netq_t *queue);
+void netq_delete_all(list_t queue);
 
 /** Creates a new node suitable for adding to a netq_t queue. */
 netq_t *netq_node_new();
@@ -78,17 +78,17 @@ netq_t *netq_node_new();
  * Returns a pointer to the first item in given queue or NULL if
  * empty. 
  */
-netq_t *netq_head(netq_t **queue);
+netq_t *netq_head(list_t queue);
 
 netq_t *netq_next(netq_t *p);
-void netq_remove(netq_t **queue, netq_t *p);
+void netq_remove(list_t queue, netq_t *p);
 
 /**
  * Removes the first item in given queue and returns a pointer to the
  * removed element. If queue is empty when netq_pop_first() is called,
  * this function returns NULL.
  */
-netq_t *netq_pop_first(netq_t **queue);
+netq_t *netq_pop_first(list_t queue);
 
 /**@}*/
 

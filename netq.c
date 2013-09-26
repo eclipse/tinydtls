@@ -57,30 +57,30 @@ netq_init() {
 #endif /* WITH_CONTIKI */
 
 int 
-netq_insert_node(netq_t **queue, netq_t *node) {
+netq_insert_node(list_t queue, netq_t *node) {
   netq_t *p;
 
   assert(queue);
   assert(node);
 
-  p = (netq_t *)list_head((list_t)queue);
+  p = (netq_t *)list_head(queue);
   while(p && p->t <= node->t && list_item_next(p))
     p = list_item_next(p);
 
   if (p)
-    list_insert((list_t)queue, p, node);
+    list_insert(queue, p, node);
   else
-    list_push((list_t)queue, node);
+    list_push(queue, node);
 
   return 1;
 }
 
 netq_t *
-netq_head(netq_t **queue) {
+netq_head(list_t queue) {
   if (!queue)
     return NULL;
 
-  return list_head((list_t)queue);
+  return list_head(queue);
 }
 
 netq_t *
@@ -92,18 +92,18 @@ netq_next(netq_t *p) {
 }
 
 void
-netq_remove(netq_t **queue, netq_t *p) {
+netq_remove(list_t queue, netq_t *p) {
   if (!queue || !p)
     return;
 
-  list_remove((list_t)queue, p);
+  list_remove(queue, p);
 }
 
-netq_t *netq_pop_first(netq_t **queue) {
+netq_t *netq_pop_first(list_t queue) {
   if (!queue)
     return NULL;
 
-  return list_pop((list_t)queue);
+  return list_pop(queue);
 }
 
 netq_t *
@@ -129,10 +129,10 @@ netq_node_free(netq_t *node) {
 }
 
 void 
-netq_delete_all(netq_t *queue) {
+netq_delete_all(list_t queue) {
   netq_t *p;
   if (queue) {
-    while((p = list_pop((list_t)&queue)))
+    while((p = list_pop(queue)))
       netq_free_node(p); 
   }
 }
