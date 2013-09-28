@@ -824,6 +824,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (!ok) {
     /* reset config cipher to a well-defined value */
     config->cipher = TLS_NULL_WITH_NULL_NULL;
+    dtls_warn("No matching cipher found\n");
     goto error;
   }
 
@@ -860,8 +861,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   }
   
   return dtls_check_tls_extension(peer, data, data_length, 1);
- error:
-  dtls_warn("ClientHello too short (%d bytes)\n", data_length);
+error:
   if (peer->state == DTLS_STATE_CONNECTED) {
     return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
   } else {
