@@ -735,8 +735,8 @@ dtls_check_tls_extension(dtls_peer_t *peer,
     data_length -= j;
   }
   if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-    if (!ext_elliptic_curve && !ext_client_cert_type && !ext_server_cert_type
-	&& !ext_ec_point_formats) {
+    if (!ext_elliptic_curve || !ext_client_cert_type || !ext_server_cert_type
+	|| !ext_ec_point_formats) {
       dtls_warn("not all required tls extensions found in client hello\n");
       goto error;
     }
