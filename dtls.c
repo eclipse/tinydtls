@@ -882,7 +882,7 @@ check_client_keyexchange(dtls_context_t *ctx,
     }
     data += DTLS_HS_LENGTH;
 
-    if (dtls_uint8_to_int(data) != 65) {
+    if (dtls_uint8_to_int(data) != 1 + 2 * DTLS_EC_KEY_SIZE) {
       dtls_alert("expected 65 bytes long public point\n");
       return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
     }
@@ -1793,7 +1793,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* NamedCurve namedcurve: secp256r1 */
-  dtls_int_to_uint16(p, 23);
+  dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES_SECP256R1);
   p += sizeof(uint16);
 
   dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
@@ -1872,7 +1872,7 @@ dtls_send_server_certificate_request(dtls_context_t *ctx, dtls_peer_t *peer)
   p += sizeof(uint8);
 
   /* ecdsa_sign */
-  dtls_int_to_uint8(p, 64);
+  dtls_int_to_uint8(p, TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN);
   p += sizeof(uint8);
 
   /* supported_signature_algorithms */
@@ -2440,21 +2440,21 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   }
   key_params = data;
 
-  if (dtls_uint8_to_int(data) != 3) {
+  if (dtls_uint8_to_int(data) != TLS_EC_CURVE_TYPE_NAMED_CURVE) {
     dtls_alert("Only named curves supported\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  if (dtls_uint16_to_int(data) != 23) {
+  if (dtls_uint16_to_int(data) != TLS_EXT_ELLIPTIC_CURVES_SECP256R1) {
     dtls_alert("secp256r1 supported\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint16);
   data_length -= sizeof(uint16);
 
-  if (dtls_uint8_to_int(data) != 65) {
+  if (dtls_uint8_to_int(data) != 1 + 2 * DTLS_EC_KEY_SIZE) {
     dtls_alert("expected 65 bytes long public point\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
@@ -2565,12 +2565,13 @@ check_certificate_request(dtls_context_t *ctx,
 
   auth_alg = 0;
   for (; i > 0 ; i -= sizeof(uint8)) {
-    if (dtls_uint8_to_int(data) == 64 && auth_alg == 0)
+    if (dtls_uint8_to_int(data) == TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN
+	&& auth_alg == 0)
       auth_alg = dtls_uint8_to_int(data);
     data += sizeof(uint8);
   }
 
-  if (auth_alg != 64) {
+  if (auth_alg != TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN) {
     dtls_alert("the request authentication algorithem is not supproted\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
@@ -2593,14 +2594,15 @@ check_certificate_request(dtls_context_t *ctx,
     current_sig_alg = dtls_uint8_to_int(data);
     data += sizeof(uint8);
 
-    if (current_hash_alg == 4 && hash_alg == 0 && 
-        current_sig_alg == 3 && sig_alg == 0) {
+    if (current_hash_alg == TLS_EXT_SIG_HASH_ALGO_SHA256 && hash_alg == 0 && 
+        current_sig_alg == TLS_EXT_SIG_HASH_ALGO_ECDSA && sig_alg == 0) {
       hash_alg = current_hash_alg;
       sig_alg = current_sig_alg;
     }
   }
 
-  if (hash_alg != 4 || sig_alg != 3) {
+  if (hash_alg != TLS_EXT_SIG_HASH_ALGO_SHA256 ||
+      sig_alg != TLS_EXT_SIG_HASH_ALGO_ECDSA) {
     dtls_alert("no supported hash and signature algorithem\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
