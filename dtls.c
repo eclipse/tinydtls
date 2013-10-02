@@ -1526,7 +1526,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
 				uint8 *data, size_t data_length)
 {
   dtls_handshake_parameters_t *config = peer->handshake_params;
-  int i;
+  int ret;
   unsigned char *result_r;
   unsigned char *result_s;
   dtls_hash_ctx hs_hash;
@@ -1541,24 +1541,24 @@ check_client_certificate_verify(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
-  i = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
-  if (i < 0) {
-    return i;
+  ret = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
+  if (ret < 0) {
+    return ret;
   }
-  data += i;
-  data_length -= i;
+  data += ret;
+  data_length -= ret;
 
   copy_hs_hash(peer, &hs_hash);
 
   dtls_hash_finalize(sha256hash, &hs_hash);
 
-  i = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
+  ret = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
 			    sizeof(config->keyx.ecdsa.other_pub_x),
 			    sha256hash, sizeof(sha256hash),
 			    result_r, result_s);
 
-  if (i < 0) {
-    dtls_alert("wrong signature err: %i\n", i);
+  if (ret < 0) {
+    dtls_alert("wrong signature err: %i\n", ret);
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   return 0;
@@ -2423,7 +2423,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 				uint8 *data, size_t data_length)
 {
   dtls_handshake_parameters_t *config = peer->handshake_params;
-  int i;
+  int ret;
   unsigned char *result_r;
   unsigned char *result_s;
   unsigned char *key_params;
@@ -2476,14 +2476,14 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   data += sizeof(config->keyx.ecdsa.other_eph_pub_y);
   data_length -= sizeof(config->keyx.ecdsa.other_eph_pub_y);
 
-  i = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
-  if (i < 0) {
-    return i;
+  ret = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
+  if (ret < 0) {
+    return ret;
   }
-  data += i;
-  data_length -= i;
+  data += ret;
+  data_length -= ret;
 
-  i = dtls_ecdsa_verify_sig(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
+  ret = dtls_ecdsa_verify_sig(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
 			    sizeof(config->keyx.ecdsa.other_pub_x),
 			    config->tmp.random.client, DTLS_RANDOM_LENGTH,
 			    config->tmp.random.server, DTLS_RANDOM_LENGTH,
@@ -2491,7 +2491,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 			    1 + 2 + 1 + 1 + (2 * DTLS_EC_KEY_SIZE),
 			    result_r, result_s);
 
-  if (i < 0) {
+  if (ret < 0) {
     dtls_alert("wrong signature\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
