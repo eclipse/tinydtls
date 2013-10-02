@@ -74,7 +74,7 @@
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_CE_LENGTH (3 + 3 + 27 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE)
-#define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 2 + 70)
+#define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 1 + 1 + 2 + 70)
 #define DTLS_SKEXECPSK_LENGTH_MIN 2
 #define DTLS_SKEXECPSK_LENGTH_MAX 2 + DTLS_PSK_MAX_CLIENT_IDENTITY_LEN
 #define DTLS_CKXPSK_LENGTH_MIN 2
@@ -1448,6 +1448,20 @@ dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
   int i;
   uint8 *data_orig = data;
 
+  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_SHA256) {
+    dtls_alert("only sha256 is supported in certificate verify\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_ECDSA) {
+    dtls_alert("only ecdsa signature is supported in client verify\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+  data += sizeof(uint8);
+  data_length -= sizeof(uint8);
+
   if (data_length < dtls_uint16_to_int(data)) {
     dtls_alert("signature length wrong\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
@@ -1526,20 +1540,6 @@ check_client_certificate_verify(dtls_context_t *ctx,
     dtls_alert("the package length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
-
-  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_SHA256) {
-    dtls_alert("only sha256 is supported in certificate verify\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  }
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
-
-  if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_ECDSA) {
-    dtls_alert("only ecdsa signature is supported in client verify\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  }
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
 
   i = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
   if (i < 0) {
@@ -1716,7 +1716,7 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   int len_r;
   int len_s;
 
-#define R_KEY_OFFSET (2 + 1 + 1 + 1 + 1)
+#define R_KEY_OFFSET (1 + 1 + 2 + 1 + 1 + 1 + 1)
 #define S_KEY_OFFSET(len_s) (R_KEY_OFFSET + (len_s) + 1 + 1)
   /* store the pointer to the r component of the signature and make space */
   len_r = dtls_ec_key_from_uint32_asn1(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
@@ -1724,6 +1724,14 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
 
 #undef R_KEY_OFFSET
 #undef S_KEY_OFFSET
+
+  /* sha256 */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
+  p += sizeof(uint8);
+
+  /* ecdsa */
+  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
+  p += sizeof(uint8);
 
   /* length of signature */
   dtls_int_to_uint16(p, len_r + len_s + 2 + 2 + 2);
@@ -2065,14 +2073,6 @@ dtls_send_certificate_verify_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
    *
    * Start message construction at beginning of buffer. */
   p = buf;
-
-  /* sha256 */
-  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_SHA256);
-  p += sizeof(uint8);
-
-  /* ecdsa */
-  dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
-  p += sizeof(uint8);
 
   copy_hs_hash(peer, &hs_hash);
 
