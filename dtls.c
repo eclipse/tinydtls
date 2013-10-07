@@ -3160,11 +3160,21 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   hs_header = DTLS_HANDSHAKE_HEADER(data);
 
   if (!peer || !peer->handshake_params) {
+    /* This is the initial ClientHello */
     if (hs_header->msg_type != DTLS_HT_CLIENT_HELLO && !peer) {
       dtls_warn("If there is no peer only ClientHello is allowed\n");
       return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
     }
-    return handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
+
+    /* This is a ClientHello or Hello Request send when doing TLS renegotiation */
+    if (hs_header->msg_type == DTLS_HT_CLIENT_HELLO ||
+	hs_header->msg_type == DTLS_HT_HELLO_REQUEST) {
+      return handle_handshake_msg(ctx, peer, session, role, state, data,
+				  data_length);
+    } else {
+      dtls_warn("ignore unexpected handshake message\n");
+      return 0;
+    }
   }
 
   if (dtls_uint16_to_int(hs_header->message_seq) < peer->handshake_params->hs_state.mseq_r) {
