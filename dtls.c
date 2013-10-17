@@ -734,10 +734,15 @@ dtls_check_tls_extension(dtls_peer_t *peer,
     data += j;
     data_length -= j;
   }
-  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 && client_hello) {
     if (!ext_elliptic_curve || !ext_client_cert_type || !ext_server_cert_type
 	|| !ext_ec_point_formats) {
       dtls_warn("not all required tls extensions found in client hello\n");
+      goto error;
+    }
+  } else if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 && !client_hello) {
+    if (!ext_client_cert_type || !ext_server_cert_type) {
+      dtls_warn("not all required tls extensions found in server hello\n");
       goto error;
     }
   }
@@ -1579,7 +1584,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   ecdsa = handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
 
-  extension_size = (ecdsa) ? 2 + 5 + 5 + 8 + 6 : 0;
+  extension_size = (ecdsa) ? 2 + 5 + 5 + 6 : 0;
 
   /* Handshake header */
   p = buf;
@@ -1637,21 +1642,6 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
     dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
     p += sizeof(uint8);
-
-    /* elliptic_curves */
-    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES);
-    p += sizeof(uint16);
-
-    /* length of this extension type */
-    dtls_int_to_uint16(p, 4);
-    p += sizeof(uint16);
-
-    /* length of the list */
-    dtls_int_to_uint16(p, 2);
-    p += sizeof(uint16);
-
-    dtls_int_to_uint16(p, TLS_EXT_ELLIPTIC_CURVES_SECP256R1);
-    p += sizeof(uint16);
 
     /* ec_point_formats */
     dtls_int_to_uint16(p, TLS_EXT_EC_POINT_FORMATS);
