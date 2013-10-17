@@ -2735,8 +2735,8 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
       printf("decrypt_verify(): found %i bytes cleartext\n", clen);
 #endif
       dtls_security_params_free_other(peer);
+      dtls_debug_dump("cleartext", *cleartext, clen);
     }
-    dtls_debug_dump("cleartext", *cleartext, clen);
   }
   return clen;
 }
