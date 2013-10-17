@@ -131,7 +131,9 @@ typedef unsigned char uint32[4];
 typedef unsigned char uint48[6];
 
 #ifndef DTLS_MAX_BUF
-/** Maximum size of DTLS message. */
+/** Maximum size of DTLS message.
+    When Peers are sending bigger messages this causes problems. Californium
+    with ECDSA needs at least 220 */
 #define DTLS_MAX_BUF 200
 #endif
 
