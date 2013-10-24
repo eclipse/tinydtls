@@ -307,10 +307,14 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
   return len;
 }
 
-size_t
+int
 dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
-			   unsigned char *result) {
+			   unsigned char *result, size_t result_len) {
   unsigned char *p = result;
+
+  if (result_len < (2 * (sizeof(uint16) + keylen))) {
+    return -1;
+  }
 
   dtls_int_to_uint16(p, keylen);
   p += sizeof(uint16);
@@ -323,7 +327,7 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
   
   memcpy(p, key, keylen);
 
-  return (sizeof(uint16) + keylen) << 1;
+  return 2 * (sizeof(uint16) + keylen);
 }
 
 static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
@@ -382,16 +386,21 @@ int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
   return buf - buf_orig;
 }
 
-size_t dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
 				   unsigned char *pub_key_x,
                                    unsigned char *pub_key_y,
                                    size_t key_size,
-                                   unsigned char *result) {
+                                   unsigned char *result,
+                                   size_t result_len) {
   uint32_t priv[8];
   uint32_t pub_x[8];
   uint32_t pub_y[8];
   uint32_t result_x[8];
   uint32_t result_y[8];
+
+  if (result_len < key_size) {
+    return -1;
+  }
 
   dtls_ec_key_to_uint32(priv_key, key_size, priv);
   dtls_ec_key_to_uint32(pub_key_x, key_size, pub_x);
