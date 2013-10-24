@@ -505,7 +505,7 @@ calculate_key_block(dtls_context_t *ctx,
 		    session_t *session,
 		    dtls_peer_type role) {
   unsigned char *pre_master_secret;
-  size_t pre_master_len = 0;
+  int pre_master_len = 0;
   dtls_security_parameters_t *security = dtls_security_params_next(peer);
   uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   int err;
@@ -528,8 +528,12 @@ calculate_key_block(dtls_context_t *ctx,
     }
   /* Temporarily use the key_block storage space for the pre master secret. */
     pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
-						pre_master_secret);
-
+						pre_master_secret,
+						MAX_KEYBLOCK_LENGTH);
+    if (pre_master_len < 0) {
+      dtls_crit("the psk was too long, for the pre master secret\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
     dtls_debug_hexdump("psk", psk->key, psk->key_length);
 
     break;
@@ -539,7 +543,12 @@ calculate_key_block(dtls_context_t *ctx,
 						 handshake->keyx.ecdsa.other_eph_pub_x,
 						 handshake->keyx.ecdsa.other_eph_pub_y,
 						 sizeof(handshake->keyx.ecdsa.own_eph_priv),
-						 pre_master_secret);
+						 pre_master_secret,
+						 MAX_KEYBLOCK_LENGTH);
+    if (pre_master_len < 0) {
+      dtls_crit("the curve was too long, for the pre master secret\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
     break;
   }
   default:

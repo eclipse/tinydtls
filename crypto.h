@@ -292,16 +292,17 @@ int dtls_decrypt(const unsigned char *src, size_t length,
  * @param result The derived pre master secret.
  * @return The actual length of @p result.
  */
-size_t dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
-				  unsigned char *result);
+int dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
+			       unsigned char *result, size_t result_len);
 
 #define DTLS_EC_KEY_SIZE 32
 
-size_t dtls_ecdh_pre_master_secret(unsigned char *priv_key,
-				   unsigned char *pub_key_x,
-                                   unsigned char *pub_key_y,
-                                   size_t key_size,
-                                   unsigned char *result);
+int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+				unsigned char *pub_key_x,
+                                unsigned char *pub_key_y,
+                                size_t key_size,
+                                unsigned char *result,
+                                size_t result_len);
 
 void dtls_ecdsa_generate_key(unsigned char *priv_key,
 			     unsigned char *pub_key_x,
