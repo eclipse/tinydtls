@@ -298,7 +298,7 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   memxor(msg, S, M);
 
   /* return length if MAC is valid, otherwise continue with error handling */
-  if (memcmp(X, msg, M) == 0) 
+  if (equals(X, msg, M))
     return len - M;
   
  error:
