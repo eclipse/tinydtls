@@ -49,7 +49,7 @@ handle_sigint(int signum) {
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
-int
+static int
 get_psk_key(struct dtls_context_t *ctx,
 	    const session_t *session,
 	    const unsigned char *id, size_t id_len,
@@ -65,7 +65,7 @@ get_psk_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
 	      const dtls_ecdsa_key_t **result) {
@@ -80,7 +80,7 @@ get_ecdsa_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const session_t *session,
 		 const unsigned char *other_pub_x,
@@ -92,7 +92,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #define DTLS_SERVER_CMD_CLOSE "server:close"
 #define DTLS_SERVER_CMD_RENEGOTIATE "server:renegotiate"
 
-int
+static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
@@ -113,7 +113,7 @@ read_from_peer(struct dtls_context_t *ctx,
   return dtls_write(ctx, session, data, len);
 }
 
-int
+static int
 send_to_peer(struct dtls_context_t *ctx, 
 	     session_t *session, uint8 *data, size_t len) {
 
@@ -122,7 +122,7 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
-int
+static int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int *fd;
   session_t session;
@@ -149,7 +149,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   return dtls_handle_message(ctx, &session, buf, len);
 }    
 
-int 
+static int
 resolve_address(const char *server, struct sockaddr *dst) {
   
   struct addrinfo *res, *ainfo;
@@ -190,7 +190,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
   return -1;
 }
 
-void
+static void
 usage(const char *program, const char *version) {
   const char *p;
 

@@ -56,7 +56,7 @@ static const unsigned char ecdsa_pub_key_y[] = {
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
-int
+static int
 get_psk_key(struct dtls_context_t *ctx,
 	    const session_t *session,
 	    const unsigned char *id, size_t id_len,
@@ -72,7 +72,7 @@ get_psk_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
 	      const dtls_ecdsa_key_t **result) {
@@ -87,7 +87,7 @@ get_ecdsa_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const session_t *session,
 		 const unsigned char *other_pub_x,
@@ -96,7 +96,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-void
+static void
 try_send(struct dtls_context_t *ctx, session_t *dst) {
   int res;
   res = dtls_write(ctx, dst, (uint8 *)buf, len);
@@ -106,13 +106,13 @@ try_send(struct dtls_context_t *ctx, session_t *dst) {
   }
 }
 
-void
+static void
 handle_stdin() {
   if (fgets(buf + len, sizeof(buf) - len, stdin))
     len += strlen(buf + len);
 }
 
-int
+static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
@@ -121,7 +121,7 @@ read_from_peer(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 send_to_peer(struct dtls_context_t *ctx, 
 	     session_t *session, uint8 *data, size_t len) {
 
@@ -130,7 +130,7 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
-int
+static int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
   session_t session;
@@ -167,7 +167,7 @@ static void dtls_handle_signal(int sig)
 }
 
 /* stolen from libcoap: */
-int 
+static int
 resolve_address(const char *server, struct sockaddr *dst) {
   
   struct addrinfo *res, *ainfo;
@@ -210,7 +210,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
 }
 
 /*---------------------------------------------------------------------------*/
-void
+static void
 usage( const char *program, const char *version) {
   const char *p;
 
