@@ -450,6 +450,10 @@ static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client){
 			   (is_client && ctx->h->verify_ecdsa_key));
 }
 
+static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx) {
+  return ctx && ctx->h && ctx->h->get_ecdsa_key && ctx->h->verify_ecdsa_key;
+}
+
 /**
  * Returns @c 1 if @p code is a cipher suite other than @c
  * TLS_NULL_WITH_NULL_NULL that we recognize.
@@ -1948,7 +1952,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
     }
 
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	ctx && ctx->h && ctx->h->verify_ecdsa_key) {
+	is_ecdsa_client_auth_supported(ctx)) {
       res = dtls_send_server_certificate_request(ctx, peer);
 
       if (res < 0) {
@@ -2989,7 +2993,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     update_hs_hash(peer, data, data_length);
 
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	ctx && ctx->h && ctx->h->verify_ecdsa_key)
+	is_ecdsa_client_auth_supported(ctx))
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
       peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
@@ -3097,7 +3101,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return err;
     }
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	ctx && ctx->h && ctx->h->verify_ecdsa_key)
+	is_ecdsa_client_auth_supported(ctx))
       peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
     else
       peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
