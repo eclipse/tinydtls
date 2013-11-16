@@ -72,7 +72,7 @@ static const unsigned char ecdsa_pub_key_y[] = {
 			0xD0, 0x43, 0xB1, 0xFB, 0x03, 0xE2, 0x2F, 0x4D,
 			0x17, 0xDE, 0x43, 0xF9, 0xF9, 0xAD, 0xEE, 0x70};
 
-int
+static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
@@ -84,7 +84,7 @@ read_from_peer(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 send_to_peer(struct dtls_context_t *ctx, 
 	     session_t *session, uint8 *data, size_t len) {
 
@@ -106,7 +106,7 @@ send_to_peer(struct dtls_context_t *ctx,
   return len;
 }
 
-int
+static int
 get_psk_key(struct dtls_context_t *ctx, 
 	    const session_t *session, 
 	    const unsigned char *id, size_t id_len, 
@@ -123,7 +123,7 @@ get_psk_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
 	      const dtls_ecdsa_key_t **result) {
@@ -138,7 +138,7 @@ get_ecdsa_key(struct dtls_context_t *ctx,
   return 0;
 }
 
-int
+static int
 verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const session_t *session,
 		 const unsigned char *other_pub_x,
