@@ -499,16 +499,6 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 }
 
 static int
-init_cipher(dtls_handshake_parameters_t *handshake, dtls_security_parameters_t *config, dtls_peer_type role)
-{
-  config->cipher = handshake->cipher;
-  config->compression = handshake->compression;
-  config->rseq = 0;
-
-  return 0;
-}
-
-static int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_handshake_parameters_t *handshake,
 		    dtls_peer_t *peer,
@@ -594,7 +584,11 @@ calculate_key_block(dtls_context_t *ctx,
   memcpy(handshake->tmp.master_secret, master_secret, DTLS_MASTER_SECRET_LENGTH);
   dtls_debug_keyblock(security);
 
-  return init_cipher(handshake, security, role);
+  security->cipher = handshake->cipher;
+  security->compression = handshake->compression;
+  security->rseq = 0;
+
+  return 0;
 }
 
 /* TODO: add a generic method which iterates over a list and searches for a specific key */
