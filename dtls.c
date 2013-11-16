@@ -431,6 +431,16 @@ static uint8 compression_methods[] = {
   TLS_COMPRESSION_NULL
 };
 
+static inline int is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(dtls_cipher_t cipher)
+{
+  return cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
+}
+
+static inline int is_tls_psk_with_aes_128_ccm_8(dtls_cipher_t cipher)
+{
+  return cipher == TLS_PSK_WITH_AES_128_CCM_8;
+}
+
 static inline int is_psk_supported(dtls_context_t *ctx){
   return ctx && ctx->h && ctx->h->get_psk_key;
 }
@@ -456,8 +466,8 @@ known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
 
   psk = is_psk_supported(ctx);
   ecdsa = is_ecdsa_supported(ctx, is_client);
-  return (psk && code == TLS_PSK_WITH_AES_128_CCM_8) ||
-	 (ecdsa && code == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  return (psk && is_tls_psk_with_aes_128_ccm_8(code)) ||
+	 (ecdsa && is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(code));
 }
 
 static void dtls_debug_keyblock(dtls_security_parameters_t *config)
@@ -673,7 +683,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 
   if (data_length < sizeof(uint16)) { 
     /* no tls extensions specified */
-    if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher)) {
       goto error;
     }
     return 0;
@@ -743,13 +753,13 @@ dtls_check_tls_extension(dtls_peer_t *peer,
     data += j;
     data_length -= j;
   }
-  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 && client_hello) {
+  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher) && client_hello) {
     if (!ext_elliptic_curve || !ext_client_cert_type || !ext_server_cert_type
 	|| !ext_ec_point_formats) {
       dtls_warn("not all required tls extensions found in client hello\n");
       goto error;
     }
-  } else if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 && !client_hello) {
+  } else if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher) && !client_hello) {
     if (!ext_client_cert_type || !ext_server_cert_type) {
       dtls_warn("not all required tls extensions found in server hello\n");
       goto error;
@@ -888,7 +898,7 @@ check_client_keyexchange(dtls_context_t *ctx,
 			 dtls_handshake_parameters_t *handshake,
 			 uint8 *data, size_t length) {
 
-  if (handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher)) {
 
     if (length < DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH) {
       dtls_debug("The client key exchange is too short\n");
@@ -1090,9 +1100,9 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
 
-    if (security->cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+    if (is_tls_psk_with_aes_128_ccm_8(security->cipher)) {
       dtls_debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
-    } else if (security->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    } else if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(security->cipher)) {
       dtls_debug("dtls_prepare_record(): encrypt using TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8\n");
     } else {
       dtls_debug("dtls_prepare_record(): encrypt using unknown cipher\n");
@@ -1546,7 +1556,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
-  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
 
@@ -1591,7 +1601,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
   dtls_tick_t now;
 
-  ecdsa = handshake->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
+  ecdsa = is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher);
 
   extension_size = (ecdsa) ? 2 + 5 + 5 + 6 : 0;
 
@@ -1920,7 +1930,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
     return res;
   }
 
-  if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
     const dtls_ecdsa_key_t *ecdsa_key;
 
     res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
@@ -1943,7 +1953,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       return res;
     }
 
-    if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key) {
       res = dtls_send_server_certificate_request(ctx, peer);
 
@@ -1952,7 +1962,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
         return res;
       }
     }
-  } else if (peer->handshake_params->cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+  } else if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
     const dtls_psk_key_t *psk;
 
     res = CALL(ctx, get_psk_key, &peer->session, NULL, 0, &psk);
@@ -2374,7 +2384,7 @@ check_server_certificate(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
 
@@ -2429,7 +2439,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(config->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
 
@@ -2507,7 +2517,7 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(config->cipher == TLS_PSK_WITH_AES_128_CCM_8);
+  assert(is_tls_psk_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
 
@@ -2546,7 +2556,7 @@ check_certificate_request(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
+  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher));
 
   data += DTLS_HS_LENGTH;
 
@@ -2836,7 +2846,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       dtls_warn("error in check_server_hello err: %i\n", err);
       return err;
     }
-    if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher))
       peer->state = DTLS_STATE_WAIT_SERVERCERTIFICATE;
     else
       peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
@@ -2869,12 +2879,12 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
     dtls_debug("DTLS_HT_SERVER_KEY_EXCHANGE\n");
 
-    if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
       if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
       err = check_server_key_exchange_ecdsa(ctx, peer, data, data_length);
-    } else if (peer->handshake_params->cipher == TLS_PSK_WITH_AES_128_CCM_8) {
+    } else if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
       if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
@@ -2984,7 +2994,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     }
     update_hs_hash(peer, data, data_length);
 
-    if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key)
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
@@ -3092,7 +3102,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     if (err < 0) {
       return err;
     }
-    if (peer->handshake_params->cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 &&
+    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
 	ctx && ctx->h && ctx->h->verify_ecdsa_key)
       peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
     else
