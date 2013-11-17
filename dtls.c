@@ -357,8 +357,9 @@ is_record(uint8 *msg, size_t msglen) {
 /**
  * Initializes \p buf as record header. The caller must ensure that \p
  * buf is capable of holding at least \c sizeof(dtls_record_header_t)
- * bytes. Increments sequence number counter of \p peer.
- * \return pointer to the next byte after the written header
+ * bytes. Increments sequence number counter of \p security.
+ * \return pointer to the next byte after the written header.
+ * The length will be set to 0 and has to be changed before sending.
  */ 
 static inline uint8 *
 dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
@@ -431,6 +432,7 @@ static uint8 compression_methods[] = {
   TLS_COMPRESSION_NULL
 };
 
+/** returns true if the cipher matches TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
 static inline int is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(dtls_cipher_t cipher)
 {
 #ifdef DTLS_ECC
@@ -440,6 +442,7 @@ static inline int is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(dtls_cipher_t cipher)
 #endif /* DTLS_ECC */
 }
 
+/** returns true if the cipher matches TLS_PSK_WITH_AES_128_CCM_8 */
 static inline int is_tls_psk_with_aes_128_ccm_8(dtls_cipher_t cipher)
 {
 #ifdef DTLS_PSK
@@ -449,6 +452,7 @@ static inline int is_tls_psk_with_aes_128_ccm_8(dtls_cipher_t cipher)
 #endif /* DTLS_PSK */
 }
 
+/** returns true if the application is configured for psk */
 static inline int is_psk_supported(dtls_context_t *ctx)
 {
 #ifdef DTLS_PSK
@@ -458,6 +462,7 @@ static inline int is_psk_supported(dtls_context_t *ctx)
 #endif /* DTLS_PSK */
 }
 
+/** returns true if the application is configured for ecdhe_ecdsa */
 static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
 {
 #ifdef DTLS_ECC
@@ -468,6 +473,8 @@ static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
 #endif /* DTLS_ECC */
 }
 
+/** Returns true if the application is configured for ecdhe_ecdsa with
+  * client authentication */
 static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
 {
 #ifdef DTLS_ECC
@@ -497,6 +504,7 @@ known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
 	 (ecdsa && is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(code));
 }
 
+/** Dump out the cipher keys and IVs used for the symetric cipher. */
 static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 {
   dtls_debug("key_block (%d bytes):\n", dtls_kb_size(config, peer->role));
@@ -525,6 +533,9 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 		  dtls_kb_iv_size(config, peer->role));
 }
 
+/**
+ * Calculate the pre master secret and after that calculate the master-secret.
+ */
 static int
 calculate_key_block(dtls_context_t *ctx, 
 		    dtls_handshake_parameters_t *handshake,
@@ -695,6 +706,9 @@ static int verify_ext_ec_point_formats(uint8 *data, size_t data_length) {
   return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
+/*
+ * Check for some TLS Extensions used by the ECDHE_ECDSA cipher.
+ */
 static int
 dtls_check_tls_extension(dtls_peer_t *peer,
 			 uint8 *data, size_t data_length, int client_hello)
@@ -801,17 +815,16 @@ error:
 }
 
 /**
- * Updates the security parameters of given \p peer.  As this must be
- * done before the new configuration is activated, it changes the
- * OTHER_CONFIG only. When the ClientHello handshake message in \p
- * data does not contain a cipher suite or compression method, it is 
- * copied from the CURRENT_CONFIG.
+ * Parses the ClientHello from the client and updates the internal handshake
+ * parameters with the new data for the given \p peer. When the ClientHello
+ * handshake message in \p data does not contain a cipher suite or
+ * compression method, it is copied from the the current security parameters.
  *
  * \param ctx   The current DTLS context.
  * \param peer  The remote peer whose security parameters are about to change.
  * \param data  The handshake message with a ClientHello. 
  * \param data_length The actual size of \p data.
- * \return \c 0 if an error occurred, \c 1 otherwise.
+ * \return \c -Something if an error occurred, \c 0 on success.
  */
 static int
 dtls_update_parameters(dtls_context_t *ctx, 
@@ -825,15 +838,11 @@ dtls_update_parameters(dtls_context_t *ctx,
   assert(config);
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
 
-  /* dtls_debug("dtls_update_parameters: msglen is %d\n", data_length); */
-
   /* skip the handshake header and client version information */
   data += DTLS_HS_LENGTH + sizeof(uint16);
   data_length -= DTLS_HS_LENGTH + sizeof(uint16);
 
-  /* store client random in config 
-   * FIXME: if we send the ServerHello here, we do not need to store
-   * the client's random bytes */
+  /* store client random in config */
   memcpy(config->tmp.random.client, data, DTLS_RANDOM_LENGTH);
   data += DTLS_RANDOM_LENGTH;
   data_length -= DTLS_RANDOM_LENGTH;
@@ -918,6 +927,10 @@ error:
   }
 }
 
+/**
+ * Parse the ClientKeyExchange and update the internal handshake state with
+ * the new data.
+ */
 static inline int
 check_client_keyexchange(dtls_context_t *ctx, 
 			 dtls_handshake_parameters_t *handshake,
@@ -1008,15 +1021,14 @@ clear_hs_hash(dtls_peer_t *peer) {
 }
 
 /** 
- *Checks if \p record + \p data contain a Finished message with valid
+ * Checks if \p record + \p data contain a Finished message with valid
  * verify_data. 
  *
  * \param ctx    The current DTLS context.
  * \param peer   The remote peer of the security association.
- * \param rlen   The actual length of \p record.
  * \param data   The cleartext payload of the message.
  * \param data_length Actual length of \p data.
- * \return \c 1 if the Finished message is valid, \c 0 otherwise.
+ * \return \c 0 if the Finished message is valid, \c negative number otherwise.
  */
 static int
 check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
@@ -1076,9 +1088,11 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
  * as well (usually \c dtls_kb_digest_size(CURRENT_CONFIG(peer)).
  *
  * \param peer    The remote peer the packet will be sent to.
+ * \param security  The encryption paramater used to encrypt
  * \param type    The content type of this record.
- * \param data    The payload to send.
- * \param data_length The size of \p data.
+ * \param data_array Array with payloads in correct order.
+ * \param data_len_array sizes of the payloads in correct order.
+ * \param data_array_len The number of payloads given.
  * \param sendbuf The output buffer where the encrypted record
  *                will be placed.
  * \param rlen    This parameter must be initialized with the 
@@ -1121,7 +1135,7 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
       p += data_len_array[i];
       res += data_len_array[i];
     }
-  } else { /* TLS_PSK_WITH_AES_128_CCM_8 */   
+  } else { /* TLS_PSK_WITH_AES_128_CCM_8 or TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */   
     /** 
      * length of additional_data for the AEAD cipher which consists of
      * seq_num(2+6) + type(1) + version(2) + length(2)
@@ -2769,7 +2783,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
   if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite selected */
     return clen;
-  } else {			/* TLS_PSK_WITH_AES_128_CCM_8 */   
+  } else { /* TLS_PSK_WITH_AES_128_CCM_8 or TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
     /** 
      * length of additional_data for the AEAD cipher which consists of
      * seq_num(2+6) + type(1) + version(2) + length(2)
@@ -3087,8 +3101,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 #endif /* DTLS_ECC */
 
   case DTLS_HT_CLIENT_HELLO:
-    /* At this point, we have a good relationship with this peer. This
-     * state is left for re-negotiation of key material. */
     
     dtls_debug("DTLS_HT_CLIENT_HELLO\n");
     if ((peer && state != DTLS_STATE_CONNECTED) ||
@@ -3116,6 +3128,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       break;
     }
 
+    /* At this point, we have a good relationship with this peer. This
+     * state is left for re-negotiation of key material. */
     if (!peer) {
       dtls_security_parameters_t *security;
 
@@ -3158,7 +3172,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
      */
     err = dtls_update_parameters(ctx, peer, data, data_length);
     if (err < 0) {
-
       dtls_warn("error updating security parameters\n");
       return err;
     }
