@@ -46,12 +46,18 @@ SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c
 ifneq ("@NDEBUG@", "1")
 SOURCES += debug.c
 endif
-OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o ecc/ecc.o @OPT_OBJS@
+OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o @OPT_OBJS@
+ifeq ("@DTLS_ECC@", "1")
+OBJECTS += ecc/ecc.o
+endif
 HEADERS:=dtls.h hmac.h debug.h config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h t_list.h alert.h utlist.h prng.h peer.h state.h dtls_time.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE
-SUBDIRS:=tests doc sha2 aes ecc
+SUBDIRS:=tests doc sha2 aes
+ifeq ("@DTLS_ECC@", "1")
+SUBDIRS += ecc
+endif
 DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.in config.h.in $(SOURCES) $(HEADERS)
 LIB:=libtinydtls.a

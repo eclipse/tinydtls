@@ -53,6 +53,7 @@ static const unsigned char ecdsa_pub_key_y[] = {
 			0xE9, 0x3F, 0x98, 0x72, 0x09, 0xDA, 0xED, 0x0B,
 			0x4F, 0xAB, 0xC3, 0x6F, 0xC7, 0x72, 0xF8, 0x29};
 
+#ifdef DTLS_PSK
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
@@ -71,7 +72,9 @@ get_psk_key(struct dtls_context_t *ctx,
   *result = &psk;
   return 0;
 }
+#endif /* DTLS_PSK */
 
+#ifdef DTLS_ECC
 static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
@@ -95,6 +98,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 size_t key_size) {
   return 0;
 }
+#endif /* DTLS_ECC */
 
 static void
 try_send(struct dtls_context_t *ctx, session_t *dst) {
@@ -231,9 +235,13 @@ static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
   .event = NULL,
+#ifdef DTLS_PSK
   .get_psk_key = get_psk_key,
+#endif /* DTLS_PSK */
+#ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,
   .verify_ecdsa_key = verify_ecdsa_key
+#endif /* DTLS_ECC */
 };
 
 #define DTLS_CLIENT_CMD_CLOSE "client:close"

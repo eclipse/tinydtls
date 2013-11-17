@@ -121,8 +121,12 @@ typedef struct {
   dtls_cipher_t cipher;		/**< cipher type */
   unsigned int do_client_auth:1;
   union {
+#ifdef DTLS_ECC
     dtls_handshake_parameters_ecdsa_t ecdsa;
+#endif /* DTLS_ECC */
+#ifdef DTLS_PSK
     dtls_handshake_parameters_psk_t psk;
+#endif /* DTLS_PSK */
   } keyx;
 } dtls_handshake_parameters_t;
 

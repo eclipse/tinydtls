@@ -115,6 +115,7 @@ send_to_peer(struct dtls_context_t *ctx,
   return len;
 }
 
+#ifdef DTLS_PSK
 static int
 get_psk_key(struct dtls_context_t *ctx, 
 	    const session_t *session, 
@@ -131,7 +132,9 @@ get_psk_key(struct dtls_context_t *ctx,
   *result = &psk;
   return 0;
 }
+#endif /* DTLS_PSK */
 
+#ifdef DTLS_ECC
 static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
@@ -155,6 +158,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 size_t key_size) {
   return 0;
 }
+#endif /* DTLS_ECC */
 
 PROCESS(udp_server_process, "UDP server process");
 AUTOSTART_PROCESSES(&udp_server_process);
@@ -216,9 +220,13 @@ init_dtls(session_t *dst) {
     .write = send_to_peer,
     .read  = read_from_peer,
     .event = NULL,
+#ifdef DTLS_PSK
     .get_psk_key = get_psk_key,
+#endif /* DTLS_PSK */
+#ifdef DTLS_ECC
     .get_ecdsa_key = get_ecdsa_key,
     .verify_ecdsa_key = verify_ecdsa_key
+#endif /* DTLS_ECC */
   };
   PRINTF("DTLS client started\n");
 

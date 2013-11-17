@@ -46,6 +46,7 @@ handle_sigint(int signum) {
 }
 #endif
 
+#ifdef DTLS_PSK
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
@@ -64,7 +65,9 @@ get_psk_key(struct dtls_context_t *ctx,
   *result = &psk;
   return 0;
 }
+#endif /* DTLS_PSK */
 
+#ifdef DTLS_ECC
 static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
@@ -88,6 +91,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 size_t key_size) {
   return 0;
 }
+#endif /* DTLS_ECC */
 
 #define DTLS_SERVER_CMD_CLOSE "server:close"
 #define DTLS_SERVER_CMD_RENEGOTIATE "server:renegotiate"
@@ -211,9 +215,13 @@ static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
   .event = NULL,
+#ifdef DTLS_PSK
   .get_psk_key = get_psk_key,
+#endif /* DTLS_PSK */
+#ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,
   .verify_ecdsa_key = verify_ecdsa_key
+#endif /* DTLS_ECC */
 };
 
 int 
