@@ -58,11 +58,26 @@ AC_ARG_WITH(debug,
    NDEBUG=1], 
   [])
 
+
+AC_ARG_WITH(ecc,
+  [AS_HELP_STRING([--without-ecc],[disable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8])],
+  [],
+  [CPPFLAGS="${CPPFLAGS} -DDTLS_ECC"
+   DTLS_ECC=1])
+
+AC_ARG_WITH(psk,
+  [AS_HELP_STRING([--without-psk],[disable support for TLS_PSK_WITH_AES_128_CCM_8])],
+  [],
+  [CPPFLAGS="${CPPFLAGS} -DDTLS_PSK"
+   DTLS_PSK=1])
+
 CPPFLAGS="${CPPFLAGS} -DDTLSv12 -DWITH_SHA256"
 OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
 AC_SUBST(OPT_OBJS)
 AC_SUBST(NDEBUG)
+AC_SUBST(DTLS_ECC)
+AC_SUBST(DTLS_PSK)
 
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h sys/time.h time.h unistd.h])

@@ -136,6 +136,7 @@ typedef struct {
   int (*event)(struct dtls_context_t *ctx, session_t *session, 
 		dtls_alert_level_t level, unsigned short code);
 
+#ifdef DTLS_PSK
   /**
    * Called during handshake to lookup the key for @p id in @p
    * session. If found, the key must be stored in @p result and 
@@ -158,6 +159,9 @@ typedef struct {
 		     const unsigned char *id, size_t id_len, 
 		     const dtls_psk_key_t **result);
 
+#endif /* DTLS_PSK */
+
+#ifdef DTLS_ECC
   /**
    * Called during handshake to get the server's or client's ecdsa
    * key used to authenticate this server or client in this 
@@ -213,6 +217,7 @@ typedef struct {
 			  const unsigned char *other_pub_x,
 			  const unsigned char *other_pub_y,
 			  size_t key_size);
+#endif /* DTLS_ECC */
 } dtls_handler_t;
 
 /** Holds global information of the DTLS engine. */

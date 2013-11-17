@@ -307,6 +307,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
   return len;
 }
 
+#ifdef DTLS_PSK
 int
 dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 			   unsigned char *result, size_t result_len) {
@@ -329,7 +330,9 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 
   return 2 * (sizeof(uint16) + keylen);
 }
+#endif /* DTLS_PSK */
 
+#ifdef DTLS_ECC
 static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
 				  uint32_t *result) {
   int i;
@@ -509,6 +512,7 @@ dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
   return dtls_ecdsa_verify_sig_hash(pub_key_x, pub_key_y, key_size, sha256hash,
 				    sizeof(sha256hash), result_r, result_s);
 }
+#endif /* DTLS_ECC */
 
 int 
 dtls_encrypt(const unsigned char *src, size_t length,

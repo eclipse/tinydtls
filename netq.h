@@ -23,7 +23,11 @@
  */
 
 #ifndef NETQ_MAXCNT
-#define NETQ_MAXCNT 4 /**< maximum number of elements in netq structure */
+#ifdef DTLS_ECC
+#define NETQ_MAXCNT 5 /**< maximum number of elements in netq structure */
+#elif defined(DTLS_PSK)
+#define NETQ_MAXCNT 3 /**< maximum number of elements in netq structure */
+#endif
 #endif
 
 /** 
