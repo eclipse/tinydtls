@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.4.0])
+AC_INIT([tinydtls], [0.5.0])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -62,13 +62,13 @@ AC_ARG_WITH(debug,
 AC_ARG_WITH(ecc,
   [AS_HELP_STRING([--without-ecc],[disable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8])],
   [],
-  [CPPFLAGS="${CPPFLAGS} -DDTLS_ECC"
+  [AC_DEFINE(DTLS_ECC, 1, [Define to 1 if building with ECC support.])
    DTLS_ECC=1])
 
 AC_ARG_WITH(psk,
   [AS_HELP_STRING([--without-psk],[disable support for TLS_PSK_WITH_AES_128_CCM_8])],
   [],
-  [CPPFLAGS="${CPPFLAGS} -DDTLS_PSK"
+  [AC_DEFINE(DTLS_PSK, 1, [Define to 1 if building with PSK support])
    DTLS_PSK=1])
 
 CPPFLAGS="${CPPFLAGS} -DDTLSv12 -DWITH_SHA256"
