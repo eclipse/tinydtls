@@ -3862,14 +3862,18 @@ PROCESS_THREAD(dtls_retransmit_process, ev, data)
 	node = list_head(the_dtls_context.sendqueue);
 	
 	now = clock_time();
-	while (node && node->t <= now) {
+	if (node && node->t <= now) {
 	  dtls_retransmit(&the_dtls_context, list_pop(the_dtls_context.sendqueue));
 	  node = list_head(the_dtls_context.sendqueue);
 	}
 
 	/* need to set timer to some value even if no nextpdu is available */
-	etimer_set(&the_dtls_context.retransmit_timer, 
-		   node ? node->t - now : 0xFFFF);
+	if (node) {
+	  etimer_set(&the_dtls_context.retransmit_timer, 
+		     node->t <= now ? 1 : node->t - now);
+	} else {
+	  etimer_set(&the_dtls_context.retransmit_timer, 0xFFFF);
+	}
       } 
     }
   }
