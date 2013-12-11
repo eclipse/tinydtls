@@ -2886,6 +2886,15 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   int err = 0;
 
+  /* This will clear the retransmission buffer if we get an expected
+   * handshake message. We have to make sure that no handshake message
+   * should get expected when we still should retransmit something, when
+   * we do everything accordingly to the DTLS 1.2 standard this should
+   * not be a problem. */
+  if (peer) {
+    dtls_stop_retransmission(ctx, peer);
+  }
+
   /* The following switch construct handles the given message with
    * respect to the current internal state for this peer. In case of
    * error, it is left with return 0. */
@@ -3308,7 +3317,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     dtls_info("Added package for reordering\n");
     return 0;
   } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->handshake_params->hs_state.mseq_r) {
-    /* Found the expected package, use this an all the buffered packages */
+    /* Found the expected package, use this and all the buffered packages */
     int next = 1;
 
     res = handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
@@ -3497,14 +3506,6 @@ dtls_handle_message(dtls_context_t *ctx,
     dtls_debug("dtls_handle_message: FOUND PEER\n");
   }
 
-  /* FIXME: check sequence number of record and drop message if the
-   * number is not exactly the last number that we have responded to + 1. 
-   * Otherwise, stop retransmissions for this specific peer and 
-   * continue processing. */
-  if (peer) {
-    dtls_stop_retransmission(ctx, peer);
-  }
-
   while ((rlen = is_record(msg,msglen))) {
     dtls_peer_type role;
     dtls_state_t state;
@@ -3537,6 +3538,9 @@ dtls_handle_message(dtls_context_t *ctx,
     switch (msg[0]) {
 
     case DTLS_CT_CHANGE_CIPHER_SPEC:
+      if (peer) {
+        dtls_stop_retransmission(ctx, peer);
+      }
       err = handle_ccs(ctx, peer, msg, data, data_length);
       if (err < 0) {
 	dtls_warn("error while handling ChangeCipherSpec package\n");
@@ -3546,6 +3550,9 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_ALERT:
+      if (peer) {
+        dtls_stop_retransmission(ctx, peer);
+      }
       err = handle_alert(ctx, peer, msg, data, data_length);
       if (err < 0) {
         dtls_warn("received wrong package\n");
@@ -3576,6 +3583,7 @@ dtls_handle_message(dtls_context_t *ctx,
         // TODO: should we send a alert here?
         return -1;
       }
+      dtls_stop_retransmission(ctx, peer);
       CALL(ctx, read, &peer->session, data, data_length);
       break;
     default:
