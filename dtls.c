@@ -1372,7 +1372,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   if ((type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) ||
       type == DTLS_CT_CHANGE_CIPHER_SPEC) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
-    netq_t *n = netq_node_new();
+    netq_t *n = netq_node_new(overall_len);
     if (n) {
       dtls_tick_t now;
       dtls_ticks(&now);
@@ -3327,7 +3327,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       node = netq_next(node);
     }
 
-    n = netq_node_new();
+    n = netq_node_new(data_length);
     if (!n) {
       dtls_warn("no space in reoder buffer\n");
       return 0;

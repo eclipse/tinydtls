@@ -24,8 +24,8 @@
 #include <stdlib.h>
 
 static inline netq_t *
-netq_malloc_node() {
-  return (netq_t *)malloc(sizeof(netq_t));
+netq_malloc_node(size_t size) {
+  return (netq_t *)malloc(sizeof(netq_t) + size);
 }
 
 static inline void
@@ -41,7 +41,7 @@ netq_free_node(netq_t *node) {
 MEMB(netq_storage, netq_t, NETQ_MAXCNT);
 
 static inline netq_t *
-netq_malloc_node() {
+netq_malloc_node(size_t size) {
   return (netq_t *)memb_alloc(&netq_storage);
 }
 
@@ -107,9 +107,9 @@ netq_t *netq_pop_first(list_t queue) {
 }
 
 netq_t *
-netq_node_new() {
+netq_node_new(size_t size) {
   netq_t *node;
-  node = netq_malloc_node();
+  node = netq_malloc_node(size);
 
 #ifndef NDEBUG
   if (!node)
