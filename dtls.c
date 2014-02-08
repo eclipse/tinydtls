@@ -1711,8 +1711,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     p += sizeof(uint16);
 
     /* selected compression method */
-    if (handshake->compression >= 0)
-      *p++ = compression_methods[handshake->compression];
+    *p++ = compression_methods[handshake->compression];
   }
 
   if (extension_size) {
