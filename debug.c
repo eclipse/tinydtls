@@ -210,7 +210,7 @@ dsrv_log(log_t level, char *format, ...) {
   if (print_timestamp(timebuf,sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG) 
     fprintf(log_fd, "%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -230,7 +230,7 @@ dsrv_log(log_t level, char *format, ...) {
   if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
     PRINTF("%s ", timebuf);
 
-  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG) 
     PRINTF("%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -292,7 +292,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (print_timestamp(timebuf, sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG) 
     fprintf(log_fd, "%s ", loglevels[level]);
 
   if (extend) {
