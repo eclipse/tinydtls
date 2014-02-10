@@ -143,7 +143,7 @@ typedef unsigned char uint48[6];
 
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT
 /** Number of message retransmissions. */
-#define DTLS_DEFAULT_MAX_RETRANSMIT 5
+#define DTLS_DEFAULT_MAX_RETRANSMIT 7
 #endif
 
 /** Known cipher suites.*/
