@@ -708,7 +708,7 @@ static int verify_ext_cert_type(uint8 *data, size_t data_length) {
     cert_type = dtls_uint8_to_int(data);
     data += sizeof(uint8);
 
-    if (cert_type == TLS_CERT_TYPE_OOB)
+    if (cert_type == TLS_CERT_TYPE_RAW_PUBLIC_KEY)
       return 0;
   }
 
@@ -800,7 +800,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
-	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_OOB)
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
 	    goto error;
         }
         break;
@@ -810,7 +810,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
-	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_OOB)
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
 	    goto error;
         }
         break;
@@ -1729,7 +1729,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint16(p, 1);
     p += sizeof(uint16);
 
-    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
     /* client certificate type extension */
@@ -1740,7 +1740,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint16(p, 1);
     p += sizeof(uint16);
 
-    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
     /* ec_point_formats */
@@ -2323,7 +2323,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint8(p, 1);
     p += sizeof(uint8);
 
-    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
     /* client certificate type extension */
@@ -2338,7 +2338,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint8(p, 1);
     p += sizeof(uint8);
 
-    dtls_int_to_uint8(p, TLS_CERT_TYPE_OOB);
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
     /* elliptic_curves */

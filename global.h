@@ -164,7 +164,7 @@ typedef enum {
 #define TLS_EXT_CLIENT_CERTIFICATE_TYPE	122 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
 #define TLS_EXT_SERVER_CERTIFICATE_TYPE	123 /* TODO: replcae with values from draft-ietf-tls-oob-pubkey */
 
-#define TLS_CERT_TYPE_OOB 2 /* replcae with values from draft-ietf-tls-oob-pubkey */
+#define TLS_CERT_TYPE_RAW_PUBLIC_KEY	2 /* replcae with values from draft-ietf-tls-oob-pubkey */
 
 #define TLS_EXT_ELLIPTIC_CURVES_SECP256R1	23 /* see RFC 4492 */
 
