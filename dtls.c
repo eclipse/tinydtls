@@ -794,7 +794,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_eliptic_curves(data, j))
           goto error;
         break;
-      case TLS_EXT_CLIENT_CERIFICATE_TYPE:
+      case TLS_EXT_CLIENT_CERTIFICATE_TYPE:
         ext_client_cert_type = 1;
         if (client_hello) {
 	  if (verify_ext_cert_type(data, j))
@@ -804,7 +804,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	    goto error;
         }
         break;
-      case TLS_EXT_SERVER_CERIFICATE_TYPE:
+      case TLS_EXT_SERVER_CERTIFICATE_TYPE:
         ext_server_cert_type = 1;
         if (client_hello) {
 	  if (verify_ext_cert_type(data, j))
@@ -1722,7 +1722,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   if (ecdsa) {
     /* client certificate type extension */
-    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERIFICATE_TYPE);
+    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
     /* length of this extension type */
@@ -1733,7 +1733,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     p += sizeof(uint8);
 
     /* client certificate type extension */
-    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERIFICATE_TYPE);
+    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
     /* length of this extension type */
@@ -2312,7 +2312,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 
   if (ecdsa) {
     /* client certificate type extension */
-    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERIFICATE_TYPE);
+    dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
     /* length of this extension type */
@@ -2327,7 +2327,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     p += sizeof(uint8);
 
     /* client certificate type extension */
-    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERIFICATE_TYPE);
+    dtls_int_to_uint16(p, TLS_EXT_SERVER_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
     /* length of this extension type */
