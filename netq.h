@@ -47,7 +47,11 @@ typedef struct netq_t {
   unsigned char retransmit_cnt;	/**< retransmission counter, will be removed when zero */
 
   size_t length;		/**< actual length of data */
+#ifndef WITH_CONTIKI
+  unsigned char data[];		/**< the datagram to send */
+#else
   netq_packet_t data;		/**< the datagram to send */
+#endif
 } netq_t;
 
 #ifndef WITH_CONTIKI
@@ -76,7 +80,7 @@ void netq_node_free(netq_t *node);
 void netq_delete_all(list_t queue);
 
 /** Creates a new node suitable for adding to a netq_t queue. */
-netq_t *netq_node_new();
+netq_t *netq_node_new(size_t size);
 
 /**
  * Returns a pointer to the first item in given queue or NULL if

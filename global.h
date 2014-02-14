@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -186,6 +186,25 @@ memxor(unsigned char *x, const unsigned char *y, size_t n) {
     *x ^= *y;
     x++; y++;
   }
+}
+
+/**
+ * Compares \p len bytes from @p a with @p b in constant time. This
+ * functions always traverses the entire length to prevent timing
+ * attacks.
+ *
+ * \param a Byte sequence to compare
+ * \param b Byte sequence to compare
+ * \param len Number of bytes to compare.
+ * \return \c 1 if \p a and \p b are equal, \c 0 otherwise.
+ */
+static inline int
+equals(unsigned char *a, unsigned char *b, size_t len) {
+  int result = 1;
+  while (len--) {
+    result &= (*a++ == *b++);
+  }
+  return result;
 }
 
 #ifdef HAVE_FLS

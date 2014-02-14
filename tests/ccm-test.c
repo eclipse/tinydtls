@@ -48,7 +48,6 @@ PROCESS_THREAD(ccm_test_process, ev, d)
 int main(int argc, char **argv) {
 #endif /* WITH_CONTIKI */
   long int len;
-  size_t L;			/* max(2,(fls(lm) >> 3) + 1) */
   int n;
 
   rijndael_ctx ctx;
@@ -64,8 +63,7 @@ int main(int argc, char **argv) {
       return -1;
     }
 
-    L = 15 - 13; /* the Nonce in ccm-testdata.c is always 13 Bytes */
-    len = dtls_ccm_encrypt_message(&ctx, data[n].M, L, data[n].nonce, 
+    len = dtls_ccm_encrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce, 
 				   data[n].msg + data[n].la, 
 				   data[n].lm - data[n].la, 
 				   data[n].msg, data[n].la);
@@ -80,7 +78,7 @@ int main(int argc, char **argv) {
     printf("result is (total length = %lu):\n\t", len);
     dump(data[n].msg, len);
 
-    len = dtls_ccm_decrypt_message(&ctx, data[n].M, L, data[n].nonce, 
+    len = dtls_ccm_decrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce, 
 				   data[n].msg + data[n].la, len - data[n].la, 
 				   data[n].msg, data[n].la);
     

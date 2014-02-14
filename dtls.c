@@ -533,6 +533,40 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
 		  dtls_kb_iv_size(config, peer->role));
 }
 
+/** returns the name of the goven handshake type number.
+  * see IANA for a full list of types:
+  * https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-7
+  */
+static char *dtls_handshake_type_to_name(int type)
+{
+  switch (type) {
+  case DTLS_HT_HELLO_REQUEST:
+    return "hello_request";
+  case DTLS_HT_CLIENT_HELLO:
+    return "client_hello";
+  case DTLS_HT_SERVER_HELLO:
+    return "server_hello";
+  case DTLS_HT_HELLO_VERIFY_REQUEST:
+    return "hello_verify_request";
+  case DTLS_HT_CERTIFICATE:
+    return "certificate";
+  case DTLS_HT_SERVER_KEY_EXCHANGE:
+    return "server_key_exchange";
+  case DTLS_HT_CERTIFICATE_REQUEST:
+    return "certificate_request";
+  case DTLS_HT_SERVER_HELLO_DONE:
+    return "server_hello_done";
+  case DTLS_HT_CERTIFICATE_VERIFY:
+    return "certificate_verify";
+  case DTLS_HT_CLIENT_KEY_EXCHANGE:
+    return "client_key_exchange";
+  case DTLS_HT_FINISHED:
+    return "finished";
+  default:
+    return "unknown";
+  }
+}
+
 /**
  * Calculate the pre master secret and after that calculate the master-secret.
  */
@@ -1251,6 +1285,8 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     data_len_array[i] = data_length;
     i++;
   }
+  dtls_debug("send handshake package of type: %s (%i)\n",
+	     dtls_handshake_type_to_name(header_type), header_type);
   return dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
 			 data_array, data_len_array, i);
 }
@@ -1336,7 +1372,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   if ((type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) ||
       type == DTLS_CT_CHANGE_CIPHER_SPEC) {
     /* copy handshake messages other than HelloVerify into retransmit buffer */
-    netq_t *n = netq_node_new();
+    netq_t *n = netq_node_new(overall_len);
     if (n) {
       dtls_tick_t now;
       dtls_ticks(&now);
@@ -2760,7 +2796,6 @@ check_server_hellodone(dtls_context_t *ctx,
   dtls_security_params_switch(peer);
 
   /* Client Finished */
-  dtls_debug("send Finished\n");
   return dtls_send_finished(ctx, peer, PRF_LABEL(client), PRF_LABEL_SIZE(client));
 }
 
@@ -2886,10 +2921,21 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   int err = 0;
 
+  /* This will clear the retransmission buffer if we get an expected
+   * handshake message. We have to make sure that no handshake message
+   * should get expected when we still should retransmit something, when
+   * we do everything accordingly to the DTLS 1.2 standard this should
+   * not be a problem. */
+  if (peer) {
+    dtls_stop_retransmission(ctx, peer);
+  }
+
   /* The following switch construct handles the given message with
    * respect to the current internal state for this peer. In case of
    * error, it is left with return 0. */
 
+  dtls_debug("handle handshake package of type: %s (%i)\n",
+	     dtls_handshake_type_to_name(data[0]), data[0]);
   switch (data[0]) {
 
   /************************************************************************
@@ -2897,7 +2943,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
    ************************************************************************/
   case DTLS_HT_HELLO_VERIFY_REQUEST:
 
-    dtls_debug("DTLS_HT_HELLO_VERIFY_REQUEST\n");
     if (state != DTLS_STATE_CLIENTHELLO) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -2911,7 +2956,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     break;
   case DTLS_HT_SERVER_HELLO:
 
-    dtls_debug("DTLS_HT_SERVER_HELLO\n");
     if (state != DTLS_STATE_CLIENTHELLO) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -2931,7 +2975,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
 #ifdef DTLS_ECC
   case DTLS_HT_CERTIFICATE:
-    dtls_debug("DTLS_HT_CERTIFICATE\n");
 
     if ((role == DTLS_CLIENT && state != DTLS_STATE_WAIT_SERVERCERTIFICATE) ||
         (role == DTLS_SERVER && state != DTLS_STATE_WAIT_CLIENTCERTIFICATE)) {
@@ -2953,8 +2996,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 #endif /* DTLS_ECC */
 
   case DTLS_HT_SERVER_KEY_EXCHANGE:
-
-    dtls_debug("DTLS_HT_SERVER_KEY_EXCHANGE\n");
 
 #ifdef DTLS_ECC
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
@@ -2984,7 +3025,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   case DTLS_HT_SERVER_HELLO_DONE:
 
-    dtls_debug("DTLS_HT_SERVER_HELLO_DONE\n");
     if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -3001,7 +3041,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   case DTLS_HT_CERTIFICATE_REQUEST:
 
-    dtls_debug("DTLS_HT_CERTIFICATE_REQUEST\n");
     if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -3017,7 +3056,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_FINISHED:
     /* expect a Finished message from server */
 
-    dtls_debug("DTLS_HT_FINISHED\n");
     if (state != DTLS_STATE_WAIT_FINISHED) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -3061,8 +3099,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_CLIENT_KEY_EXCHANGE:
     /* handle ClientHello, update msg and msglen and goto next if not finished */
 
-    dtls_debug("DTLS_HT_CLIENT_KEY_EXCHANGE\n");
-
     if (state != DTLS_STATE_WAIT_CLIENTKEYEXCHANGE) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -3084,7 +3120,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 #ifdef DTLS_ECC
   case DTLS_HT_CERTIFICATE_VERIFY:
 
-    dtls_debug("DTLS_HT_CERTIFICATE_VERIFY\n");
     if (state != DTLS_STATE_WAIT_CERTIFICATEVERIFY) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
@@ -3101,8 +3136,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 #endif /* DTLS_ECC */
 
   case DTLS_HT_CLIENT_HELLO:
-    
-    dtls_debug("DTLS_HT_CLIENT_HELLO\n");
+
     if ((peer && state != DTLS_STATE_CONNECTED) ||
 	(!peer && state != DTLS_STATE_WAIT_CLIENTHELLO)) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
@@ -3198,7 +3232,6 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   case DTLS_HT_HELLO_REQUEST:
 
-    dtls_debug("DTLS_HT_HELLO_REQUEST\n");
     if (state != DTLS_STATE_CONNECTED) {
       /* we should just ignore such packages when in handshake */
       return 0;
@@ -3249,6 +3282,9 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   }
   hs_header = DTLS_HANDSHAKE_HEADER(data);
 
+  dtls_debug("received handshake package of type: %s (%i)\n",
+	     dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
+
   if (!peer || !peer->handshake_params) {
     /* This is the initial ClientHello */
     if (hs_header->msg_type != DTLS_HT_CLIENT_HELLO && !peer) {
@@ -3291,7 +3327,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       node = netq_next(node);
     }
 
-    n = netq_node_new();
+    n = netq_node_new(data_length);
     if (!n) {
       dtls_warn("no space in reoder buffer\n");
       return 0;
@@ -3308,7 +3344,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     dtls_info("Added package for reordering\n");
     return 0;
   } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->handshake_params->hs_state.mseq_r) {
-    /* Found the expected package, use this an all the buffered packages */
+    /* Found the expected package, use this and all the buffered packages */
     int next = 1;
 
     res = handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
@@ -3497,14 +3533,6 @@ dtls_handle_message(dtls_context_t *ctx,
     dtls_debug("dtls_handle_message: FOUND PEER\n");
   }
 
-  /* FIXME: check sequence number of record and drop message if the
-   * number is not exactly the last number that we have responded to + 1. 
-   * Otherwise, stop retransmissions for this specific peer and 
-   * continue processing. */
-  if (peer) {
-    dtls_stop_retransmission(ctx, peer);
-  }
-
   while ((rlen = is_record(msg,msglen))) {
     dtls_peer_type role;
     dtls_state_t state;
@@ -3537,6 +3565,9 @@ dtls_handle_message(dtls_context_t *ctx,
     switch (msg[0]) {
 
     case DTLS_CT_CHANGE_CIPHER_SPEC:
+      if (peer) {
+        dtls_stop_retransmission(ctx, peer);
+      }
       err = handle_ccs(ctx, peer, msg, data, data_length);
       if (err < 0) {
 	dtls_warn("error while handling ChangeCipherSpec package\n");
@@ -3546,6 +3577,9 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_ALERT:
+      if (peer) {
+        dtls_stop_retransmission(ctx, peer);
+      }
       err = handle_alert(ctx, peer, msg, data, data_length);
       if (err < 0) {
         dtls_warn("received wrong package\n");
@@ -3576,6 +3610,7 @@ dtls_handle_message(dtls_context_t *ctx,
         // TODO: should we send a alert here?
         return -1;
       }
+      dtls_stop_retransmission(ctx, peer);
       CALL(ctx, read, &peer->session, data, data_length);
       break;
     default:
@@ -3754,7 +3789,14 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       node->t = now + (node->timeout << node->retransmit_cnt);
       netq_insert_node(context->sendqueue, node);
       
-      dtls_debug("** retransmit packet\n");
+      if (node->type == DTLS_CT_HANDSHAKE) {
+	dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
+
+	dtls_debug("** retransmit handshake package of type: %s (%i)\n",
+	           dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
+      } else {
+	dtls_debug("** retransmit packet\n");
+      }
       
       err = dtls_prepare_record(node->peer, security, node->type, &data, &length,
 				1, sendbuf, &len);
@@ -3831,14 +3873,18 @@ PROCESS_THREAD(dtls_retransmit_process, ev, data)
 	node = list_head(the_dtls_context.sendqueue);
 	
 	now = clock_time();
-	while (node && node->t <= now) {
+	if (node && node->t <= now) {
 	  dtls_retransmit(&the_dtls_context, list_pop(the_dtls_context.sendqueue));
 	  node = list_head(the_dtls_context.sendqueue);
 	}
 
 	/* need to set timer to some value even if no nextpdu is available */
-	etimer_set(&the_dtls_context.retransmit_timer, 
-		   node ? node->t - now : 0xFFFF);
+	if (node) {
+	  etimer_set(&the_dtls_context.retransmit_timer, 
+		     node->t <= now ? 1 : node->t - now);
+	} else {
+	  etimer_set(&the_dtls_context.retransmit_timer, 0xFFFF);
+	}
       } 
     }
   }
