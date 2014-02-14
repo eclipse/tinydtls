@@ -3709,6 +3709,7 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
 int
 dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   dtls_peer_t *peer;
+  int res;
 
   peer = dtls_get_peer(ctx, dst);
   
@@ -3720,7 +3721,17 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
     return -1;
   }
 
-  return dtls_connect_peer(ctx, peer);
+  res = dtls_connect_peer(ctx, peer);
+
+  /* Invoke event callback to indicate connection attempt or
+   * re-negotiation. */
+  if (res > 0) {
+    CALL(ctx, event, &peer->session, 0, DTLS_EVENT_CONNECT);
+  } else if (res == 0) {
+    CALL(ctx, event, &peer->session, 0, DTLS_EVENT_RENEGOTIATE);
+  }
+  
+  return res;
 }
 
 static void
