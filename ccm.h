@@ -26,7 +26,6 @@
 #ifndef _DTLS_CCM_H_
 #define _DTLS_CCM_H_
 
-#include "config.h"
 #include "aes/rijndael.h"
 
 /* implementation of Counter Mode CBC-MAC, RFC 3610 */

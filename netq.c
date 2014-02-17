@@ -6,6 +6,7 @@
  * LICENSE for terms of use.
  */
 
+#include "config.h"
 #include "debug.h"
 #include "netq.h"
 

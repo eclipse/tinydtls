@@ -260,7 +260,7 @@ main(int argc, char **argv) {
       log_level = strtol(optarg, NULL, 10);
       break;
     default:
-      usage(argv[0], PACKAGE_VERSION);
+      usage(argv[0], dtls_package_version());
       exit(1);
     }
   }

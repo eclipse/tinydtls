@@ -610,12 +610,12 @@ int get_psk_key(struct dtls_context_t *ctx,
  * has changed can register an event handling function with the field @c event
  * in the dtls_handler_t structure (see \ref dtls_server_example). The call-back
  * function is called for alert messages and internal state changes. For alert
- * messages, the argument @p level will be set to a value greate than zero, and
+ * messages, the argument @p level will be set to a value greater than zero, and
  * @p code will indicate the notification code. For internal events, @p level
  * is @c 0, and @p code a value greater than @c 255. 
  *
- * Currently, the only defined internal event is @c DTLS_EVENT_CONNECTED. It
- * indicates successful establishment of a new DTLS channel.
+ * Internal events are DTLS_EVENT_CONNECTED, @c DTLS_EVENT_CONNECT, and
+ * @c DTLS_EVENT_RENEGOTIATE.
  *
  * @code
 int handle_event(struct dtls_context_t *ctx, session_t *session, 
@@ -650,7 +650,7 @@ int handle_event(struct dtls_context_t *ctx, session_t *session,
  * @code
 #include "contiki.h"
 
-#include "config.h"
+#include "tinydtls.h"
 #include "dtls.h"
 
 #define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])

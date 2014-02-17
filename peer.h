@@ -31,8 +31,11 @@
 #ifndef _DTLS_PEER_H_
 #define _DTLS_PEER_H_
 
-#include "config.h"
+#include <sys/types.h>
+
+#include "tinydtls.h"
 #include "global.h"
+#include "session.h"
 
 #include "state.h"
 #include "crypto.h"
