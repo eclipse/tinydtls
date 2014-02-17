@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.5.0])
+AC_INIT([tinydtls], [0.5.2])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -99,7 +99,7 @@ AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
 
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([config.h tinydtls.h])
 
 AC_CONFIG_FILES([Makefile
                  doc/Makefile

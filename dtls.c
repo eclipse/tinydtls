@@ -24,6 +24,7 @@
  * SOFTWARE.
  */
 
+#include "tinydtls.h"
 #include "config.h"
 #include "dtls_time.h"
 
@@ -41,6 +42,8 @@
 #include "numeric.h"
 #include "netq.h"
 #include "dtls.h"
+#include "alert.h"
+#include "session.h"
 #include "prng.h"
 
 #ifdef WITH_SHA256

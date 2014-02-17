@@ -14,7 +14,7 @@
 #ifndef _DTLS_PRNG_H_
 #define _DTLS_PRNG_H_
 
-#include "config.h"
+#include "tinydtls.h"
 
 /** 
  * @defgroup prng Pseudo Random Numbers

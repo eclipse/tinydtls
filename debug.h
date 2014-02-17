@@ -26,9 +26,11 @@
 #ifndef _DTLS_DEBUG_H_
 #define _DTLS_DEBUG_H_
 
+#include <stdlib.h>
+
 #include "config.h"
 #include "global.h"
-#include <stdlib.h>
+#include "session.h"
 
 #ifdef WITH_CONTIKI
 # ifndef DEBUG
@@ -45,6 +47,12 @@ struct __session_t;
 typedef enum { DTLS_LOG_EMERG=0, DTLS_LOG_ALERT, DTLS_LOG_CRIT, DTLS_LOG_WARN, 
        DTLS_LOG_NOTICE, DTLS_LOG_INFO, DTLS_LOG_DEBUG
 } log_t;
+
+/** Returns a zero-terminated string with the name of this library. */
+const char *dtls_package_name();
+
+/** Returns a zero-terminated string with the library version. */
+const char *dtls_package_version();
 
 #ifndef NDEBUG
 /** Returns the current log level. */

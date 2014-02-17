@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2014 Olaf Bergmann <bergmann@tzi.org>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,42 +23,54 @@
  * SOFTWARE.
  */
 
-/**
- * @file state.h
- * @brief state information for DTLS FSM
- */
+#ifndef _DTLS_SESSION_H_
+#define _DTLS_SESSION_H_
 
-#ifndef _DTLS_STATE_H_
-#define _DTLS_STATE_H_
+#include <string.h>
 
-#include <sys/types.h>
-#include <stdint.h>
-
+#include "tinydtls.h"
 #include "global.h"
-#include "hmac.h"
 
-typedef enum { 
-  DTLS_STATE_INIT = 0, DTLS_STATE_WAIT_CLIENTHELLO, DTLS_STATE_WAIT_CLIENTCERTIFICATE,
-  DTLS_STATE_WAIT_CLIENTKEYEXCHANGE, DTLS_STATE_WAIT_CERTIFICATEVERIFY,
-  DTLS_STATE_WAIT_CHANGECIPHERSPEC,
-  DTLS_STATE_WAIT_FINISHED, DTLS_STATE_FINISHED, 
-  /* client states */
-  DTLS_STATE_CLIENTHELLO, DTLS_STATE_WAIT_SERVERCERTIFICATE, DTLS_STATE_WAIT_SERVERKEYEXCHANGE,
-  DTLS_STATE_WAIT_SERVERHELLODONE,
+#ifdef WITH_CONTIKI
+#include "uip.h"
+typedef struct {
+  unsigned char size;
+  uip_ipaddr_t addr;
+  unsigned short port;
+  int ifindex;
+} session_t;
 
-  DTLS_STATE_CONNECTED,
-  DTLS_STATE_CLOSING,
-  DTLS_STATE_CLOSED
-} dtls_state_t;
+#else /* WITH_CONTIKI */
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 typedef struct {
-  uint16_t mseq_s;	     /**< send handshake message sequence number counter */
-  uint16_t mseq_r;	     /**< received handshake message sequence number counter */
+  socklen_t size;		/**< size of addr */
+  union {
+    struct sockaddr     sa;
+    struct sockaddr_storage st;
+    struct sockaddr_in  sin;
+    struct sockaddr_in6 sin6;
+  } addr;
+  uint8_t ifindex;
+} session_t;
+#endif /* WITH_CONTIKI */
 
-  /** pending config that is updated during handshake */
-  /* FIXME: dtls_security_parameters_t pending_config; */
+/** 
+ * Resets the given session_t object @p sess to its default
+ * values.  In particular, the member rlen must be initialized to the
+ * available size for storing addresses.
+ * 
+ * @param sess The session_t object to initialize.
+ */
+void dtls_session_init(session_t *sess);
 
-  /* temporary storage for the final handshake hash */
-  dtls_hash_ctx hs_hash;
-} dtls_hs_state_t;
-#endif /* _DTLS_STATE_H_ */
+/**
+ * Compares the given session objects. This function returns @c 0
+ * when @p a and @p b differ, @c 1 otherwise.
+ */
+int dtls_session_equals(const session_t *a, const session_t *b);
+
+#endif /* _DTLS_SESSION_H_ */

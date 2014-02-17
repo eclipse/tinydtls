@@ -26,8 +26,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "config.h"
+
 #ifdef HAVE_ASSERT_H
 #include <assert.h>
+#else
+#define assert(x)
 #endif
 
 #include "debug.h"

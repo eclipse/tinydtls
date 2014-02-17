@@ -284,7 +284,7 @@ main(int argc, char **argv) {
       log_level = strtol(optarg, NULL, 10);
       break;
     default:
-      usage(argv[0], PACKAGE_VERSION);
+      usage(argv[0], dtls_package_version());
       exit(1);
     }
   }
@@ -292,7 +292,7 @@ main(int argc, char **argv) {
   dtls_set_log_level(log_level);
   
   if (argc <= optind) {
-    usage(argv[0], PACKAGE_VERSION);
+    usage(argv[0], dtls_package_version());
     exit(1);
   }
   

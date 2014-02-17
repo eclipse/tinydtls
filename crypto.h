@@ -27,9 +27,8 @@
 #ifndef _DTLS_CRYPTO_H_
 #define _DTLS_CRYPTO_H_
 
-#include "config.h"
-
 #include <stdlib.h>		/* for rand() and srand() */
+#include <stdint.h>
 #include "t_list.h"
 
 #include "aes/rijndael.h"

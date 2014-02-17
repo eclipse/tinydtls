@@ -46,6 +46,14 @@
 
 static int maxlog = DTLS_LOG_WARN;	/* default maximum log level */
 
+const char *dtls_package_name() {
+  return PACKAGE_NAME;
+}
+
+const char *dtls_package_version() {
+  return PACKAGE_STRING;
+}
+
 log_t 
 dtls_get_log_level() {
   return maxlog;
@@ -102,6 +110,8 @@ strnlen(const char *s, size_t maxlen) {
     ++n;
   return n;
 }
+#else
+extern size_t strnlen(const char *s, size_t maxlen);
 #endif /* HAVE_STRNLEN */
 
 #ifndef min

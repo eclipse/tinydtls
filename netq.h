@@ -9,7 +9,7 @@
 #ifndef _DTLS_NETQ_H_
 #define _DTLS_NETQ_H_
 
-#include "config.h"
+#include "tinydtls.h"
 #include "global.h"
 #include "dtls.h"
 #include "dtls_time.h"
