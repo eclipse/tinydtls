@@ -3691,7 +3691,11 @@ dtls_new_context(void *app_data) {
 
 void dtls_free_context(dtls_context_t *ctx) {
   dtls_peer_t *p;
-  
+
+  if (!ctx) {
+    return;
+  }
+
 #ifndef WITH_CONTIKI
   dtls_peer_t *tmp;
 
