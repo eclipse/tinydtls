@@ -3597,6 +3597,30 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_HANDSHAKE:
+      /* Handshake messages other than Finish must use the current
+       * epoch, Finish has epoch + 1. */
+
+      if (peer) {
+	uint16_t expected_epoch = dtls_security_params(peer)->epoch;
+	uint16_t msg_epoch = 
+	  dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->epoch);
+
+	/* The new security parameters must be used for all messages
+	 * that are sent after the ChangeCipherSpec message. This
+	 * means that the client's Finished message uses epoch + 1
+	 * while the server is still in the old epoch.
+	 */
+	if (role == DTLS_SERVER && state == DTLS_STATE_WAIT_FINISHED) {
+	  expected_epoch++;
+	}
+
+	if (expected_epoch != msg_epoch) {
+	  dtls_warn("Wrong epoch, expected %i, got: %i\n",
+		    expected_epoch, msg_epoch);
+	  break;
+	}
+      }
+
       err = handle_handshake(ctx, peer, session, role, state, data, data_length);
       if (err < 0) {
 	dtls_warn("error while handling handshake package\n");
