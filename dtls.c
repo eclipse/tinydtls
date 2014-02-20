@@ -1113,9 +1113,11 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 
   dtls_debug_dump("d:", data + DTLS_HS_LENGTH, sizeof(b.verify_data));
   dtls_debug_dump("v:", b.verify_data, sizeof(b.verify_data));
+
+  /* compare verify data and create DTLS alert code when they differ */
   return equals(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data))
     ? 0
-    : -1;
+    : dtls_alert_create(DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
 /**
