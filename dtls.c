@@ -1784,10 +1784,10 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
    * Start message construction at beginning of buffer. */
   p = buf;
 
-  dtls_int_to_uint24(p, 94);
+  dtls_int_to_uint24(p, 94);	/* certificates length */
   p += sizeof(uint24);
 
-  dtls_int_to_uint24(p, 91);
+  dtls_int_to_uint24(p, 91);	/* length of this certificate */
   p += sizeof(uint24);
   
   memcpy(p, &cert_asn1_header, sizeof(cert_asn1_header));
@@ -2688,7 +2688,7 @@ check_certificate_request(dtls_context_t *ctx,
   }
 
   if (auth_alg != TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN) {
-    dtls_alert("the request authentication algorithem is not supproted\n");
+    dtls_alert("the request authentication algorithm is not supproted\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
