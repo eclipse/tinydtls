@@ -1456,13 +1456,9 @@ static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
     HASH_DEL_PEER(ctx->peers, peer);
 #else /* WITH_CONTIKI */
     list_remove(ctx->peers, peer);
-
-#ifndef NDEBUG
-    PRINTF("removed peer [");
-    PRINT6ADDR(&peer->session.addr);
-    PRINTF("]:%d\n", uip_ntohs(peer->session.port));
-#endif
 #endif /* WITH_CONTIKI */
+
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "removed peer", &peer->session);
   }
   dtls_free_peer(peer);
 }
@@ -3548,8 +3544,15 @@ dtls_handle_message(dtls_context_t *ctx,
     if (peer) {
       data_length = decrypt_verify(peer, msg, rlen, &data);
       if (data_length < 0) {
+	int err =  dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
         dtls_info("decrypt_verify() failed\n");
-        goto next;
+	if (peer->state < DTLS_STATE_CONNECTED) {
+	  dtls_alert_send_from_err(ctx, peer, &peer->session, err);
+	  peer->state = DTLS_STATE_CLOSED;
+	  /* dtls_stop_retransmission(ctx, peer); */
+	  dtls_destory_peer(ctx, peer, 1);
+	}
+        return err;
       }
       role = peer->role;
       state = peer->state;
