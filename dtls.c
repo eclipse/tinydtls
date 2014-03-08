@@ -1447,7 +1447,7 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   return res;
 }
 
-static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
+static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
   if (peer->state != DTLS_STATE_CLOSED)
     dtls_close(ctx, &peer->session);
@@ -1894,7 +1894,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
   p += sizeof(uint8);
 
-  /* This should be an uncompressed point, but I do not have access to the sepc. */
+  /* This should be an uncompressed point, but I do not have access to the spec. */
   dtls_int_to_uint8(p, 4);
   p += sizeof(uint8);
 
@@ -2139,7 +2139,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
 
-    /* This should be an uncompressed point, but I do not have access to the sepc. */
+    /* This should be an uncompressed point, but I do not have access to the spec. */
     dtls_int_to_uint8(p, 4);
     p += sizeof(uint8);
 
@@ -3478,7 +3478,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   
   if (free_peer) {
     dtls_stop_retransmission(ctx, peer);
-    dtls_destory_peer(ctx, peer, 0);
+    dtls_destroy_peer(ctx, peer, 0);
   }
 
   return free_peer;
@@ -3550,7 +3550,7 @@ dtls_handle_message(dtls_context_t *ctx,
 	  dtls_alert_send_from_err(ctx, peer, &peer->session, err);
 	  peer->state = DTLS_STATE_CLOSED;
 	  /* dtls_stop_retransmission(ctx, peer); */
-	  dtls_destory_peer(ctx, peer, 1);
+	  dtls_destroy_peer(ctx, peer, 1);
 	}
         return err;
       }
@@ -3732,12 +3732,12 @@ void dtls_free_context(dtls_context_t *ctx) {
 
   if (ctx->peers) {
     HASH_ITER(hh, ctx->peers, p, tmp) {
-      dtls_destory_peer(ctx, p, 1);
+      dtls_destroy_peer(ctx, p, 1);
     }
   }
 #else /* WITH_CONTIKI */
   for (p = list_head(ctx->peers); p; p = list_item_next(p))
-    dtls_destory_peer(ctx, p, 1);
+    dtls_destroy_peer(ctx, p, 1);
 #endif /* WITH_CONTIKI */
 }
 
