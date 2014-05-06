@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012,2014 Olaf Bergmann <bergmann@tzi.org>
  * Copyright (C) 2013 Hauke Mehrtens <hauke@hauke-m.de>
  *
  * Permission is hereby granted, free of charge, to any person
@@ -132,10 +132,31 @@ static const unsigned char cert_asn1_header[] = {
          0x04 /* uncompressed, followed by the r und s values of the public key */
 };
 
-static dtls_context_t the_dtls_context;
-
 #ifdef WITH_CONTIKI
 PROCESS(dtls_retransmit_process, "DTLS retransmit process");
+
+static dtls_context_t the_dtls_context;
+
+static inline dtls_context_t *
+malloc_context() {
+  return &the_dtls_context;
+}
+
+static inline void
+free_context(dtls_context_t *context) {
+}
+
+#else /* WITH_CONTIKI */
+
+static inline dtls_context_t *
+malloc_context() {
+  return (dtls_context_t *)malloc(sizeof(dtls_context_t));
+}
+
+static inline void
+free_context(dtls_context_t *context) {
+  free(context);
+}
 #endif
 
 void
@@ -3651,7 +3672,6 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_info("dropped unknown message of type %d\n",msg[0]);
     }
 
-  next:
     /* advance msg by length of ciphertext */
     msg += rlen;
     msglen -= rlen;
@@ -3688,7 +3708,9 @@ dtls_new_context(void *app_data) {
   dtls_prng_init((unsigned long)*buf);
 #endif /* WITH_CONTIKI */
 
-  c = &the_dtls_context;
+  c = malloc_context();
+  if (!c)
+    goto error;
 
   memset(c, 0, sizeof(dtls_context_t));
   c->app = app_data;
@@ -3720,7 +3742,8 @@ dtls_new_context(void *app_data) {
   return NULL;
 }
 
-void dtls_free_context(dtls_context_t *ctx) {
+void
+dtls_free_context(dtls_context_t *ctx) {
   dtls_peer_t *p;
 
   if (!ctx) {
@@ -3739,6 +3762,8 @@ void dtls_free_context(dtls_context_t *ctx) {
   for (p = list_head(ctx->peers); p; p = list_item_next(p))
     dtls_destroy_peer(ctx, p, 1);
 #endif /* WITH_CONTIKI */
+
+  free_context(ctx);
 }
 
 int
