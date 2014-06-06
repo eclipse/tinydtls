@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2011--2013 Olaf Bergmann <bergmann@tzi.org>
+# Copyright (C) 2011--2014 Olaf Bergmann <bergmann@tzi.org>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation
@@ -24,18 +24,14 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.5.2])
+AC_INIT([tinydtls], [0.6.0])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
-# First check for Contiki build to quit configure before any other test
 AC_ARG_WITH(contiki,
   [AS_HELP_STRING([--with-contiki],[build libtinydtls for the Contiki OS])],
-  [cp -p Makefile.contiki Makefile
-   cp -p config.h.contiki config.h
-   cp -p ecc/Makefile.contiki ecc/Makefile
-   AC_MSG_NOTICE([Contiki build prepared])
-   exit 0], 
+  [AC_DEFINE(WITH_CONTIKI,1,[Define to 1 if building for Contiki.])
+   WITH_CONTIKI=1],
   [])
 
 # Checks for programs.
@@ -50,7 +46,6 @@ AC_C_BIGENDIAN
 # Checks for libraries.
 AC_SEARCH_LIBS([gethostbyname], [nsl])
 AC_SEARCH_LIBS([socket], [socket])
-dnl AC_CHECK_LIB([dl], [dlopen])
 
 AC_ARG_WITH(debug,
   [AS_HELP_STRING([--without-debug],[disable all debug output and assertions])],
@@ -63,6 +58,7 @@ AC_ARG_WITH(ecc,
   [AS_HELP_STRING([--without-ecc],[disable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8])],
   [],
   [AC_DEFINE(DTLS_ECC, 1, [Define to 1 if building with ECC support.])
+   OPT_OBJS="${OPT_OBJS} ecc/ecc.o"
    DTLS_ECC=1])
 
 AC_ARG_WITH(psk,
@@ -76,19 +72,23 @@ OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
 AC_SUBST(OPT_OBJS)
 AC_SUBST(NDEBUG)
+AC_SUBST(WITH_CONTIKI)
 AC_SUBST(DTLS_ECC)
 AC_SUBST(DTLS_PSK)
 
 # Checks for header files.
-AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h sys/time.h time.h unistd.h])
+AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h unistd.h])
+
+dnl Skip checks for time.h when cross-compiling Contiki to avoid trouble
+if test "${cross_compiling}" = "no" -o "${with_contiki}" != "yes" ; then
+   AC_CHECK_HEADERS([sys/time.h time.h])
+else
+   AC_MSG_NOTICE([skipping sys/time.h and time.h checks on cross-compiled Contiki])
+fi
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
 AC_TYPE_SIZE_T
-dnl AC_TYPE_UINT8_T
-dnl AC_TYPE_UINT16_T
-dnl AC_TYPE_UINT32_T
-dnl AC_TYPE_UINT64_T
 
 AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 		[AC_DEFINE(HAVE_SOCKADDR_IN6_SIN6_LEN, [1], 
@@ -99,12 +99,13 @@ AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
 
-AC_CONFIG_HEADERS([config.h tinydtls.h])
+AC_CONFIG_HEADERS([dtls_config.h tinydtls.h])
 
 AC_CONFIG_FILES([Makefile
                  doc/Makefile
                  doc/Doxyfile
                  tests/Makefile
+                 platform-specific/Makefile
 		 sha2/Makefile
 		 aes/Makefile
 		 ecc/Makefile])
