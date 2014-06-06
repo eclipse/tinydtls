@@ -3777,9 +3777,7 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   /* check if the same peer is already in our list */
   if (peer == dtls_get_peer(ctx, &peer->session)) {
     dtls_debug("found peer, try to re-connect\n");
-    /* FIXME: send HelloRequest if we are server, 
-       ClientHello with good cookie if client */
-    return 0;
+    return dtls_renegotiate(ctx, &peer->session);
   }
     
   /* set local peer role to client, remote is server */
