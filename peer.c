@@ -23,7 +23,6 @@
  * SOFTWARE.
  */
 
-#include "tinydtls.h"
 #include "global.h"
 #include "peer.h"
 #include "debug.h"

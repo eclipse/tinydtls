@@ -25,11 +25,14 @@
 
 #include <string.h>
 
-#include "tinydtls.h"
-#include "config.h"
+#include "dtls_config.h"
 #include "global.h"
 #include "numeric.h"
 #include "ccm.h"
+
+#ifdef HAVE_ASSERT_H
+# include <assert.h>
+#endif
 
 #define CCM_FLAGS(A,M,L) (((A > 0) << 6) | (((M - 2)/2) << 3) | (L - 1))
 

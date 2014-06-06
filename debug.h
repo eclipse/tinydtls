@@ -28,7 +28,7 @@
 
 #include <stdlib.h>
 
-#include "config.h"
+#include "dtls_config.h"
 #include "global.h"
 #include "session.h"
 
@@ -36,16 +36,7 @@
 # ifndef DEBUG
 #  define DEBUG DEBUG_PRINT
 # endif /* DEBUG */
-#include "net/uip-debug.h"
-#else
-#define PRINTF(...)
-#endif
-
-#ifdef WITH_CONTIKI
-# ifndef DEBUG
-#  define DEBUG DEBUG_PRINT
-# endif /* DEBUG */
-#include "net/uip-debug.h"
+#include "net/ip/uip-debug.h"
 #else
 #define PRINTF(...)
 #endif

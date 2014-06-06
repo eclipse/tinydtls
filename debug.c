@@ -23,7 +23,8 @@
  * SOFTWARE.
  */
 
-#include "config.h"
+#include "tinydtls.h"
+#include "dtls_config.h"
 
 #if defined(HAVE_ASSERT_H) && !defined(assert)
 #include <assert.h>

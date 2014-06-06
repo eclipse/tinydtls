@@ -25,7 +25,7 @@
  */
 
 #include "tinydtls.h"
-#include "config.h"
+#include "dtls_config.h"
 #include "dtls_time.h"
 
 #include <stdio.h>
@@ -1155,7 +1155,7 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
   unsigned int i;
   
   if (*rlen < DTLS_RH_LENGTH) {
-    dtls_alert("The sendbuf (%i bytes) is too small\n", *rlen);
+    dtls_alert("The sendbuf (%zu bytes) is too small\n", *rlen);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
@@ -1491,7 +1491,7 @@ dtls_verify_peer(dtls_context_t *ctx,
   uint8 buf[DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH];
   uint8 *p = buf;
   int len = DTLS_COOKIE_LENGTH;
-  uint8 *cookie;
+  uint8 *cookie = NULL;
   int err;
 #undef mycookie
 #define mycookie (buf + DTLS_HV_LENGTH)

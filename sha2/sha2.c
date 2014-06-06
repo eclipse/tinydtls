@@ -32,7 +32,8 @@
  * $Id: sha2.c,v 1.1 2001/11/08 00:01:51 adg Exp adg $
  */
 
-#include "../config.h"
+#include "tinydtls.h"
+#include "dtls_config.h"
 #include <string.h>	/* memcpy()/memset() or bcopy()/bzero() */
 #ifdef HAVE_ASSERT_H
 #include <assert.h>	/* assert() */
