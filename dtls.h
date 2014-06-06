@@ -640,9 +640,14 @@ int handle_event(struct dtls_context_t *ctx, session_t *session,
  *
  * To use tinyDTLS as Contiki application, place the source code in the directory 
  * @c apps/tinydtls in the Contiki source tree and invoke configure with the option
- * @c --with-contiki. This will create the tinydtls Makefile and config.h from the
- * templates @c Makefile.contiki and @c config.h.contiki instead of the usual 
- * templates ending in @c .in.
+ * @c --with-contiki. This will define WITH_CONTIKI in tinydtls.h and include 
+ * @c Makefile.contiki in the main Makefile. To cross-compile for another platform
+ * you will need to set your host and build system accordingly. For example,
+ * when configuring for ARM, you would invoke
+ * @code
+./configure --with-contiki --build=x86_64-linux-gnu --host=arm-none-eabi 
+ * @endcode
+ * on an x86_64 linux host.
  *
  * Then, create a Contiki project with @c APPS += tinydtls in its Makefile. A sample
  * server could look like this (with read_from_peer() and get_psk_key() as shown above).
