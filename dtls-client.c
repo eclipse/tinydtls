@@ -35,12 +35,12 @@
 
 #include <string.h>
 
-#include "config.h"
+#include "tinydtls.h"
 
 #ifndef DEBUG
 #define DEBUG DEBUG_PRINT
 #endif
-#include "net/uip-debug.h"
+#include "net/ip/uip-debug.h"
 
 #include "debug.h"
 #include "dtls.h"

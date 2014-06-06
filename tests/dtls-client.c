@@ -1,4 +1,4 @@
-#include "config.h" 
+#include "tinydtls.h" 
 
 /* This is needed for apple */
 #define __APPLE_USE_RFC_3542

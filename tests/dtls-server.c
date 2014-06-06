@@ -14,7 +14,7 @@
 #include <netdb.h>
 #include <signal.h>
 
-#include "config.h" 
+#include "tinydtls.h" 
 #include "dtls.h" 
 #include "debug.h" 
 

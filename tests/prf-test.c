@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "config.h"
+#include "tinydtls.h"
 #include "debug.h"
 #include "global.h"
 #include "crypto.h"

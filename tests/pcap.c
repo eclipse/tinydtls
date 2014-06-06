@@ -3,7 +3,7 @@
 #include <getopt.h>
 #include <pcap/pcap.h>
 
-#include "config.h"
+#include "tinydtls.h"
 #include "debug.h"
 #include "dtls.h"
 

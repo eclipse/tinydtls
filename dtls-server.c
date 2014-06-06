@@ -35,15 +35,19 @@
 
 #include <string.h>
 
-#include "config.h"
+#include "tinydtls.h"
 
 #ifndef DEBUG
 #define DEBUG DEBUG_PRINT
 #endif
-#include "net/uip-debug.h"
+#include "net/ip/uip-debug.h"
 
 #include "debug.h"
 #include "dtls.h"
+
+#ifdef ENABLE_POWERTRACE
+#include "powertrace.h"
+#endif
 
 #define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
 #define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLIPH_LEN])
@@ -222,6 +226,7 @@ init_dtls() {
   };
 #if UIP_CONF_ROUTER
   uip_ipaddr_t ipaddr;
+  /* struct uip_ds6_addr *root_if; */
 #endif /* UIP_CONF_ROUTER */
 
   PRINTF("DTLS server started\n");
@@ -235,9 +240,16 @@ init_dtls() {
 #endif /* TEST */
 
 #if UIP_CONF_ROUTER
-  uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0);
-  uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
-  uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF);
+/*   uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0); */
+/*   uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr); */
+/*   uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF); */
+
+/*   create_rpl_dag(&ipaddr); */
+/* #else */
+  /* uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF); */
+
+  uip_ip6addr(&ipaddr, 0xaaaa, 0,0,0,0x0200,0,0,0x0003);
+  uip_ds6_addr_add(&ipaddr, 0, ADDR_MANUAL);
 
   create_rpl_dag(&ipaddr);
 #endif /* UIP_CONF_ROUTER */
@@ -257,15 +269,19 @@ PROCESS_THREAD(udp_server_process, ev, data)
 {
   PROCESS_BEGIN();
 
-  print_local_addresses();
-
   dtls_init();
   init_dtls();
+
+  print_local_addresses();
 
   if (!dtls_context) {
     dtls_emerg("cannot create context\n");
     PROCESS_EXIT();
   }
+
+#ifdef ENABLE_POWERTRACE
+  powertrace_start(CLOCK_SECOND * 2); 
+#endif
 
   while(1) {
     PROCESS_WAIT_EVENT();
