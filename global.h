@@ -26,6 +26,7 @@
 #ifndef _DTLS_GLOBAL_H_
 #define _DTLS_GLOBAL_H_
 
+#include <stdlib.h>
 #include <sys/types.h>
 
 #include "tinydtls.h"
