@@ -1,5 +1,6 @@
 # the library's version
 VERSION:=@PACKAGE_VERSION@
+PACKAGE_TARNAME:=@PACKAGE_TARNAME@
 
 # tools
 @SET_MAKE@
@@ -8,6 +9,10 @@ MKDIR = mkdir
 DOXYGEN= @DOXYGEN@
 
 top_builddir = @top_builddir@
+prefix = @prefix@
+datarootdir = @datarootdir@
+docdir = @docdir@
+htmldir = @htmldir@
 
 DISTDIR?=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in Doxyfile.in html
@@ -25,3 +30,7 @@ distclean:	clean
 dist:	doc
 	test -d $(DISTDIR)/doc || mkdir $(DISTDIR)/doc
 	cp -r $(FILES) $(DISTDIR)/doc
+
+install:	$(doc) html
+	test -d $(htmldir) || mkdir -p $(htmldir)
+	cp -r html/* $(htmldir)

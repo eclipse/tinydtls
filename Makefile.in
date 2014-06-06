@@ -31,6 +31,7 @@ SHELL = /bin/sh
 MKDIR = mkdir
 ETAGS = @ETAGS@
 
+ifneq ("@WITH_CONTIKI@", "1")
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 abs_builddir = @abs_builddir@
@@ -46,21 +47,17 @@ SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c
 ifneq ("@NDEBUG@", "1")
 SOURCES += debug.c
 endif
-OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) aes/rijndael.o @OPT_OBJS@
-ifeq ("@DTLS_ECC@", "1")
-OBJECTS += ecc/ecc.o
-endif
-HEADERS:=dtls.h hmac.h debug.h config.h uthash.h numeric.h crypto.h global.h ccm.h \
+SUB_OBJECTS:=aes/rijndael.o @OPT_OBJS@
+OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) $(SUB_OBJECTS)
+HEADERS:=dtls.h hmac.h debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h t_list.h alert.h utlist.h prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE
-SUBDIRS:=tests doc sha2 aes
-ifeq ("@DTLS_ECC@", "1")
-SUBDIRS += ecc
-endif
+SUBDIRS:=tests doc platform-specific sha2 aes ecc
 DISTDIR=$(top_builddir)/$(package)
-FILES:=Makefile.in configure configure.in config.h.in $(SOURCES) $(HEADERS)
+FILES:=Makefile.in configure configure.in dtls_config.h.in tinydtls.h.in \
+  Makefile.contiki Makefile.tinydtls $(SOURCES) $(HEADERS)
 LIB:=libtinydtls.a
 LDFLAGS:=@LIBS@
 ARFLAGS:=cru
@@ -71,7 +68,9 @@ GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
  autom4te.cache/ config.h config.log config.status configure \
  doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
  tests/dtls-client tests/dtls-server tests/prf-test $(package) \
- $(DISTDIR)/ TAGS \*.patch .gitignore
+ $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
+ \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
+ $(addprefix \*., $(notdir $(wildcard ../../platform/*)))
 
 .PHONY: all dirs clean install dist distclean .gitignore doc TAGS
 
@@ -89,6 +88,9 @@ dirs:	$(SUBDIRS)
 	for dir in $^; do \
 		$(MAKE) -C $$dir ; \
 	done
+
+$(SUB_OBJECTS)::
+	$(MAKE) -C $(@D) $(@F)
 
 $(LIB):	$(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^ 
@@ -123,6 +125,9 @@ install:	$(LIB) $(HEADERS) $(SUBDIRS)
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done
+else  # WITH_CONTIKI
+include Makefile.contiki
+endif # WITH_CONTIKI
 
 TAGS:	
 	$(ETAGS) -o $@.new $(SOURCES) 

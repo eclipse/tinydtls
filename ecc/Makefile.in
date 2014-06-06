@@ -31,6 +31,9 @@ VERSION:=@PACKAGE_VERSION@
 SHELL = /bin/sh
 MKDIR = mkdir
 
+ifeq ("@WITH_CONTIKI@", "1")
+include Makefile.contiki
+else
 abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
@@ -80,6 +83,8 @@ dist:	$(FILES)
 install:	$(HEADERS)
 	test -d $(includedir)/ecc || mkdir -p $(includedir)/ecc
 	$(install) $(HEADERS) $(includedir)/ecc
+
+endif # WITH_CONTIKI
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
