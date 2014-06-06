@@ -21,7 +21,7 @@ CFLAGS += -DSHA2_USE_INTTYPES_H=1
 endif
 
 CFLAGS += -DDTLSv12 -DWITH_SHA256 
-tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c ecc.c dtls_time.c peer.c
+tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c ecc.c dtls_time.c peer.c session.c
 
 # This adds support for TLS_PSK_WITH_AES_128_CCM_8
 CFLAGS += -DDTLS_PSK
