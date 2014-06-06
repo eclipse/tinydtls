@@ -70,7 +70,7 @@ typedef unsigned char uint48[6];
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
   TLS_PSK_WITH_AES_128_CCM_8 = 0xC0A8, /**< see RFC 6655 */
-  TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AC /**< TODO: replace with values from draft-mcgrew-tls-aes-ccm-ecc */
+  TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AE /**< see RFC 7251 */
 } dtls_cipher_t;
 
 /** Known compression suites.*/
