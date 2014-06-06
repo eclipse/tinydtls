@@ -1,6 +1,6 @@
 /* dtls -- a very basic DTLS implementation
  *
- * Copyright (C) 2011--2012 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (C) 2011--2012,2014 Olaf Bergmann <bergmann@tzi.org>
  * Copyright (C) 2013 Hauke Mehrtens <hauke@hauke-m.de>
  *
  * Permission is hereby granted, free of charge, to any person
@@ -132,10 +132,31 @@ static const unsigned char cert_asn1_header[] = {
          0x04 /* uncompressed, followed by the r und s values of the public key */
 };
 
-static dtls_context_t the_dtls_context;
-
 #ifdef WITH_CONTIKI
 PROCESS(dtls_retransmit_process, "DTLS retransmit process");
+
+static dtls_context_t the_dtls_context;
+
+static inline dtls_context_t *
+malloc_context() {
+  return &the_dtls_context;
+}
+
+static inline void
+free_context(dtls_context_t *context) {
+}
+
+#else /* WITH_CONTIKI */
+
+static inline dtls_context_t *
+malloc_context() {
+  return (dtls_context_t *)malloc(sizeof(dtls_context_t));
+}
+
+static inline void
+free_context(dtls_context_t *context) {
+  free(context);
+}
 #endif
 
 void
@@ -1447,7 +1468,7 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   return res;
 }
 
-static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
+static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
   if (peer->state != DTLS_STATE_CLOSED)
     dtls_close(ctx, &peer->session);
@@ -1456,13 +1477,9 @@ static void dtls_destory_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
     HASH_DEL_PEER(ctx->peers, peer);
 #else /* WITH_CONTIKI */
     list_remove(ctx->peers, peer);
-
-#ifndef NDEBUG
-    PRINTF("removed peer [");
-    PRINT6ADDR(&peer->session.addr);
-    PRINTF("]:%d\n", uip_ntohs(peer->session.port));
-#endif
 #endif /* WITH_CONTIKI */
+
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "removed peer", &peer->session);
   }
   dtls_free_peer(peer);
 }
@@ -1788,10 +1805,10 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
    * Start message construction at beginning of buffer. */
   p = buf;
 
-  dtls_int_to_uint24(p, 94);
+  dtls_int_to_uint24(p, 94);	/* certificates length */
   p += sizeof(uint24);
 
-  dtls_int_to_uint24(p, 91);
+  dtls_int_to_uint24(p, 91);	/* length of this certificate */
   p += sizeof(uint24);
   
   memcpy(p, &cert_asn1_header, sizeof(cert_asn1_header));
@@ -1898,7 +1915,7 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
   p += sizeof(uint8);
 
-  /* This should be an uncompressed point, but I do not have access to the sepc. */
+  /* This should be an uncompressed point, but I do not have access to the spec. */
   dtls_int_to_uint8(p, 4);
   p += sizeof(uint8);
 
@@ -2143,7 +2160,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
     p += sizeof(uint8);
 
-    /* This should be an uncompressed point, but I do not have access to the sepc. */
+    /* This should be an uncompressed point, but I do not have access to the spec. */
     dtls_int_to_uint8(p, 4);
     p += sizeof(uint8);
 
@@ -2692,7 +2709,7 @@ check_certificate_request(dtls_context_t *ctx,
   }
 
   if (auth_alg != TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN) {
-    dtls_alert("the request authentication algorithem is not supproted\n");
+    dtls_alert("the request authentication algorithm is not supproted\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
@@ -3482,7 +3499,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   
   if (free_peer) {
     dtls_stop_retransmission(ctx, peer);
-    dtls_destory_peer(ctx, peer, 0);
+    dtls_destroy_peer(ctx, peer, 0);
   }
 
   return free_peer;
@@ -3548,8 +3565,15 @@ dtls_handle_message(dtls_context_t *ctx,
     if (peer) {
       data_length = decrypt_verify(peer, msg, rlen, &data);
       if (data_length < 0) {
+	int err =  dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
         dtls_info("decrypt_verify() failed\n");
-        goto next;
+	if (peer->state < DTLS_STATE_CONNECTED) {
+	  dtls_alert_send_from_err(ctx, peer, &peer->session, err);
+	  peer->state = DTLS_STATE_CLOSED;
+	  /* dtls_stop_retransmission(ctx, peer); */
+	  dtls_destroy_peer(ctx, peer, 1);
+	}
+        return err;
       }
       role = peer->role;
       state = peer->state;
@@ -3648,7 +3672,6 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_info("dropped unknown message of type %d\n",msg[0]);
     }
 
-  next:
     /* advance msg by length of ciphertext */
     msg += rlen;
     msglen -= rlen;
@@ -3685,7 +3708,9 @@ dtls_new_context(void *app_data) {
   dtls_prng_init((unsigned long)*buf);
 #endif /* WITH_CONTIKI */
 
-  c = &the_dtls_context;
+  c = malloc_context();
+  if (!c)
+    goto error;
 
   memset(c, 0, sizeof(dtls_context_t));
   c->app = app_data;
@@ -3717,7 +3742,8 @@ dtls_new_context(void *app_data) {
   return NULL;
 }
 
-void dtls_free_context(dtls_context_t *ctx) {
+void
+dtls_free_context(dtls_context_t *ctx) {
   dtls_peer_t *p;
 
   if (!ctx) {
@@ -3729,13 +3755,15 @@ void dtls_free_context(dtls_context_t *ctx) {
 
   if (ctx->peers) {
     HASH_ITER(hh, ctx->peers, p, tmp) {
-      dtls_destory_peer(ctx, p, 1);
+      dtls_destroy_peer(ctx, p, 1);
     }
   }
 #else /* WITH_CONTIKI */
   for (p = list_head(ctx->peers); p; p = list_item_next(p))
-    dtls_destory_peer(ctx, p, 1);
+    dtls_destroy_peer(ctx, p, 1);
 #endif /* WITH_CONTIKI */
+
+  free_context(ctx);
 }
 
 int
