@@ -31,7 +31,6 @@
 #endif
 
 #include <stdarg.h>
-#include <string.h>
 #include <stdio.h>
 
 #ifdef HAVE_ARPA_INET_H
@@ -95,7 +94,6 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
 
 #endif /* HAVE_TIME_H */
 
-#ifndef HAVE_STRNLEN
 /** 
  * A length-safe strlen() fake. 
  * 
@@ -105,15 +103,12 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
  * @return The length of @p s.
  */
 static inline size_t
-strnlen(const char *s, size_t maxlen) {
+dtls_strnlen(const char *s, size_t maxlen) {
   size_t n = 0;
   while(*s++ && n < maxlen)
     ++n;
   return n;
 }
-#else
-extern size_t strnlen(const char *s, size_t maxlen);
-#endif /* HAVE_STRNLEN */
 
 #ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
@@ -154,7 +149,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
     return 0;
   }
 
-  p += strnlen(p, len);
+  p += dtls_strnlen(p, len);
 
   if (addr->addr.sa.sa_family == AF_INET6) {
     if (p < buf + len) {
@@ -169,8 +164,8 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #else /* HAVE_ARPA_INET_H */
 # if WITH_CONTIKI
   char *p = buf;
-  uint8_t i;
 #  if WITH_UIP6
+  uint8_t i;
   const char hex[] = "0123456789ABCDEF";
 
   if (len < 41)
