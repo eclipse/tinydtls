@@ -104,7 +104,7 @@
 #endif
 
 #ifndef BYTE_ORDER
-#  ifdef WORDS_BIGENDIAN
+#  if defined(WORDS_BIGENDIAN) || (defined(AC_APPLE_UNIVERSAL_BUILD) && defined(__BIG_ENDIAN__))
 #    define BYTE_ORDER BIG_ENDIAN
 #  else /* WORDS_BIGENDIAN */
 #    define BYTE_ORDER LITTLE_ENDIAN
