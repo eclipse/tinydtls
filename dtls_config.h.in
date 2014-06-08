@@ -202,20 +202,12 @@
 #  include "platform-specific/config-cc2538dk.h"
 #endif /* CONTIKI_TARGET_CC2538DK */
 
-#if defined(TMOTE_SKY)
-/* Need to set the byte order for TMote Sky explicitely */
+#ifdef CONTIKI_TARGET_WISMOTE
+#  include "platform-specific/config-wismote.h"
+#endif /* CONTIKI_TARGET_CC2538DK */
 
-#define BYTE_ORDER UIP_LITTLE_ENDIAN
-
-typedef int ssize_t;
-#endif /* defined(TMOTE_SKY) */
-
-#ifndef BYTE_ORDER
-# ifdef UIP_CONF_BYTE_ORDER
-#  define BYTE_ORDER UIP_CONF_BYTE_ORDER
-# else
-#  error "UIP_CONF_BYTE_ORDER not defined"
-# endif /* UIP_CONF_BYTE_ORDER */
-#endif /* BYTE_ORDER */
+#ifdef CONTIKI_TARGET_SKY
+#  include "platform-specific/config-sky.h"
+#endif /* CONTIKI_TARGET_CC2538DK */
 
 #endif /* CONTIKI */
