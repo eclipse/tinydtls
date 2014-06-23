@@ -196,7 +196,7 @@
 
 #if CONTIKI_TARGET_ECONOTAG
 #  include "platform-specific/config-econotag.h"
-#endif /* CONTIKI_TARGET_REDBEE_ECONOTAG */
+#endif /* CONTIKI_TARGET_ECONOTAG */
 
 #ifdef CONTIKI_TARGET_CC2538DK
 #  include "platform-specific/config-cc2538dk.h"
@@ -204,10 +204,14 @@
 
 #ifdef CONTIKI_TARGET_WISMOTE
 #  include "platform-specific/config-wismote.h"
-#endif /* CONTIKI_TARGET_CC2538DK */
+#endif /* CONTIKI_TARGET_WISMOTE */
 
 #ifdef CONTIKI_TARGET_SKY
 #  include "platform-specific/config-sky.h"
-#endif /* CONTIKI_TARGET_CC2538DK */
+#endif /* CONTIKI_TARGET_SKY */
+
+#ifdef CONTIKI_TARGET_MINIMAL_NET
+#  include "platform-specific/config-minimal-net.h"
+#endif /* CONTIKI_TARGET_MINIMAL_NET */
 
 #endif /* CONTIKI */
