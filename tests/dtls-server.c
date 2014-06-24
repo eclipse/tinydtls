@@ -154,15 +154,18 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
-  len = recvfrom(*fd, buf, sizeof(buf), 0, 
+  len = recvfrom(*fd, buf, sizeof(buf), MSG_TRUNC,
 		 &session.addr.sa, &session.size);
-  
+
   if (len < 0) {
     perror("recvfrom");
     return -1;
   } else {
     dtls_debug("got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
+    if (sizeof(buf) < len) {
+      dtls_warn("packet was truncated (%d bytes lost)\n", len - sizeof(buf));
+    }
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
