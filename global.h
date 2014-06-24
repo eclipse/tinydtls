@@ -54,11 +54,15 @@ typedef unsigned char uint48[6];
 /** Maximum size of DTLS message.
     When Peers are sending bigger messages this causes problems. Californium
     with ECDSA needs at least 220 */
+#ifdef WITH_CONTIKI
 #ifdef DTLS_ECC
 #define DTLS_MAX_BUF 200
 #else /* DTLS_ECC */
 #define DTLS_MAX_BUF 100
 #endif /* DTLS_ECC */
+#else /* WITH_CONTIKI */
+#define DTLS_MAX_BUF 1400
+#endif /* WITH_CONTIKI */
 #endif
 
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT
