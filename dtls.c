@@ -620,7 +620,7 @@ calculate_key_block(dtls_context_t *ctx,
 
     err = CALL(ctx, get_psk_key, session, handshake->keyx.psk.identity,
 	       handshake->keyx.psk.id_length, &psk);
-    if (err < 0) {
+    if (!psk || err < 0) {
       dtls_crit("no psk key for session available\n");
       return err;
     }
@@ -2088,7 +2088,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       return res;
     }
 
-    if (psk->id_length) {
+    if (psk) {
       res = dtls_send_server_key_exchange_psk(ctx, peer, psk);
 
       if (res < 0) {
@@ -2133,7 +2133,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 
     err = CALL(ctx, get_psk_key, &peer->session, handshake->keyx.psk.identity,
 	       handshake->keyx.psk.id_length, &psk);
-    if (err < 0) {
+    if (!psk || err < 0) {
       dtls_crit("no psk key to send in kx\n");
       return err;
     }
