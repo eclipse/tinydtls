@@ -51,7 +51,7 @@ const char *dtls_package_name() {
 }
 
 const char *dtls_package_version() {
-  return PACKAGE_STRING;
+  return PACKAGE_VERSION;
 }
 
 log_t 
