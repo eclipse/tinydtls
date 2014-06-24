@@ -48,22 +48,37 @@ handle_sigint(int signum) {
 
 #ifdef DTLS_PSK
 /* This function is the "key store" for tinyDTLS. It is called to
- * retrieve a key for the given identiy within this particular
+ * retrieve a key for the given identity within this particular
  * session. */
 static int
 get_psk_key(struct dtls_context_t *ctx,
 	    const session_t *session,
 	    const unsigned char *id, size_t id_len,
 	    const dtls_psk_key_t **result) {
-  static const dtls_psk_key_t psk = {
-    .id = (unsigned char *)"Client_identity",
-    .id_length = 15,
-    .key = (unsigned char *)"secretPSK",
-    .key_length = 9
+  static const dtls_psk_key_t psk[3] = {
+    { (unsigned char *)"Client_identity", 15,
+      (unsigned char *)"secretPSK", 9 },
+    { (unsigned char *)"default identity", 16,
+      (unsigned char *)"\x11\x22\x33", 3 },
+    { (unsigned char *)"\0", 2,
+      (unsigned char *)"", 1 }
   };
 
-  *result = &psk;
-  return 0;
+  if (id) {
+    int i;
+    for (i = 0; i < sizeof(psk)/sizeof(dtls_psk_key_t); i++) {
+      if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
+	*result = &psk[i];
+	return 0;
+      }
+    }
+  } else {
+    /* the default case */
+    *result = NULL;
+    return 0;
+  }
+
+  return -1;
 }
 #endif /* DTLS_PSK */
 
