@@ -1216,17 +1216,43 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     }
 
     /* set nonce       
-       from http://tools.ietf.org/html/draft-mcgrew-tls-aes-ccm-03:
-        struct {
-               case client:
-                  uint32 client_write_IV;  // low order 32-bits
-               case server:
-                  uint32 server_write_IV;  // low order 32-bits
-               uint64 seq_num;
-            } CCMNonce.
+       from RFC 6655:
+   	The "nonce" input to the AEAD algorithm is exactly that of [RFC5288]:
+   	the "nonce" SHALL be 12 bytes long and is constructed as follows:
+   	(this is an example of a "partially explicit" nonce; see Section
+   	3.2.1 in [RFC5116]).
 
-	    In DTLS, the 64-bit seq_num is the 16-bit epoch concatenated with the
-	    48-bit seq_num.
+                       struct {
+             opaque salt[4];
+             opaque nonce_explicit[8];
+                       } CCMNonce;
+
+         [...]
+
+  	 In DTLS, the 64-bit seq_num is the 16-bit epoch concatenated with the
+   	 48-bit seq_num.
+
+   	 When the nonce_explicit is equal to the sequence number, the CCMNonce
+   	 will have the structure of the CCMNonceExample given below.
+
+   	            struct {
+   	             uint32 client_write_IV; // low order 32-bits
+   	             uint64 seq_num;         // TLS sequence number
+   	            } CCMClientNonce.
+
+
+   	            struct {
+   	             uint32 server_write_IV; // low order 32-bits
+   	             uint64 seq_num; // TLS sequence number
+   	            } CCMServerNonce.
+
+
+   	            struct {
+   	             case client:
+   	               CCMClientNonce;
+   	             case server:
+   	               CCMServerNonce:
+   	            } CCMNonceExample;
     */
 
     memcpy(p, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8);
