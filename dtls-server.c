@@ -31,7 +31,9 @@
 #include "contiki-lib.h"
 #include "contiki-net.h"
 
+#if UIP_CONF_IPV6_RPL
 #include "net/rpl/rpl.h"
+#endif /* UIP_CONF_IPV6_RPL */
 
 #include <string.h>
 
@@ -188,7 +190,7 @@ print_local_addresses(void)
   }
 }
 
-#if UIP_CONF_ROUTER
+#if 0
 static void
 create_rpl_dag(uip_ipaddr_t *ipaddr)
 {
@@ -224,7 +226,7 @@ init_dtls() {
     .verify_ecdsa_key = verify_ecdsa_key
 #endif /* DTLS_ECC */
   };
-#if UIP_CONF_ROUTER
+#if 0
   uip_ipaddr_t ipaddr;
   /* struct uip_ds6_addr *root_if; */
 #endif /* UIP_CONF_ROUTER */
@@ -239,7 +241,7 @@ init_dtls() {
 #endif
 #endif /* TEST */
 
-#if UIP_CONF_ROUTER
+#if 0
 /*   uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0); */
 /*   uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr); */
 /*   uip_ds6_addr_add(&ipaddr, 0, ADDR_AUTOCONF); */
