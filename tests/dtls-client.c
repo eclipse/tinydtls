@@ -22,6 +22,16 @@
 
 #define DEFAULT_PORT 20220
 
+#define PSK_DEFAULT_IDENTITY "Client_identity"
+#define PSK_DEFAULT_KEY      "secretPSK"
+#define PSK_OPTIONS          "i:k:"
+
+#ifdef __GNUC__
+#define UNUSED_PARAM __attribute__((unused))
+#else
+#define UNUSED_PARAM
+#endif /* __GNUC__ */
+
 static char buf[200];
 static size_t len = 0;
 
@@ -54,20 +64,54 @@ static const unsigned char ecdsa_pub_key_y[] = {
 			0x4F, 0xAB, 0xC3, 0x6F, 0xC7, 0x72, 0xF8, 0x29};
 
 #ifdef DTLS_PSK
+ssize_t
+read_from_file(char *arg, unsigned char *buf, size_t max_buf_len) {
+  FILE *f;
+  ssize_t result = 0;
+
+  f = fopen(arg, "r");
+  if (f == NULL)
+    return -1;
+
+  while (!feof(f)) {
+    size_t bytes_read;
+    bytes_read = fread(buf, 1, max_buf_len, f);
+    if (ferror(f)) {
+      result = -1;
+      break;
+    }
+
+    buf += bytes_read;
+    result += bytes_read;
+    max_buf_len -= bytes_read;
+  }
+
+  fclose(f);
+  return result;
+}
+
+/* The PSK information for DTLS */
+#define PSK_ID_MAXLEN 256
+#define PSK_MAXLEN 256
+static unsigned char psk_id[PSK_ID_MAXLEN];
+static unsigned char psk_key[PSK_MAXLEN];
+
+static dtls_psk_key_t psk = {
+  .id = psk_id,
+  .id_length = 0,
+  .key = psk_key,
+  .key_length = 0
+};
+
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identiy within this particular
  * session. */
 static int
-get_psk_key(struct dtls_context_t *ctx,
-	    const session_t *session,
-	    const unsigned char *id, size_t id_len,
+get_psk_key(struct dtls_context_t *ctx UNUSED_PARAM,
+	    const session_t *session UNUSED_PARAM,
+	    const unsigned char *id UNUSED_PARAM,
+	    size_t id_len UNUSED_PARAM,
 	    const dtls_psk_key_t **result) {
-  static const dtls_psk_key_t psk = {
-    .id = (unsigned char *)"Client_identity",
-    .id_length = 15,
-    .key = (unsigned char *)"secretPSK",
-    .key_length = 9
-  };
 
   *result = &psk;
   return 0;
@@ -223,8 +267,16 @@ usage( const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
-	  "(c) 2011-2012 Olaf Bergmann <bergmann@tzi.org>\n\n"
-	  "usage: %s [-o file][-p port] [-v num] addr [port]\n"
+	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
+#ifdef DTLS_PSK
+	  "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] addr [port]\n"
+#else /*  DTLS_PSK */
+	  "usage: %s [-o file] [-p port] [-v num] addr [port]\n"
+#endif /* DTLS_PSK */
+#ifdef DTLS_PSK
+	  "\t-i file\t\tread PSK identity from file\n"
+	  "\t-k file\t\tread pre-shared key from file\n"
+#endif /* DTLS_PSK */
 	  "\t-o file\t\toutput received data to this file (use '-' for STDOUT)\n"
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
 	  "\t-v num\t\tverbosity level (default: 3)\n",
@@ -262,8 +314,35 @@ main(int argc, char **argv) {
   dtls_init();
   snprintf(port_str, sizeof(port_str), "%d", port);
 
-  while ((opt = getopt(argc, argv, "p:o:v:")) != -1) {
+#ifdef DTLS_PSK
+  psk.id_length = strlen(PSK_DEFAULT_IDENTITY);
+  psk.key_length = strlen(PSK_DEFAULT_KEY);
+  memcpy(psk.id, PSK_DEFAULT_IDENTITY, psk.id_length);
+  memcpy(psk.key, PSK_DEFAULT_KEY, psk.key_length);
+#endif /* DTLS_PSK */
+
+  while ((opt = getopt(argc, argv, "p:o:v:" PSK_OPTIONS)) != -1) {
     switch (opt) {
+#ifdef DTLS_PSK
+    case 'i' : {
+      ssize_t result = read_from_file(optarg, psk.id, PSK_ID_MAXLEN);
+      if (result < 0) {
+	dtls_warn("cannot read PSK identity\n");
+      } else {
+	psk.id_length = result;
+      }
+      break;
+    }
+    case 'k' : {
+      ssize_t result = read_from_file(optarg, psk.key, PSK_MAXLEN);
+      if (result < 0) {
+	dtls_warn("cannot read PSK\n");
+      } else {
+	psk.key_length = result;
+      }
+      break;
+    }
+#endif /* DTLS_PSK */
     case 'p' :
       strncpy(port_str, optarg, NI_MAXSERV-1);
       port_str[NI_MAXSERV - 1] = '\0';
