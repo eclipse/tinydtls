@@ -84,9 +84,13 @@ typedef struct {
   uint8 other_pub_y[32];
 } dtls_handshake_parameters_ecdsa_t;
 
+/* This is the maximal supported length of the psk client identity and psk
+ * server identity hint */
+#define DTLS_PSK_MAX_CLIENT_IDENTITY_LEN   32
+
 typedef struct {
   uint16_t id_length;
-  unsigned char identity[32];
+  unsigned char identity[DTLS_PSK_MAX_CLIENT_IDENTITY_LEN];
 } dtls_handshake_parameters_psk_t;
 
 typedef struct {
