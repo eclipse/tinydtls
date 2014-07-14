@@ -2106,13 +2106,11 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 
 #ifdef DTLS_PSK
   if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
-    const dtls_psk_key_t *psk;
+    const dtls_psk_key_t *psk = NULL;
 
-    res = CALL(ctx, get_psk_key, &peer->session, NULL, 0, &psk);
-    if (res < 0) {
-      dtls_crit("no psk or identity found for this session\n");
-      return res;
-    }
+    /* The identity hint is optional, therefore we ignore the result
+     * and check psk only. */
+    CALL(ctx, get_psk_hint, &peer->session, &psk);
 
     if (psk) {
       res = dtls_send_server_key_exchange_psk(ctx, peer, psk);

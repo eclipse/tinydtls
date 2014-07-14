@@ -109,9 +109,11 @@ static dtls_psk_key_t psk = {
 static int
 get_psk_key(struct dtls_context_t *ctx UNUSED_PARAM,
 	    const session_t *session UNUSED_PARAM,
-	    const unsigned char *id UNUSED_PARAM,
-	    size_t id_len UNUSED_PARAM,
+	    const unsigned char *id,
+	    size_t id_len,
 	    const dtls_psk_key_t **result) {
+
+  dsrv_log(DTLS_LOG_INFO, "requested identity is '%.*s'\n", id_len, id);
 
   *result = &psk;
   return 0;
@@ -289,6 +291,7 @@ static dtls_handler_t cb = {
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_key = get_psk_key,
+  .get_psk_hint = NULL,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,

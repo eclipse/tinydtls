@@ -80,6 +80,7 @@ get_psk_key(struct dtls_context_t *ctx,
 
   return -1;
 }
+
 #endif /* DTLS_PSK */
 
 #ifdef DTLS_ECC
@@ -221,7 +222,7 @@ usage(const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
-	  "(c) 2011-2012 Olaf Bergmann <bergmann@tzi.org>\n\n"
+	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
 	  "usage: %s [-A address] [-p port] [-v num]\n"
 	  "\t-A address\t\tlisten on specified address (default is ::)\n"
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
@@ -235,6 +236,7 @@ static dtls_handler_t cb = {
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_key = get_psk_key,
+  .get_psk_hint = NULL,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,
