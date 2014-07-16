@@ -164,7 +164,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #else /* HAVE_ARPA_INET_H */
 # if WITH_CONTIKI
   char *p = buf;
-#  if WITH_UIP6
+#  ifdef UIP_CONF_IPV6
   uint8_t i;
   const char hex[] = "0123456789ABCDEF";
 
@@ -173,20 +173,22 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
   *p++ = '[';
 
-  for (i=0; i < 8; i += 4) {
-    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0xf000) >> 24];
-    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x0f00) >> 16];
-    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x00f0) >> 8];
-    *p++ = hex[((uint32_t)addr->addr.u16[i] & 0x000f)];
-    *p++ = ':';
+  for (i=0; i < 16; i += 2) {
+    if (i) {
+      *p++ = ':';
+    }
+    *p++ = hex[(addr->addr.u8[i] & 0xf0) >> 4];
+    *p++ = hex[(addr->addr.u8[i] & 0x0f)];
+    *p++ = hex[(addr->addr.u8[i+1] & 0xf0) >> 4];
+    *p++ = hex[(addr->addr.u8[i+1] & 0x0f)];
   }
-  *(p-1) = ']';
-#  else /* WITH_UIP6 */
+  *p++ = ']';
+#  else /* UIP_CONF_IPV6 */
 #   warning "IPv4 network addresses will not be included in debug output"
 
   if (len < 21)
     return 0;
-#  endif /* WITH_UIP6 */
+#  endif /* UIP_CONF_IPV6 */
   if (buf + len - p < 6)
     return 0;
 
