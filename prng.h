@@ -42,6 +42,7 @@ dtls_prng_init(unsigned short seed) {
 }
 #else /* WITH_CONTIKI */
 #include <string.h>
+#include "random.h"
 
 #ifdef HAVE_PRNG
 static inline int
