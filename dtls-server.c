@@ -220,6 +220,7 @@ init_dtls() {
     .event = NULL,
 #ifdef DTLS_PSK
     .get_psk_key = get_psk_key,
+    .get_psk_hint = NULL,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
     .get_ecdsa_key = get_ecdsa_key,
