@@ -3135,6 +3135,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     dtls_handshake_free(peer->handshake_params);
     peer->handshake_params = NULL;
     dtls_debug("Handshake complete\n");
+    check_stack();
     peer->state = DTLS_STATE_CONNECTED;
 
     /* return here to not increase the message receive counter */
