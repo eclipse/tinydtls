@@ -1496,7 +1496,7 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
 
 static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
-  if (peer->state != DTLS_STATE_CLOSED)
+  if (peer->state != DTLS_STATE_CLOSED && peer->state != DTLS_STATE_CLOSING)
     dtls_close(ctx, &peer->session);
   if (unlink) {
 #ifndef WITH_CONTIKI
@@ -3625,8 +3625,13 @@ dtls_handle_message(dtls_context_t *ctx,
       }
       err = handle_ccs(ctx, peer, msg, data, data_length);
       if (err < 0) {
-	dtls_warn("error while handling ChangeCipherSpec package\n");
+	dtls_warn("error while handling ChangeCipherSpec message\n");
 	dtls_alert_send_from_err(ctx, peer, session, err);
+
+	/* invalidate peer */
+	dtls_destroy_peer(ctx, peer, 1);
+	peer = NULL;
+
 	return err;
       }
       break;
