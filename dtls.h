@@ -150,10 +150,11 @@ typedef struct {
    *                session.
    * @return @c 0 if result is set, or less than zero on error.
    */
-  int (*get_psk_key)(struct dtls_context_t *ctx, 
-		     const session_t *session, 
-		     const unsigned char *id, size_t id_len, 
-		     const dtls_psk_key_t **result);
+  int (*get_credentials)(struct dtls_context_t *ctx, 
+			 const session_t *session, 
+			 dtls_credentials_type_t type,
+			 const unsigned char *desc, size_t desc_len, 
+			 unsigned char *result);
 
   /**
    * Called during handshake to query the PSK identity hint. If the

@@ -54,7 +54,7 @@ static int
 get_psk_key(struct dtls_context_t *ctx,
 	    const session_t *session,
 	    const unsigned char *id, size_t id_len,
-	    const dtls_psk_key_t **result) {
+	    dtls_psk_key_t *result) {
   static const dtls_psk_key_t psk[3] = {
     { (unsigned char *)"Client_identity", 15,
       (unsigned char *)"secretPSK", 9 },
@@ -68,14 +68,10 @@ get_psk_key(struct dtls_context_t *ctx,
     int i;
     for (i = 0; i < sizeof(psk)/sizeof(dtls_psk_key_t); i++) {
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
-	*result = &psk[i];
+	*result = psk[i];
 	return 0;
       }
     }
-  } else {
-    /* the default case */
-    *result = NULL;
-    return 0;
   }
 
   return -1;

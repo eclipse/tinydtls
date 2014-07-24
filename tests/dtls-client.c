@@ -111,11 +111,11 @@ get_psk_key(struct dtls_context_t *ctx UNUSED_PARAM,
 	    const session_t *session UNUSED_PARAM,
 	    const unsigned char *id,
 	    size_t id_len,
-	    const dtls_psk_key_t **result) {
+	    dtls_psk_key_t *result) {
 
   dsrv_log(DTLS_LOG_INFO, "requested identity is '%.*s'\n", id_len, id);
 
-  *result = &psk;
+  *result = psk;
   return 0;
 }
 #endif /* DTLS_PSK */

@@ -615,24 +615,27 @@ calculate_key_block(dtls_context_t *ctx,
   switch (handshake->cipher) {
 #ifdef DTLS_PSK
   case TLS_PSK_WITH_AES_128_CCM_8: {
-    const dtls_psk_key_t *psk;
+    dtls_psk_key_t psk;
     int err;
 
     err = CALL(ctx, get_psk_key, session, handshake->keyx.psk.identity,
 	       handshake->keyx.psk.id_length, &psk);
-    if (!psk || err < 0) {
+    if (err < 0) {
       dtls_crit("no psk key for session available\n");
       return err;
     }
   /* Temporarily use the key_block storage space for the pre master secret. */
-    pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
+    pre_master_len = dtls_psk_pre_master_secret(psk.key, psk.key_length, 
 						pre_master_secret,
 						MAX_KEYBLOCK_LENGTH);
+
+    dtls_debug_hexdump("psk", psk.key, psk.key_length);
+
+    memset(&psk, 0, sizeof(dtls_psk_key_t));
     if (pre_master_len < 0) {
       dtls_crit("the psk was too long, for the pre master secret\n");
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
-    dtls_debug_hexdump("psk", psk->key, psk->key_length);
 
     break;
   }
@@ -2152,26 +2155,28 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
   switch (handshake->cipher) {
 #ifdef DTLS_PSK
   case TLS_PSK_WITH_AES_128_CCM_8: {
-    const dtls_psk_key_t *psk;
+    dtls_psk_key_t psk;
     int err;
 
     err = CALL(ctx, get_psk_key, &peer->session, handshake->keyx.psk.identity,
 	       handshake->keyx.psk.id_length, &psk);
-    if (!psk || err < 0) {
+    if (err < 0) {
       dtls_crit("no psk key to send in kx\n");
       return err;
     }
 
-    if (psk->id_length + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
+    if (psk.id_length + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
+      memset(&psk, 0, sizeof(dtls_psk_key_t));
       dtls_warn("the psk identity is too long\n");
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
 
-    dtls_int_to_uint16(p, psk->id_length);
+    dtls_int_to_uint16(p, psk.id_length);
     p += sizeof(uint16);
 
-    memcpy(p, psk->id, psk->id_length);
-    p += psk->id_length;
+    memcpy(p, psk.id, psk.id_length);
+    p += psk.id_length;
+    memset(&psk, 0, sizeof(dtls_psk_key_t));
 
     break;
   }
