@@ -51,10 +51,11 @@ handle_sigint(int signum) {
  * retrieve a key for the given identity within this particular
  * session. */
 static int
-get_psk_key(struct dtls_context_t *ctx,
-	    const session_t *session,
-	    const unsigned char *id, size_t id_len,
-	    dtls_psk_key_t *result) {
+get_psk_info(struct dtls_context_t *ctx, const session_t *session,
+	     dtls_credentials_type_t type,
+	     const unsigned char *id, size_t id_len,
+	     unsigned char *result, size_t result_length) {
+
   static const dtls_psk_key_t psk[3] = {
     { (unsigned char *)"Client_identity", 15,
       (unsigned char *)"secretPSK", 9 },
@@ -64,17 +65,26 @@ get_psk_key(struct dtls_context_t *ctx,
       (unsigned char *)"", 1 }
   };
 
+  if (type != DTLS_PSK_KEY) {
+    return 0;
+  }
+
   if (id) {
     int i;
     for (i = 0; i < sizeof(psk)/sizeof(dtls_psk_key_t); i++) {
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
-	*result = psk[i];
-	return 0;
+	if (result_length < psk[i].key_length) {
+	  dtls_warn("buffer too small for PSK");
+	  return DTLS_ALERT_INTERNAL_ERROR;
+	}
+
+	memcpy(result, psk[i].key, psk[i].key_length);
+	return psk[i].key_length;
       }
     }
   }
 
-  return -1;
+  return DTLS_ALERT_DECRYPT_ERROR;
 }
 
 #endif /* DTLS_PSK */
@@ -231,8 +241,7 @@ static dtls_handler_t cb = {
   .read  = read_from_peer,
   .event = NULL,
 #ifdef DTLS_PSK
-  .get_psk_key = get_psk_key,
-  .get_psk_hint = NULL,
+  .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,

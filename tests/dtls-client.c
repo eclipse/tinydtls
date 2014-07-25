@@ -94,28 +94,44 @@ read_from_file(char *arg, unsigned char *buf, size_t max_buf_len) {
 #define PSK_ID_MAXLEN 256
 #define PSK_MAXLEN 256
 static unsigned char psk_id[PSK_ID_MAXLEN];
+static size_t psk_id_length = 0;
 static unsigned char psk_key[PSK_MAXLEN];
-
-static dtls_psk_key_t psk = {
-  .id = psk_id,
-  .id_length = 0,
-  .key = psk_key,
-  .key_length = 0
-};
+static size_t psk_key_length = 0;
 
 /* This function is the "key store" for tinyDTLS. It is called to
- * retrieve a key for the given identiy within this particular
+ * retrieve a key for the given identity within this particular
  * session. */
 static int
-get_psk_key(struct dtls_context_t *ctx UNUSED_PARAM,
+get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
 	    const session_t *session UNUSED_PARAM,
-	    const unsigned char *id,
-	    size_t id_len,
-	    dtls_psk_key_t *result) {
+	    dtls_credentials_type_t type,
+	    const unsigned char *id, size_t id_len,
+	    unsigned char *result, size_t result_length) {
 
-  dsrv_log(DTLS_LOG_INFO, "requested identity is '%.*s'\n", id_len, id);
+  switch (type) {
+  case DTLS_PSK_IDENTITY:
+    if (result_length < psk_id_length) {
+      dtls_warn("cannot set psk_identity -- buffer too small\n");
+      return DTLS_ALERT_INTERNAL_ERROR;
+    }
 
-  *result = psk;
+    memcpy(result, psk_id, psk_id_length);
+    return psk_id_length;
+  case DTLS_PSK_KEY:
+    if (id_len != psk_id_length || memcmp(psk_id, id, id_len) != 0) {
+      dtls_warn("PSK for unknown id requested, exiting\n");
+      return DTLS_ALERT_ILLEGAL_PARAMETER;
+    } else if (result_length < psk_key_length) {
+      dtls_warn("cannot set psk -- buffer too small\n");
+      return DTLS_ALERT_INTERNAL_ERROR;
+    }
+
+    memcpy(result, psk_key, psk_key_length);
+    return psk_key_length;
+  default:
+    dtls_warn("unsupported request type: %d\n", type);
+  }
+
   return 0;
 }
 #endif /* DTLS_PSK */
@@ -290,8 +306,7 @@ static dtls_handler_t cb = {
   .read  = read_from_peer,
   .event = NULL,
 #ifdef DTLS_PSK
-  .get_psk_key = get_psk_key,
-  .get_psk_hint = NULL,
+  .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,
@@ -318,30 +333,30 @@ main(int argc, char **argv) {
   snprintf(port_str, sizeof(port_str), "%d", port);
 
 #ifdef DTLS_PSK
-  psk.id_length = strlen(PSK_DEFAULT_IDENTITY);
-  psk.key_length = strlen(PSK_DEFAULT_KEY);
-  memcpy(psk.id, PSK_DEFAULT_IDENTITY, psk.id_length);
-  memcpy(psk.key, PSK_DEFAULT_KEY, psk.key_length);
+  psk_id_length = strlen(PSK_DEFAULT_IDENTITY);
+  psk_key_length = strlen(PSK_DEFAULT_KEY);
+  memcpy(psk_id, PSK_DEFAULT_IDENTITY, psk_id_length);
+  memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
   while ((opt = getopt(argc, argv, "p:o:v:" PSK_OPTIONS)) != -1) {
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' : {
-      ssize_t result = read_from_file(optarg, psk.id, PSK_ID_MAXLEN);
+      ssize_t result = read_from_file(optarg, psk_id, PSK_ID_MAXLEN);
       if (result < 0) {
 	dtls_warn("cannot read PSK identity\n");
       } else {
-	psk.id_length = result;
+	psk_id_length = result;
       }
       break;
     }
     case 'k' : {
-      ssize_t result = read_from_file(optarg, psk.key, PSK_MAXLEN);
+      ssize_t result = read_from_file(optarg, psk_key, PSK_MAXLEN);
       if (result < 0) {
 	dtls_warn("cannot read PSK\n");
       } else {
-	psk.key_length = result;
+	psk_key_length = result;
       }
       break;
     }

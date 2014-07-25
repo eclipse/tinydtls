@@ -56,6 +56,10 @@
 #define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
 #endif
 
+typedef enum dtls_credentials_type_t {
+  DTLS_PSK_HINT, DTLS_PSK_IDENTITY, DTLS_PSK_KEY
+} dtls_credentials_type_t;
+
 typedef struct dtls_psk_key_t {
   unsigned char *id;     /**< psk identity */
   size_t id_length;      /**< length of psk identity  */
@@ -134,46 +138,33 @@ typedef struct {
 
 #ifdef DTLS_PSK
   /**
-   * Called during handshake to lookup the key for @p id in @p
-   * session. If found, the key must be stored in @p result and 
-   * the return value must be @c 0. If not found, @p result is 
-   * undefined and the return value must be less than zero.
-   * If PSK should not be supported, set this pointer to NULL.
+   * Called during handshake to get information related to the
+   * psk key exchange. The type of information requested is
+   * indicated by @p type which will be one of DTLS_PSK_HINT,
+   * DTLS_PSK_IDENTITY, or DTLS_PSK_KEY. The called function
+   * must store the requested item in the buffer @p result of
+   * size @p result_length. On success, the function must return
+   * the actual number of bytes written to @p result, of a
+   * value less than zero on error. The parameter @p desc may
+   * contain additional request information (e.g. the psk_identity
+   * for which a key is requested when @p type == @c DTLS_PSK_KEY.
    *
    * @param ctx     The current dtls context.
    * @param session The session where the key will be used.
-   * @param id      The identity of the communicating peer. This value is
-   *                @c NULL when the DTLS engine requests the local
-   *                id/key pair to use for session setup.
-   * @param id_len  The actual length of @p id
-   * @param result  Must be set to the key object to use for the given
-   *                session.
-   * @return @c 0 if result is set, or less than zero on error.
+   * @param type    The type of the requested information.
+   * @param desc    Additional request information
+   * @param desc_len The actual length of desc.
+   * @param result  Must be filled with the requested information.
+   * @param result_length  Maximum size of @p result.
+   * @return The number of bytes written to @p result or a value
+   *         less than zero on error.
    */
-  int (*get_credentials)(struct dtls_context_t *ctx, 
-			 const session_t *session, 
-			 dtls_credentials_type_t type,
-			 const unsigned char *desc, size_t desc_len, 
-			 unsigned char *result);
+  int (*get_psk_info)(struct dtls_context_t *ctx,
+		      const session_t *session,
+		      dtls_credentials_type_t type,
+		      const unsigned char *desc, size_t desc_len,
+		      unsigned char *result, size_t result_length);
 
-  /**
-   * Called during handshake to query the PSK identity hint. If the
-   * server application wants the DTLS server to send a
-   * ServerKeyExchange message with the given PSK identity hint, it
-   * must set @p result pointing to a dtls_psk_key_t record whose
-   * id shall be used as PSK identity hint. Otherwise, @p result
-   * must be set to NULL. This function must return @c 0 on success
-   * or a value less than zero on error.
-   *
-   * @param ctx     The current dtls context.
-   * @param session The session where the key will be used.
-   * @param result  Must be set to the key object whose id shall be
-   *                used as identity hint.
-   * @return @c 0 if result is set, or less than zero on error.
-   */
-  int (*get_psk_hint)(struct dtls_context_t *ctx, 
-		      const session_t *session, 
-		      const dtls_psk_key_t **result);
 #endif /* DTLS_PSK */
 
 #ifdef DTLS_ECC
