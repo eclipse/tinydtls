@@ -56,7 +56,12 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
 	     const unsigned char *id, size_t id_len,
 	     unsigned char *result, size_t result_length) {
 
-  static const dtls_psk_key_t psk[3] = {
+  struct keymap_t {
+    unsigned char *id;
+    size_t id_length;
+    unsigned char *key;
+    size_t key_length;
+  } psk[3] = {
     { (unsigned char *)"Client_identity", 15,
       (unsigned char *)"secretPSK", 9 },
     { (unsigned char *)"default identity", 16,
@@ -71,7 +76,7 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
 
   if (id) {
     int i;
-    for (i = 0; i < sizeof(psk)/sizeof(dtls_psk_key_t); i++) {
+    for (i = 0; i < sizeof(psk)/sizeof(struct keymap_t); i++) {
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
 	if (result_length < psk[i].key_length) {
 	  dtls_warn("buffer too small for PSK");

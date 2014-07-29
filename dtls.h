@@ -60,13 +60,6 @@ typedef enum dtls_credentials_type_t {
   DTLS_PSK_HINT, DTLS_PSK_IDENTITY, DTLS_PSK_KEY
 } dtls_credentials_type_t;
 
-typedef struct dtls_psk_key_t {
-  unsigned char *id;     /**< psk identity */
-  size_t id_length;      /**< length of psk identity  */
-  unsigned char *key;    /**< key data */
-  size_t key_length;     /**< length of key */
-} dtls_psk_key_t;
-
 typedef struct dtls_ecdsa_key_t {
   dtls_ecdh_curve curve;
   const unsigned char *priv_key;	/** < private key as bytes > */
