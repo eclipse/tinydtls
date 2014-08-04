@@ -3653,11 +3653,11 @@ dtls_handle_message(dtls_context_t *ctx,
         dtls_stop_retransmission(ctx, peer);
       }
       err = handle_alert(ctx, peer, msg, data, data_length);
-      if (err < 0) {
-        dtls_warn("received wrong package\n");
-	/* handle alert has invalidated peer */
-	peer = NULL;
-	return err;
+      if (err < 0 || err == 1) {
+         dtls_warn("received wrong package\n");
+         /* handle alert has invalidated peer */
+         peer = NULL;
+         return err < 0 ?err:-1;
       }
       break;
 
