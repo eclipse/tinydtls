@@ -63,15 +63,6 @@ LDFLAGS:=@LIBS@
 ARFLAGS:=cru
 doc:=doc
 
-# files that should be ignored by git
-GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
- autom4te.cache/ config.h config.log config.status configure \
- doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
- tests/dtls-client tests/dtls-server tests/prf-test $(package) \
- $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
- \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
- $(addprefix \*., $(notdir $(wildcard ../../platform/*)))
-
 .PHONY: all dirs clean install dist distclean .gitignore doc TAGS
 
 .SUFFIXES:
@@ -133,6 +124,16 @@ TAGS:
 	$(ETAGS) -o $@.new $(SOURCES) 
 	$(ETAGS) -a -o $@.new $(HEADERS) 
 	mv $@.new $@
+
+# files that should be ignored by git
+GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
+ autom4te.cache/ config.h config.log config.status configure \
+ doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
+ tests/dtls-client tests/dtls-server tests/prf-test $(package) \
+ $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
+ \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
+ $(addprefix \*., $(notdir $(wildcard ../../platform/*))) \
+ .project
 
 .gitignore:
 	echo $(GITIGNOREDS) | sed 's/ /\n/g' > $@

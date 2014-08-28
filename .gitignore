@@ -61,3 +61,4 @@ dtls_config.h
 *.wismote
 *.z1
 *.z1sp
+.project
