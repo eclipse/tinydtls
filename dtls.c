@@ -849,6 +849,12 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_ec_point_formats(data, j))
           goto error;
         break;
+      case TLS_EXT_ENCRYPT_THEN_MAC:
+	/* As only AEAD cipher suites are currently available, this
+	 * extension can be skipped. 
+	 */
+	dtls_info("skipped encrypt-then-mac extension\n");
+	break;
       default:
         dtls_warn("unsupported tls extension: %i\n", i);
         break;
