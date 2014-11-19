@@ -80,7 +80,7 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
 	if (result_length < psk[i].key_length) {
 	  dtls_warn("buffer too small for PSK");
-	  return DTLS_ALERT_INTERNAL_ERROR;
+	  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 	}
 
 	memcpy(result, psk[i].key, psk[i].key_length);
@@ -89,7 +89,7 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
     }
   }
 
-  return DTLS_ALERT_DECRYPT_ERROR;
+  return dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
 }
 
 #endif /* DTLS_PSK */
