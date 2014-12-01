@@ -51,11 +51,17 @@ handle_sigint(int signum) {
  * retrieve a key for the given identity within this particular
  * session. */
 static int
-get_psk_key(struct dtls_context_t *ctx,
-	    const session_t *session,
-	    const unsigned char *id, size_t id_len,
-	    const dtls_psk_key_t **result) {
-  static const dtls_psk_key_t psk[3] = {
+get_psk_info(struct dtls_context_t *ctx, const session_t *session,
+	     dtls_credentials_type_t type,
+	     const unsigned char *id, size_t id_len,
+	     unsigned char *result, size_t result_length) {
+
+  struct keymap_t {
+    unsigned char *id;
+    size_t id_length;
+    unsigned char *key;
+    size_t key_length;
+  } psk[3] = {
     { (unsigned char *)"Client_identity", 15,
       (unsigned char *)"secretPSK", 9 },
     { (unsigned char *)"default identity", 16,
@@ -64,21 +70,26 @@ get_psk_key(struct dtls_context_t *ctx,
       (unsigned char *)"", 1 }
   };
 
-  if (id) {
-    int i;
-    for (i = 0; i < sizeof(psk)/sizeof(dtls_psk_key_t); i++) {
-      if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
-	*result = &psk[i];
-	return 0;
-      }
-    }
-  } else {
-    /* the default case */
-    *result = NULL;
+  if (type != DTLS_PSK_KEY) {
     return 0;
   }
 
-  return -1;
+  if (id) {
+    int i;
+    for (i = 0; i < sizeof(psk)/sizeof(struct keymap_t); i++) {
+      if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
+	if (result_length < psk[i].key_length) {
+	  dtls_warn("buffer too small for PSK");
+	  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+	}
+
+	memcpy(result, psk[i].key, psk[i].key_length);
+	return psk[i].key_length;
+      }
+    }
+  }
+
+  return dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
 }
 
 #endif /* DTLS_PSK */
@@ -235,8 +246,7 @@ static dtls_handler_t cb = {
   .read  = read_from_peer,
   .event = NULL,
 #ifdef DTLS_PSK
-  .get_psk_key = get_psk_key,
-  .get_psk_hint = NULL,
+  .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   .get_ecdsa_key = get_ecdsa_key,

@@ -481,7 +481,7 @@ static inline int is_tls_psk_with_aes_128_ccm_8(dtls_cipher_t cipher)
 static inline int is_psk_supported(dtls_context_t *ctx)
 {
 #ifdef DTLS_PSK
-  return ctx && ctx->h && ctx->h->get_psk_key;
+  return ctx && ctx->h && ctx->h->get_psk_info;
 #else
   return 0;
 #endif /* DTLS_PSK */
@@ -615,24 +615,29 @@ calculate_key_block(dtls_context_t *ctx,
   switch (handshake->cipher) {
 #ifdef DTLS_PSK
   case TLS_PSK_WITH_AES_128_CCM_8: {
-    const dtls_psk_key_t *psk;
-    int err;
+    unsigned char psk[DTLS_PSK_MAX_KEY_LEN];
+    int len;
 
-    err = CALL(ctx, get_psk_key, session, handshake->keyx.psk.identity,
-	       handshake->keyx.psk.id_length, &psk);
-    if (!psk || err < 0) {
+    len = CALL(ctx, get_psk_info, session, DTLS_PSK_KEY,
+	       handshake->keyx.psk.identity,
+	       handshake->keyx.psk.id_length,
+	       psk, DTLS_PSK_MAX_KEY_LEN);
+    if (len < 0) {
       dtls_crit("no psk key for session available\n");
-      return err;
+      return len;
     }
   /* Temporarily use the key_block storage space for the pre master secret. */
-    pre_master_len = dtls_psk_pre_master_secret(psk->key, psk->key_length, 
+    pre_master_len = dtls_psk_pre_master_secret(psk, len,
 						pre_master_secret,
 						MAX_KEYBLOCK_LENGTH);
+
+    dtls_debug_hexdump("psk", psk, len);
+
+    memset(psk, 0, DTLS_PSK_MAX_KEY_LEN);
     if (pre_master_len < 0) {
       dtls_crit("the psk was too long, for the pre master secret\n");
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
-    dtls_debug_hexdump("psk", psk->key, psk->key_length);
 
     break;
   }
@@ -844,6 +849,12 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_ec_point_formats(data, j))
           goto error;
         break;
+      case TLS_EXT_ENCRYPT_THEN_MAC:
+	/* As only AEAD cipher suites are currently available, this
+	 * extension can be skipped. 
+	 */
+	dtls_info("skipped encrypt-then-mac extension\n");
+	break;
       default:
         dtls_warn("unsupported tls extension: %i\n", i);
         break;
@@ -1340,7 +1351,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     data_len_array[i] = data_length;
     i++;
   }
-  dtls_debug("send handshake package of type: %s (%i)\n",
+  dtls_debug("send handshake packet of type: %s (%i)\n",
 	     dtls_handshake_type_to_name(header_type), header_type);
   return dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
 			 data_array, data_len_array, i);
@@ -1693,7 +1704,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH;
 
   if (data_length < DTLS_HS_LENGTH + DTLS_CV_LENGTH) {
-    dtls_alert("the package length does not match the expected\n");
+    dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
@@ -1976,23 +1987,25 @@ dtls_send_server_key_exchange_ecdh(dtls_context_t *ctx, dtls_peer_t *peer,
 #ifdef DTLS_PSK
 static int
 dtls_send_server_key_exchange_psk(dtls_context_t *ctx, dtls_peer_t *peer,
-				   const dtls_psk_key_t *key)
+				  const unsigned char *psk_hint, size_t len)
 {
   uint8 buf[DTLS_SKEXECPSK_LENGTH_MAX];
   uint8 *p;
 
   p = buf;
 
-  if (key->id_length > DTLS_PSK_MAX_CLIENT_IDENTITY_LEN) {
+  assert(len <= DTLS_PSK_MAX_CLIENT_IDENTITY_LEN);
+  if (len > DTLS_PSK_MAX_CLIENT_IDENTITY_LEN) {
+    /* should never happen */
     dtls_warn("psk identity hint is too long\n");
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_int_to_uint16(p, key->id_length);
+  dtls_int_to_uint16(p, len);
   p += sizeof(uint16);
 
-  memcpy(p, key->id, key->id_length);
-  p += key->id_length;
+  memcpy(p, psk_hint, len);
+  p += len;
 
   assert(p - buf <= sizeof(buf));
 
@@ -2106,14 +2119,21 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 
 #ifdef DTLS_PSK
   if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
-    const dtls_psk_key_t *psk = NULL;
+    unsigned char psk_hint[DTLS_PSK_MAX_CLIENT_IDENTITY_LEN];
+    int len;
 
     /* The identity hint is optional, therefore we ignore the result
      * and check psk only. */
-    CALL(ctx, get_psk_hint, &peer->session, &psk);
+    len = CALL(ctx, get_psk_info, &peer->session, DTLS_PSK_HINT,
+	       NULL, 0, psk_hint, DTLS_PSK_MAX_CLIENT_IDENTITY_LEN);
 
-    if (psk) {
-      res = dtls_send_server_key_exchange_psk(ctx, peer, psk);
+    if (len < 0) {
+      dtls_debug("dtls_server_hello: cannot create ServerKeyExchange\n");
+      return len;
+    }
+
+    if (len > 0) {
+      res = dtls_send_server_key_exchange_psk(ctx, peer, psk_hint, (size_t)len);
 
       if (res < 0) {
 	dtls_debug("dtls_server_key_exchange_psk: cannot send server key exchange record\n");
@@ -2152,26 +2172,29 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
   switch (handshake->cipher) {
 #ifdef DTLS_PSK
   case TLS_PSK_WITH_AES_128_CCM_8: {
-    const dtls_psk_key_t *psk;
-    int err;
+    int len;
 
-    err = CALL(ctx, get_psk_key, &peer->session, handshake->keyx.psk.identity,
-	       handshake->keyx.psk.id_length, &psk);
-    if (!psk || err < 0) {
-      dtls_crit("no psk key to send in kx\n");
-      return err;
+    len = CALL(ctx, get_psk_info, &peer->session, DTLS_PSK_IDENTITY,
+	       NULL, 0,
+	       handshake->keyx.psk.identity,
+	       sizeof(handshake->keyx.psk.identity));
+    if (len < 0) {
+      dtls_crit("no psk identity set in kx\n");
+      return len;
     }
+    handshake->keyx.psk.id_length = (unsigned int)len;
 
-    if (psk->id_length + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
+    if (len + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
+      memset(&handshake->keyx.psk, 0, sizeof(dtls_handshake_parameters_psk_t));
       dtls_warn("the psk identity is too long\n");
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
 
-    dtls_int_to_uint16(p, psk->id_length);
+    dtls_int_to_uint16(p, handshake->keyx.psk.id_length);
     p += sizeof(uint16);
 
-    memcpy(p, psk->id, psk->id_length);
-    p += psk->id_length;
+    memcpy(p, handshake->keyx.psk.identity, handshake->keyx.psk.id_length);
+    p += handshake->keyx.psk.id_length;
 
     break;
   }
@@ -2593,7 +2616,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH;
 
   if (data_length < DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH) {
-    dtls_alert("the package length does not match the expected\n");
+    dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
   key_params = data;
@@ -2673,7 +2696,7 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH;
 
   if (data_length < DTLS_HS_LENGTH + DTLS_SKEXECPSK_LENGTH_MIN) {
-    dtls_alert("the package length does not match the expected\n");
+    dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
@@ -2713,7 +2736,7 @@ check_certificate_request(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH;
 
   if (data_length < DTLS_HS_LENGTH + 5) {
-    dtls_alert("the package length does not match the expected\n");
+    dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
@@ -2982,7 +3005,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
    * respect to the current internal state for this peer. In case of
    * error, it is left with return 0. */
 
-  dtls_debug("handle handshake package of type: %s (%i)\n",
+  dtls_debug("handle handshake packet of type: %s (%i)\n",
 	     dtls_handshake_type_to_name(data[0]), data[0]);
   switch (data[0]) {
 
@@ -3281,7 +3304,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_HELLO_REQUEST:
 
     if (state != DTLS_STATE_CONNECTED) {
-      /* we should just ignore such packages when in handshake */
+      /* we should just ignore such packets when in handshake */
       return 0;
     }
 
@@ -3330,7 +3353,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   }
   hs_header = DTLS_HANDSHAKE_HEADER(data);
 
-  dtls_debug("received handshake package of type: %s (%i)\n",
+  dtls_debug("received handshake packet of type: %s (%i)\n",
 	     dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
 
   if (!peer || !peer->handshake_params) {
@@ -3356,12 +3379,12 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 	      peer->handshake_params->hs_state.mseq_r, dtls_uint16_to_int(hs_header->message_seq));
     return 0;
   } else if (dtls_uint16_to_int(hs_header->message_seq) > peer->handshake_params->hs_state.mseq_r) {
-    /* A package in between is missing, buffer this package. */
+    /* A packet in between is missing, buffer this packet. */
     netq_t *n;
 
-    /* TODO: only add packages that are not too new. */
+    /* TODO: only add packet that are not too new. */
     if (data_length > DTLS_MAX_BUF) {
-      dtls_warn("the package is too big to buffer for reoder\n");
+      dtls_warn("the packet is too big to buffer for reoder\n");
       return 0;
     }
 
@@ -3369,7 +3392,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     while (node) {
       dtls_handshake_header_t *node_header = DTLS_HANDSHAKE_HEADER(node->data);
       if (dtls_uint16_to_int(node_header->message_seq) == dtls_uint16_to_int(hs_header->message_seq)) {
-        dtls_warn("a package with this sequence number is already stored\n");
+        dtls_warn("a packet with this sequence number is already stored\n");
         return 0;
       }
       node = netq_next(node);
@@ -3389,17 +3412,17 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       dtls_warn("cannot add packet to reoder buffer\n");
       netq_node_free(n);
     }
-    dtls_info("Added package for reordering\n");
+    dtls_info("Added packet for reordering\n");
     return 0;
   } else if (dtls_uint16_to_int(hs_header->message_seq) == peer->handshake_params->hs_state.mseq_r) {
-    /* Found the expected package, use this and all the buffered packages */
+    /* Found the expected packet, use this and all the buffered packet */
     int next = 1;
 
     res = handle_handshake_msg(ctx, peer, session, role, state, data, data_length);
     if (res < 0)
       return res;
 
-    /* We do not know in which order the packages are in the list just search the list for every package. */
+    /* We do not know in which order the packet are in the list just search the list for every packet. */
     while (next && peer->handshake_params) {
       next = 0;
       netq_t *node = netq_head(peer->handshake_params->reorder_queue);
@@ -3641,11 +3664,11 @@ dtls_handle_message(dtls_context_t *ctx,
         dtls_stop_retransmission(ctx, peer);
       }
       err = handle_alert(ctx, peer, msg, data, data_length);
-      if (err < 0) {
-        dtls_warn("received wrong package\n");
-	/* handle alert has invalidated peer */
-	peer = NULL;
-	return err;
+      if (err < 0 || err == 1) {
+         dtls_warn("received alert, peer has been invalidated\n");
+         /* handle alert has invalidated peer */
+         peer = NULL;
+         return err < 0 ?err:-1;
       }
       break;
 
@@ -3676,7 +3699,7 @@ dtls_handle_message(dtls_context_t *ctx,
 
       err = handle_handshake(ctx, peer, session, role, state, data, data_length);
       if (err < 0) {
-	dtls_warn("error while handling handshake package\n");
+	dtls_warn("error while handling handshake packet\n");
 	dtls_alert_send_from_err(ctx, peer, session, err);
 	return err;
       }
@@ -3882,7 +3905,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       if (node->type == DTLS_CT_HANDSHAKE) {
 	dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
 
-	dtls_debug("** retransmit handshake package of type: %s (%i)\n",
+	dtls_debug("** retransmit handshake packet of type: %s (%i)\n",
 	           dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
       } else {
 	dtls_debug("** retransmit packet\n");
@@ -3891,7 +3914,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       err = dtls_prepare_record(node->peer, security, node->type, &data, &length,
 				1, sendbuf, &len);
       if (err < 0) {
-	dtls_warn("can not retransmit package, err: %i\n", err);
+	dtls_warn("can not retransmit packet, err: %i\n", err);
 	return;
       }
       dtls_debug_hexdump("retransmit header", sendbuf,
