@@ -2175,20 +2175,22 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
     int len;
 
     len = CALL(ctx, get_psk_info, &peer->session, DTLS_PSK_IDENTITY,
-	       NULL, 0,
-	       handshake->keyx.psk.identity,
-	       sizeof(handshake->keyx.psk.identity));
+	       handshake->keyx.psk.identity, handshake->keyx.psk.id_length,
+	       buf + sizeof(uint16),
+	       min(sizeof(buf) - sizeof(uint16),
+		   sizeof(handshake->keyx.psk.identity)));
     if (len < 0) {
       dtls_crit("no psk identity set in kx\n");
       return len;
     }
-    handshake->keyx.psk.id_length = (unsigned int)len;
 
     if (len + sizeof(uint16) > DTLS_CKXEC_LENGTH) {
       memset(&handshake->keyx.psk, 0, sizeof(dtls_handshake_parameters_psk_t));
       dtls_warn("the psk identity is too long\n");
       return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
     }
+    handshake->keyx.psk.id_length = (unsigned int)len;
+    memcpy(handshake->keyx.psk.identity, p + sizeof(uint16), len);
 
     dtls_int_to_uint16(p, handshake->keyx.psk.id_length);
     p += sizeof(uint16);
@@ -2713,6 +2715,7 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
+  /* store the psk_identity_hint in config->keyx.psk for later use */
   config->keyx.psk.id_length = len;
   memcpy(config->keyx.psk.identity, data, len);
   return 0;
