@@ -113,21 +113,49 @@ send_to_peer(struct dtls_context_t *ctx,
 }
 
 #ifdef DTLS_PSK
+/* This function is the "key store" for tinyDTLS. It is called to
+ * retrieve a key for the given identity within this particular
+ * session. */
 static int
-get_psk_key(struct dtls_context_t *ctx, 
-	    const session_t *session, 
-	    const unsigned char *id, size_t id_len, 
-	    const dtls_psk_key_t **result) {
+get_psk_info(struct dtls_context_t *ctx, const session_t *session,
+	     dtls_credentials_type_t type,
+	     const unsigned char *id, size_t id_len,
+	     unsigned char *result, size_t result_length) {
 
-  static const dtls_psk_key_t psk = {
-    .id = (unsigned char *)"Client_identity", 
-    .id_length = 15,
-    .key = (unsigned char *)"secretPSK", 
-    .key_length = 9
+  struct keymap_t {
+    unsigned char *id;
+    size_t id_length;
+    unsigned char *key;
+    size_t key_length;
+  } psk[3] = {
+    { (unsigned char *)"Client_identity", 15,
+      (unsigned char *)"secretPSK", 9 },
+    { (unsigned char *)"default identity", 16,
+      (unsigned char *)"\x11\x22\x33", 3 },
+    { (unsigned char *)"\0", 2,
+      (unsigned char *)"", 1 }
   };
 
-  *result = &psk;
-  return 0;
+  if (type != DTLS_PSK_KEY) {
+    return 0;
+  }
+
+  if (id) {
+    int i;
+    for (i = 0; i < sizeof(psk)/sizeof(struct keymap_t); i++) {
+      if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
+	if (result_length < psk[i].key_length) {
+	  dtls_warn("buffer too small for PSK");
+	  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+	}
+
+	memcpy(result, psk[i].key, psk[i].key_length);
+	return psk[i].key_length;
+      }
+    }
+  }
+
+  return dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
 }
 #endif /* DTLS_PSK */
 
@@ -219,7 +247,7 @@ init_dtls() {
     .read  = read_from_peer,
     .event = NULL,
 #ifdef DTLS_PSK
-    .get_psk_key = get_psk_key,
+    .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
     .get_ecdsa_key = get_ecdsa_key,

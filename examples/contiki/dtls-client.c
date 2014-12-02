@@ -45,6 +45,19 @@
 #include "debug.h"
 #include "dtls.h"
 
+#ifdef DTLS_PSK
+/* The PSK information for DTLS */
+/* make sure that default identity and key fit into buffer, i.e.
+ * sizeof(PSK_DEFAULT_IDENTITY) - 1 <= PSK_ID_MAXLEN and
+ * sizeof(PSK_DEFAULT_KEY) - 1 <= PSK_MAXLEN
+*/
+
+#define PSK_ID_MAXLEN 32
+#define PSK_MAXLEN 32
+#define PSK_DEFAULT_IDENTITY "Client_identity"
+#define PSK_DEFAULT_KEY      "secretPSK"
+#endif /* DTLS_PSK */
+
 #define UIP_IP_BUF   ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
 #define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLIPH_LEN])
 
@@ -116,21 +129,52 @@ send_to_peer(struct dtls_context_t *ctx,
 }
 
 #ifdef DTLS_PSK
-static int
-get_psk_key(struct dtls_context_t *ctx, 
-	    const session_t *session, 
-	    const unsigned char *id, size_t id_len, 
-	    const dtls_psk_key_t **result) {
+static unsigned char psk_id[PSK_ID_MAXLEN] = PSK_DEFAULT_IDENTITY;
+static size_t psk_id_length = sizeof(PSK_DEFAULT_IDENTITY) - 1;
+static unsigned char psk_key[PSK_MAXLEN] = PSK_DEFAULT_KEY;
+static size_t psk_key_length = sizeof(PSK_DEFAULT_KEY) - 1;
 
-  static const dtls_psk_key_t psk = {
-    .id = (unsigned char *)"Client_identity", 
-    .id_length = 15,
-    .key = (unsigned char *)"secretPSK", 
-    .key_length = 9
-  };
-   
-  *result = &psk;
-  return 0;
+#ifdef __GNUC__
+#define UNUSED_PARAM __attribute__((unused))
+#else
+#define UNUSED_PARAM
+#endif /* __GNUC__ */
+
+/* This function is the "key store" for tinyDTLS. It is called to
+ * retrieve a key for the given identity within this particular
+ * session. */
+static int
+get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
+	    const session_t *session UNUSED_PARAM,
+	    dtls_credentials_type_t type,
+	    const unsigned char *id, size_t id_len,
+	    unsigned char *result, size_t result_length) {
+
+  switch (type) {
+  case DTLS_PSK_IDENTITY:
+    if (result_length < psk_id_length) {
+      dtls_warn("cannot set psk_identity -- buffer too small\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
+
+    memcpy(result, psk_id, psk_id_length);
+    return psk_id_length;
+  case DTLS_PSK_KEY:
+    if (id_len != psk_id_length || memcmp(psk_id, id, id_len) != 0) {
+      dtls_warn("PSK for unknown id requested, exiting\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_ILLEGAL_PARAMETER);
+    } else if (result_length < psk_key_length) {
+      dtls_warn("cannot set psk -- buffer too small\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
+
+    memcpy(result, psk_key, psk_key_length);
+    return psk_key_length;
+  default:
+    dtls_warn("unsupported request type: %d\n", type);
+  }
+
+  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 }
 #endif /* DTLS_PSK */
 
@@ -221,7 +265,7 @@ init_dtls(session_t *dst) {
     .read  = read_from_peer,
     .event = NULL,
 #ifdef DTLS_PSK
-    .get_psk_key = get_psk_key,
+    .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
     .get_ecdsa_key = get_ecdsa_key,
