@@ -31,7 +31,6 @@ SHELL = /bin/sh
 MKDIR = mkdir
 ETAGS = @ETAGS@
 
-ifneq ("@WITH_CONTIKI@", "1")
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 abs_builddir = @abs_builddir@
@@ -55,9 +54,10 @@ HEADERS:=dtls.h hmac.h debug.h dtls_config.h uthash.h numeric.h crypto.h global.
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE
 SUBDIRS:=tests doc platform-specific sha2 aes ecc
+DISTSUBDIRS:=$(SUBDIRS) examples/contiki
 DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.in dtls_config.h.in tinydtls.h.in \
-  Makefile.contiki Makefile.tinydtls $(SOURCES) $(HEADERS)
+  Makefile.tinydtls $(SOURCES) $(HEADERS)
 LIB:=libtinydtls.a
 LDFLAGS:=@LIBS@
 ARFLAGS:=cru
@@ -65,6 +65,7 @@ doc:=doc
 
 .PHONY: all dirs clean install dist distclean .gitignore doc TAGS
 
+ifneq ("@WITH_CONTIKI@", "1")
 .SUFFIXES:
 .SUFFIXES:      .c .o
 
@@ -92,6 +93,10 @@ clean:
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean ; \
 	done
+else  # WITH_CONTIKI
+all:
+	$(MAKE) -C examples/contiki $@
+endif # WITH_CONTIKI
 
 doc:	
 	$(MAKE) -C doc
@@ -100,10 +105,10 @@ distclean:	clean
 	@rm -rf $(DISTDIR)
 	@rm -f *~ $(DISTDIR).tar.gz
 
-dist:	$(FILES) $(SUBDIRS)
+dist:	$(FILES) $(DISTSUBDIRS)
 	test -d $(DISTDIR) || mkdir $(DISTDIR)
 	cp $(FILES) $(DISTDIR)
-	for dir in $(SUBDIRS); do \
+	for dir in $(DISTSUBDIRS); do \
 		$(MAKE) -C $$dir dist; \
 	done
 	tar czf $(package).tar.gz $(DISTDIR)
@@ -116,9 +121,6 @@ install:	$(LIB) $(HEADERS) $(SUBDIRS)
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done
-else  # WITH_CONTIKI
-include Makefile.contiki
-endif # WITH_CONTIKI
 
 TAGS:	
 	$(ETAGS) -o $@.new $(SOURCES) 

@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.8.0])
+AC_INIT([tinydtls], [0.8.1])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -34,13 +34,14 @@ AC_ARG_WITH(contiki,
    WITH_CONTIKI=1],
   [])
 
+AC_PATH_PROG(DOXYGEN, doxygen, [:])
+AC_PATH_PROG(ETAGS, etags, [/bin/false])
+
 if test "${with_contiki}" != "yes" ; then
 # Checks for programs.
 AC_PROG_MAKE_SET
 AC_PROG_CC
 AC_PROG_RANLIB
-AC_PATH_PROG(DOXYGEN, doxygen, [:])
-AC_PATH_PROG(ETAGS, etags, [/bin/false])
 
 AC_C_BIGENDIAN
 
@@ -106,6 +107,7 @@ AC_CONFIG_FILES([Makefile
                  doc/Makefile
                  doc/Doxyfile
                  tests/Makefile
+                 examples/contiki/Makefile
                  platform-specific/Makefile
 		 sha2/Makefile
 		 aes/Makefile

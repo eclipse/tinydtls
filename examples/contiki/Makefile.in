@@ -13,13 +13,27 @@ endif
 # usually, you should not need changing anything beyond this line
 ########################################################################
 
+# the library's version
+VERSION:=@PACKAGE_VERSION@
+
+# tools
+@SET_MAKE@
+SHELL = /bin/sh
+MKDIR = mkdir
+
+abs_builddir = @abs_builddir@
+top_builddir = @top_builddir@
+top_srcdir:= @top_srcdir@
+DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DTLS_SOURCES:=dtls-server.c dtls-client.c
+FILES:=Makefile.in $(DTLS_SOURCES)
 
 all: dtls-server dtls-client
 	$(MAKE) $(MAKEFLAGS) ROLE=server dtls-server
 	$(MAKE) $(MAKEFLAGS) clean
 	$(MAKE) $(MAKEFLAGS) ROLE=client dtls-client
 
-CONTIKI=../../../..
+CONTIKI=$(top_srcdir)/../..
 
 WITH_UIP6=1
 UIP_CONF_IPV6=1
@@ -39,5 +53,9 @@ CFLAGS += -DSHA2_USE_INTTYPES_H
 APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
 
 ccm-test: tests/ccm-test
+
+dist:	$(FILES)
+	test -d $(DISTDIR)/examples/contiki || $(MKDIR) -p $(DISTDIR)/examples/contiki
+	cp $(FILES) $(DISTDIR)/examples/contiki
 
 include $(CONTIKI)/Makefile.include
