@@ -132,7 +132,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     dtls_warn("unsupported request type: %d\n", type);
   }
 
-  return 0;
+  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 }
 #endif /* DTLS_PSK */
 
