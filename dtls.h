@@ -574,32 +574,53 @@ int send_to_peer(struct dtls_context_t *ctx, session_t *session, uint8 *data, si
 }
  * @endcode
  * 
- * @subsection dtls_get_psk_key The Key Storage
+ * @subsection dtls_get_psk_info The Key Storage
  *
  * When a new DTLS session is created, the library must ask the application
  * for keying material. To do so, it invokes the registered call-back function
- * get_psk_key() with the current context and session information as parameter.
- * When the function is called with the @p id parameter set, the result must
- * point to a dtls_psk_key_t structure for the given identity. When @p id is 
- * @c NULL, the function must pick a suitable identity and return a pointer to
- * the corresponding dtls_psk_key_t structure. The following example shows a
- * simple key storage for a pre-shared key for @c Client_identity:
+ * get_psk_info() with the current context and session information as parameter.
+ * When the call-back function is invoked with the parameter @p type set to 
+ * @c DTLS_PSK_IDENTITY, the result parameter @p result must be filled with
+ * the psk_identity_hint in case of a server, or the actual psk_identity in 
+ * case of a client. When @p type is @c DTLS_PSK_KEY, the result parameter
+ * must be filled with a key for the given identity @p id. The function must
+ * return the number of bytes written to @p result which must not exceed
+ * @p result_length.
+ * In case of an error, the function must return a negative value that 
+ * corresponds to a valid error code defined in alert.h.
  * 
  * @code
-int get_psk_key(struct dtls_context_t *ctx, 
-		const session_t *session, 
-		const unsigned char *id, size_t id_len, 
-		const dtls_psk_key_t **result) {
+int get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
+	    const session_t *session UNUSED_PARAM,
+	    dtls_credentials_type_t type,
+	    const unsigned char *id, size_t id_len,
+	    unsigned char *result, size_t result_length) {
 
-  static const dtls_psk_key_t psk = {
-    .id = (unsigned char *)"my identity", 
-    .id_length = 11,
-    .key = (unsigned char *)"secret", 
-    .key_length = 6
-  };
-   
-  *result = &psk;
-  return 0;
+  switch (type) {
+  case DTLS_PSK_IDENTITY:
+    if (result_length < psk_id_length) {
+      dtls_warn("cannot set psk_identity -- buffer too small\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
+
+    memcpy(result, psk_id, psk_id_length);
+    return psk_id_length;
+  case DTLS_PSK_KEY:
+    if (id_len != psk_id_length || memcmp(psk_id, id, id_len) != 0) {
+      dtls_warn("PSK for unknown id requested, exiting\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_ILLEGAL_PARAMETER);
+    } else if (result_length < psk_key_length) {
+      dtls_warn("cannot set psk -- buffer too small\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+    }
+
+    memcpy(result, psk_key, psk_key_length);
+    return psk_key_length;
+  default:
+    dtls_warn("unsupported request type: %d\n", type);
+  }
+
+  return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 }
  * @endcode
  * 
