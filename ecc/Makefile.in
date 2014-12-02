@@ -31,22 +31,23 @@ VERSION:=@PACKAGE_VERSION@
 SHELL = /bin/sh
 MKDIR = mkdir
 
-ifeq ("@WITH_CONTIKI@", "1")
-include Makefile.contiki
-else
 abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
-SOURCES:= ecc.c testecc.c testfield.c test_helper.c
-HEADERS:= ecc.h test_helper.h
-OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) ecc_test.o
+ECC_SOURCES:= ecc.c testecc.c testfield.c test_helper.c
+ECC_HEADERS:= ecc.h test_helper.h
+FILES:=Makefile.in Makefile.contiki $(ECC_SOURCES) $(ECC_HEADERS) 
+DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
+
+ifeq ("@WITH_CONTIKI@", "1")
+include Makefile.contiki
+else
+ECC_OBJECTS:= $(patsubst %.c, %.o, $(ECC_SOURCES)) ecc_test.o
 PROGRAMS:= testecc testfield
 CPPFLAGS=@CPPFLAGS@
 CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ -DTEST_INCLUDE
 LDLIBS=@LIBS@
-FILES:=Makefile.in $(SOURCES) $(HEADERS) 
-DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
 .PHONY: all dirs clean install distclean .gitignore doc
 
@@ -75,6 +76,7 @@ clean:
 distclean:	clean
 	@rm -rf $(DISTDIR)
 	@rm -f *~ $(DISTDIR).tar.gz
+endif # WITH_CONTIKI
 
 dist:	$(FILES)
 	test -d $(DISTDIR)/ecc || mkdir $(DISTDIR)/ecc
@@ -83,8 +85,6 @@ dist:	$(FILES)
 install:	$(HEADERS)
 	test -d $(includedir)/ecc || mkdir -p $(includedir)/ecc
 	$(install) $(HEADERS) $(includedir)/ecc
-
-endif # WITH_CONTIKI
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
