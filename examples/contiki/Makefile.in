@@ -58,4 +58,6 @@ dist:	$(FILES)
 	test -d $(DISTDIR)/examples/contiki || $(MKDIR) -p $(DISTDIR)/examples/contiki
 	cp $(FILES) $(DISTDIR)/examples/contiki
 
+ifeq ("@WITH_CONTIKI@", "1")
 include $(CONTIKI)/Makefile.include
+endif
