@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2011--2014 Olaf Bergmann <bergmann@tzi.org>
+# Copyright (C) 2011--2015 Olaf Bergmann <bergmann@tzi.org>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation
@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.8.1])
+AC_INIT([tinydtls], [0.8.2])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -102,6 +102,12 @@ AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
 fi
 
 AC_CONFIG_HEADERS([dtls_config.h tinydtls.h])
+
+# Adds Contiki-specific definitions to the end of dtls_config.h
+AH_BOTTOM([
+#ifdef WITH_CONTIKI
+#include "platform-specific/platform.h"
+#endif])
 
 AC_CONFIG_FILES([Makefile
                  doc/Makefile
