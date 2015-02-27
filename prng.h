@@ -73,7 +73,12 @@ dtls_prng(unsigned char *buf, size_t len) {
 
 static inline void
 dtls_prng_init(unsigned short seed) {
+  /* random_init() messes with the radio interface of the CC2538 and
+   * therefore must not be called after the radio has been
+   * initialized. */
+#ifndef CONTIKI_TARGET_CC2538DK
 	random_init(seed);
+#endif
 }
 #endif /* WITH_CONTIKI */
 
