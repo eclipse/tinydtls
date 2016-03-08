@@ -11,7 +11,7 @@
 #include "contiki-net.h"
 #endif /* WITH_CONTIKI */
 
-//#include "debug.h"
+//#include "dtls_debug.h"
 #include "dtls_config.h"
 #include "numeric.h"
 #include "ccm.h"

@@ -1,7 +1,7 @@
 # Makefile for tinydtls
 #
 #
-# Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -34,10 +34,10 @@ package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 install := cp
 
 # files and flags
-SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c debug.c
+SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c dtls_debug.c
 SUB_OBJECTS:=aes/rijndael.o @OPT_OBJS@
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) $(SUB_OBJECTS)
-HEADERS:=dtls.h hmac.h debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
+HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h alert.h utlist.h prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@

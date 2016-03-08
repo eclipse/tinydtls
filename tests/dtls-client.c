@@ -17,7 +17,7 @@
 #include <signal.h>
 
 #include "global.h" 
-#include "debug.h" 
+#include "dtls_debug.h"
 #include "dtls.h" 
 
 #define DEFAULT_PORT 20220

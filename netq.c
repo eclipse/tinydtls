@@ -16,7 +16,7 @@
  *******************************************************************************/
 
 #include "dtls_config.h"
-#include "debug.h"
+#include "dtls_debug.h"
 #include "netq.h"
 #include "utlist.h"
 

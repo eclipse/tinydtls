@@ -4,7 +4,7 @@
 #include <pcap/pcap.h>
 
 #include "tinydtls.h"
-#include "debug.h"
+#include "dtls_debug.h"
 #include "dtls.h"
 
 #define TRANSPORT_HEADER_SIZE (14+20+8) /* Ethernet + IP + UDP */
