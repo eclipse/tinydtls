@@ -15,7 +15,7 @@
 #    Hauke Mehrtens - memory optimization, ECC integration
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.8.2])
+AC_INIT([tinydtls], [0.8.6])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
