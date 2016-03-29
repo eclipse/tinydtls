@@ -49,10 +49,10 @@ dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
 #endif /* WITH_SHA256 */
 
 #ifndef WITH_CONTIKI
-static inline void dtls_hmac_storage_init()
+static inline void dtls_hmac_storage_init(void)
 { }
 #else
-void dtls_hmac_storage_init();
+void dtls_hmac_storage_init(void);
 #endif
 
 /**
