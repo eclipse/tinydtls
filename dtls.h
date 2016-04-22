@@ -232,7 +232,7 @@ typedef struct dtls_context_t {
  * This function initializes the tinyDTLS memory management and must
  * be called first.
  */
-void dtls_init();
+void dtls_init(void);
 
 /** 
  * Creates a new context object. The storage allocated for the new
