@@ -3662,7 +3662,51 @@ dtls_handle_message(dtls_context_t *ctx,
 
     dtls_debug("got packet %d (%d bytes)\n", msg[0], rlen);
     if (peer) {
-      data_length = decrypt_verify(peer, msg, rlen, &data);
+      dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
+      
+      dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
+      if (!security) {
+        dtls_alert("No security context for epoch: %i\n", dtls_get_epoch(header));
+        data_length = -1;
+      } else {
+        uint64_t pkt_seq_nr = dtls_uint48_to_int(header->sequence_number);
+        if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
+          data_length = decrypt_verify(peer, msg, rlen, &data);
+          if (data_length) {
+            security->cseq.cseq = 0;
+            security->cseq.bitfield = -1;
+          }
+        } else if (pkt_seq_nr == security->cseq.cseq) {
+          dtls_info("Duplicate packet arrived (cseq=%llu)\n", security->cseq.cseq);
+          return 0;
+        } else if ((int64_t)(security->cseq.cseq-pkt_seq_nr) > 0) { //pkt_seq_nr < security->cseq.cseq)
+          if (((security->cseq.cseq-1)-pkt_seq_nr) < 64) {
+              if(security->cseq.bitfield & (1<<((security->cseq.cseq-1)-pkt_seq_nr))) {
+                dtls_info("Duplicate packet arrived (bitfield)\n");
+                //seen it
+                  return 0;
+              } else {
+                dtls_info("Packet arrived out of order\n");
+                data_length = decrypt_verify(peer, msg, rlen, &data);
+                if(data_length > 0) {
+                  security->cseq.bitfield |= (1<<((security->cseq.cseq-1)-pkt_seq_nr));
+                }
+              }
+          } else {
+            dtls_info("Packet from before the bitfield arrived\n");
+              return 0;
+          }
+        } else { //pkt_seq_nr > security->cseq.cseq
+          data_length = decrypt_verify(peer, msg, rlen, &data);
+          if(data_length > 0) {
+            security->cseq.bitfield <<= (pkt_seq_nr-security->cseq.cseq);
+            security->cseq.bitfield |= 1<<((pkt_seq_nr-security->cseq.cseq)-1);
+            security->cseq.cseq = pkt_seq_nr;
+            dtls_debug("new packet arrived with seqNr: %llu\n", pkt_seq_nr);
+            dtls_debug("new bitfield is              : %llx\n", security->cseq.bitfield);
+          }
+        }
+      }
       if (data_length < 0) {
         if (hs_attempt_with_existing_peer(msg, rlen, peer)) {
           data = msg + DTLS_RH_LENGTH;

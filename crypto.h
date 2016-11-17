@@ -87,6 +87,11 @@ typedef struct {
 } dtls_handshake_parameters_psk_t;
 
 typedef struct {
+    uint64_t cseq;
+    uint64_t bitfield;
+} seqnum_t;
+
+typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
   dtls_cipher_t cipher;		/**< cipher type */
@@ -100,6 +105,8 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
+  
+  seqnum_t cseq;        /**<sequence number of last record received*/
 } dtls_security_parameters_t;
 
 struct netq_t;
