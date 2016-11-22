@@ -1,29 +1,23 @@
-/* dtls -- a very basic DTLS implementation
+/*******************************************************************************
  *
- * Copyright (C) 2011 Olaf Bergmann <bergmann@tzi.org>
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Olaf Bergmann (TZI) and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
+ * and the Eclipse Distribution License is available at 
+ * http://www.eclipse.org/org/documents/edl-v10.php.
  *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
+ * Contributors:
+ *    Olaf Bergmann  - initial API and implementation
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+ *******************************************************************************/
 
-/* test vectors from Appendix F.2.{1,2} of NIST SP 800-38A, ed. 2001 */
+/**
+ * @file cbc_aes128-testdata.c
+ * @brief test vectors from Appendix F.2.{1,2} of NIST SP 800-38A, ed. 2001 
+ */
 
 struct test_vector {
   size_t M;			/* mode: 0 == encrypt, 1 == decrypt */
