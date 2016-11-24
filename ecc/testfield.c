@@ -237,9 +237,9 @@ void fieldInvTest(){
 // }
 
 #ifdef CONTIKI
-PROCESS(ecc_filed_test, "ECC field test");
-AUTOSTART_PROCESSES(&ecc_filed_test);
-PROCESS_THREAD(ecc_filed_test, ev, d)
+PROCESS(ecc_field_test, "ECC field test");
+AUTOSTART_PROCESSES(&ecc_field_test);
+PROCESS_THREAD(ecc_field_test, ev, d)
 {
 	PROCESS_BEGIN();
 

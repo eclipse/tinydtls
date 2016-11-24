@@ -195,9 +195,9 @@ void ecdsaTest() {
 }
 
 #ifdef CONTIKI
-PROCESS(ecc_filed_test, "ECC test");
-AUTOSTART_PROCESSES(&ecc_filed_test);
-PROCESS_THREAD(ecc_filed_test, ev, d)
+PROCESS(ecc_test, "ECC test");
+AUTOSTART_PROCESSES(&ecc_test);
+PROCESS_THREAD(ecc_test, ev, d)
 {
 	PROCESS_BEGIN();
 
