@@ -23,13 +23,6 @@ endif
 CFLAGS += -DDTLSv12 -DWITH_SHA256 
 tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c ecc.c dtls_time.c peer.c session.c
 
-# This adds support for TLS_PSK_WITH_AES_128_CCM_8
-CFLAGS += -DDTLS_PSK
-
-# This adds support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
-CFLAGS += -DDTLS_ECC
-tinydtls_src += ecc.c
-
 # This activates debugging support
 # CFLAGS += -DNDEBUG
 tinydtls_src += dtls_debug.c
