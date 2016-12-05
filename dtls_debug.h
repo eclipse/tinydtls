@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 
-#include "dtls_config.h"
+#include "tinydtls.h"
 #include "global.h"
 #include "session.h"
 

@@ -20,6 +20,7 @@
 
 #include <sys/types.h>
 
+#include "tinydtls.h"
 #include "global.h"
 
 #ifdef WITH_SHA256

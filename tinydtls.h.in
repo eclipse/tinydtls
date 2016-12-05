@@ -32,4 +32,6 @@
 /** Defined to 1 if tinydtls is built for Contiki OS */
 #undef WITH_CONTIKI
 
+#include "dtls_config.h"
+
 #endif /* _DTLS_TINYDTLS_H_ */

@@ -17,7 +17,7 @@
 
 #include <string.h>
 
-#include "dtls_config.h"
+#include "tinydtls.h"
 #include "global.h"
 #include "numeric.h"
 #include "ccm.h"

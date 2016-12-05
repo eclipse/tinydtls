@@ -26,6 +26,8 @@
 
 #include <stdint.h>
 
+#include "tinydtls.h"
+
 #include "state.h"
 #include "peer.h"
 

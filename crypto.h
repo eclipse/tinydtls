@@ -23,6 +23,7 @@
 
 #include "aes/rijndael.h"
 
+#include "tinydtls.h"
 #include "global.h"
 #include "state.h"
 #include "numeric.h"

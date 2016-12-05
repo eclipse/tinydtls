@@ -12,7 +12,7 @@
 #endif /* WITH_CONTIKI */
 
 //#include "dtls_debug.h"
-#include "dtls_config.h"
+#include "tinydtls.h"
 #include "numeric.h"
 #include "ccm.h"
 
