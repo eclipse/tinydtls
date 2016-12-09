@@ -61,6 +61,17 @@
 /** do not use uthash hash tables */
 #define DTLS_PEERS_NOHASH 1
 
+/* BYTE_ORDER definition for sha2 */
+#ifndef LITTLE_ENDIAN
+#define LITTLE_ENDIAN UIP_LITTLE_ENDIAN
+#endif
+#ifndef BIG_ENDIAN
+#define BIG_ENDIAN    UIP_BIG_ENDIAN
+#endif
+#ifndef UIP_BYTE_ORDER
+#define BYTE_ORDER    UIP_BYTE_ORDER
+#endif
+
 #ifndef SHA2_USE_INTTYPES_H
 #define SHA2_USE_INTTYPES_H 1
 #endif

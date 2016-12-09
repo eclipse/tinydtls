@@ -1,18 +1,6 @@
 # This is a -*- Makefile -*-
 
-ifeq ($(TARGET), redbee-econotag)
-CFLAGS += -DLITTLE_ENDIAN=3412 -DBYTE_ORDER=LITTLE_ENDIAN
-endif
-
-ifeq ($(TARGET), wismote)
-CFLAGS += -DLITTLE_ENDIAN=3412 -DBYTE_ORDER=LITTLE_ENDIAN
-endif
-
-ifeq ($(TARGET), exp5438)
-CFLAGS += -DLITTLE_ENDIAN=3412 -DBYTE_ORDER=LITTLE_ENDIAN
-endif
-
-CFLAGS += -DDTLSv12 -DWITH_SHA256 
+CFLAGS += -DDTLSv12 -DWITH_SHA256
 tinydtls_src = dtls.c crypto.c hmac.c rijndael.c sha2.c ccm.c netq.c ecc.c dtls_time.c peer.c session.c
 
 # This activates debugging support
