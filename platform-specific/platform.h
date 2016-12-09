@@ -37,6 +37,9 @@
 #endif
 #endif
 
+/* Contiki has assert.h */
+#define HAVE_ASSERT_H 1
+
 /* global constants for constrained devices running Contiki */
 #ifndef DTLS_PEER_MAX
 /** The maximum number DTLS peers (i.e. sessions). */
@@ -80,25 +83,10 @@
 /* Specific Contiki platforms                                           */
 /************************************************************************/
 
-#if CONTIKI_TARGET_ECONOTAG
-#  include "platform-specific/config-econotag.h"
-#endif /* CONTIKI_TARGET_ECONOTAG */
-
-#ifdef CONTIKI_TARGET_CC2538DK
-#  include "platform-specific/config-cc2538dk.h"
-#endif /* CONTIKI_TARGET_CC2538DK */
-
-#ifdef CONTIKI_TARGET_WISMOTE
-#  include "platform-specific/config-wismote.h"
-#endif /* CONTIKI_TARGET_WISMOTE */
 
 #ifdef CONTIKI_TARGET_SKY
 #  include "platform-specific/config-sky.h"
 #endif /* CONTIKI_TARGET_SKY */
-
-#ifdef CONTIKI_TARGET_MINIMAL_NET
-#  include "platform-specific/config-minimal-net.h"
-#endif /* CONTIKI_TARGET_MINIMAL_NET */
 
 #endif /* CONTIKI */
 
