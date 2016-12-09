@@ -57,11 +57,14 @@ typedef enum { DTLS_LOG_EMERG=0, DTLS_LOG_ALERT, DTLS_LOG_CRIT, DTLS_LOG_WARN,
        DTLS_LOG_NOTICE, DTLS_LOG_INFO, DTLS_LOG_DEBUG
 } log_t;
 
+#ifndef WITH_CONTIKI
+/* Contiki does not have the required PACKAGE_ variables configured */
 /** Returns a zero-terminated string with the name of this library. */
 const char *dtls_package_name();
 
 /** Returns a zero-terminated string with the library version. */
 const char *dtls_package_version();
+#endif /* WITH_CONTIKI */
 
 /** Returns the current log level. */
 log_t dtls_get_log_level();

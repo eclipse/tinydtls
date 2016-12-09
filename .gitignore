@@ -30,7 +30,7 @@ ecc/testfield
 *.elf
 *.map
 obj_*
-tinydtls.h
+dtls_config.h.in
 dtls_config.h
 *.apple2enh
 *.atarixl

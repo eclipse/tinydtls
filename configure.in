@@ -19,16 +19,9 @@ AC_INIT([tinydtls], [0.8.6])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
-AC_ARG_WITH(contiki,
-  [AS_HELP_STRING([--with-contiki],[build libtinydtls for the Contiki OS])],
-  [AC_DEFINE(WITH_CONTIKI,1,[Define to 1 if building for Contiki.])
-   WITH_CONTIKI=1],
-  [])
-
 AC_PATH_PROG(DOXYGEN, doxygen, [:])
 AC_PATH_PROG(ETAGS, etags, [/bin/false])
 
-if test "${with_contiki}" != "yes" ; then
 # Checks for programs.
 AC_PROG_MAKE_SET
 AC_PROG_CC
@@ -39,7 +32,6 @@ AC_C_BIGENDIAN
 # Checks for libraries.
 AC_SEARCH_LIBS([gethostbyname], [nsl])
 AC_SEARCH_LIBS([socket], [socket])
-fi
 
 AC_ARG_WITH(debug,
   [AS_HELP_STRING([--without-debug],[disable all debug output and assertions])],
@@ -65,18 +57,14 @@ OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
 AC_SUBST(OPT_OBJS)
 AC_SUBST(NDEBUG)
-AC_SUBST(WITH_CONTIKI)
 AC_SUBST(DTLS_ECC)
 AC_SUBST(DTLS_PSK)
 
-if test "${with_contiki}" = "yes" ; then
-  AC_MSG_NOTICE([skipping header checks for Contiki])
-else
-  # Checks for header files.
-  AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h unistd.h])
+# Checks for header files.
+AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h unistd.h])
 
-  AC_CHECK_HEADERS([sys/time.h time.h])
-  AC_CHECK_HEADERS([sys/types.h sys/stat.h])
+AC_CHECK_HEADERS([sys/time.h time.h])
+AC_CHECK_HEADERS([sys/types.h sys/stat.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -90,15 +78,9 @@ AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
-fi
 
-AC_CONFIG_HEADERS([dtls_config.h tinydtls.h])
+AC_CONFIG_HEADERS([dtls_config.h])
 
-# Adds Contiki-specific definitions to the end of dtls_config.h
-AH_BOTTOM([
-#ifdef WITH_CONTIKI
-#include "platform-specific/platform.h"
-#endif])
 
 AC_CONFIG_FILES([Makefile
                  doc/Makefile

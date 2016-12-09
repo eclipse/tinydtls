@@ -6,11 +6,36 @@
 #define _PLATFORM_H_ 1
 
 #ifdef CONTIKI
+#define WITH_CONTIKI 1
+
 #include "contiki.h"
 #include "contiki-lib.h"
 #include "contiki-net.h"
 
 #include "contiki-conf.h"
+
+/* support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
+#ifndef DTLS_CONF_ECC
+#define DTLS_CONF_ECC 1
+#endif
+#if DTLS_CONF_ECC
+#define DTLS_ECC
+#endif
+
+/* support for TLS_PSK_WITH_AES_128_CCM_8 */
+#ifndef DTLS_CONF_PSK
+#define DTLS_CONF_PSK 1
+#endif
+#if DTLS_CONF_PSK
+#define DTLS_PSK
+#endif
+
+/* Disable all debug output and assertions */
+#ifndef DTLS_CONF_NDEBUG
+#if DTLS_CONF_NDEBUG
+#define NDEBUG
+#endif
+#endif
 
 /* global constants for constrained devices running Contiki */
 #ifndef DTLS_PEER_MAX

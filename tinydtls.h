@@ -1,3 +1,4 @@
+/* tinydtls.h.  Generated from tinydtls.h.in by configure.  */
 /*******************************************************************************
  *
  * Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
@@ -6,7 +7,7 @@
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -23,15 +24,10 @@
 #ifndef _DTLS_TINYDTLS_H_
 #define _DTLS_TINYDTLS_H_
 
-/** Defined to 1 if tinydtls is built with support for ECC */
-#undef DTLS_ECC
-
-/** Defined to 1 if tinydtls is built with support for PSK */
-#undef DTLS_PSK
-
-/** Defined to 1 if tinydtls is built for Contiki OS */
-#undef WITH_CONTIKI
-
+#ifndef CONTIKI
 #include "dtls_config.h"
+#else /* !CONTIKI */
+#include "platform-specific/platform.h"
+#endif /* !CONTIKI */
 
 #endif /* _DTLS_TINYDTLS_H_ */

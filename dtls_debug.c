@@ -41,6 +41,7 @@
 
 static int maxlog = DTLS_LOG_WARN;	/* default maximum log level */
 
+#ifndef WITH_CONTIKI
 const char *dtls_package_name() {
   return PACKAGE_NAME;
 }
@@ -48,6 +49,7 @@ const char *dtls_package_name() {
 const char *dtls_package_version() {
   return PACKAGE_VERSION;
 }
+#endif /* WITH_CONTIKI */
 
 log_t 
 dtls_get_log_level() {
