@@ -79,15 +79,6 @@
 #define SHA2_USE_INTTYPES_H 1
 #endif
 
-/************************************************************************/
-/* Specific Contiki platforms                                           */
-/************************************************************************/
-
-
-#ifdef CONTIKI_TARGET_SKY
-#  include "platform-specific/config-sky.h"
-#endif /* CONTIKI_TARGET_SKY */
-
 #endif /* CONTIKI */
 
 #endif /* _PLATFORM_H_ */
