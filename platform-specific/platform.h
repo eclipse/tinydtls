@@ -61,6 +61,10 @@
 /** do not use uthash hash tables */
 #define DTLS_PEERS_NOHASH 1
 
+#ifndef SHA2_USE_INTTYPES_H
+#define SHA2_USE_INTTYPES_H 1
+#endif
+
 /************************************************************************/
 /* Specific Contiki platforms                                           */
 /************************************************************************/
