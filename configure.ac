@@ -76,7 +76,6 @@ AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 		[#include <netinet/in.h>])
 
 # Checks for library functions.
-AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
 
 AC_CONFIG_HEADERS([dtls_config.h])
