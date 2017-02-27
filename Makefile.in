@@ -27,6 +27,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
+top_srcdir = @top_srcdir@
 libdir = @libdir@
 includedir = @includedir@/@PACKAGE_NAME@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
@@ -41,7 +42,7 @@ HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h gl
  netq.h alert.h utlist.h prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h
 CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@
-CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE
+CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE -I$(top_srcdir)
 SUBDIRS:=tests doc platform-specific sha2 aes ecc
 DISTSUBDIRS:=$(SUBDIRS)
 DISTDIR=$(top_builddir)/$(package)
