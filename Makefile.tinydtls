@@ -32,5 +32,5 @@ tinydtls_src += ecc.c
 
 # This activates debugging support
 # CFLAGS += -DNDEBUG
-tinydtls_src += debug.c
+tinydtls_src += dtls_debug.c
 
