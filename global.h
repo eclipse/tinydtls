@@ -136,6 +136,7 @@ dtls_fls(unsigned int i) {
 }
 #endif /* HAVE_FLS */
 
+#undef uthash_fatal
 #define uthash_fatal(msg) return(-1) /* fatal error in uthash */
 
 #endif /* _DTLS_GLOBAL_H_ */
