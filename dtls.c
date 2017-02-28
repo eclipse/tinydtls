@@ -29,6 +29,17 @@
 #include <stdlib.h>
 #include "global.h"
 #endif /* WITH_CONTIKI */
+#ifdef HAVE_INTTYPES_H
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+#else
+#  ifndef PRIu64
+#    define PRIu64 "llu"
+#  endif
+#  ifndef PRIx64
+#    define PRIx64 "llx"
+#  endif
+#endif /* HAVE_INTTYPES_H */
 
 #include "utlist.h"
 #ifndef DTLS_PEERS_NOHASH
@@ -137,6 +148,7 @@ static const unsigned char prf_label_client[] = "client";
 static const unsigned char prf_label_server[] = "server";
 static const unsigned char prf_label_finished[] = " finished";
 
+#ifdef DTLS_ECC
 /* first part of Raw public key, the is the start of the Subject Public Key */
 static const unsigned char cert_asn1_header[] = {
   0x30, 0x59, /* SEQUENCE, length 89 bytes */
@@ -148,6 +160,7 @@ static const unsigned char cert_asn1_header[] = {
       0x03, 0x42, 0x00, /* BIT STRING, length 66 bytes, 0 bits unused */
          0x04 /* uncompressed, followed by the r und s values of the public key */
 };
+#endif /* DTLS_ECC */
 
 #ifdef WITH_CONTIKI
 PROCESS(dtls_retransmit_process, "DTLS retransmit process");
@@ -2603,7 +2616,7 @@ check_server_certificate(dtls_context_t *ctx,
   data += DTLS_HS_LENGTH;
 
   if (dtls_uint24_to_int(data) != DTLS_EC_SUBJECTPUBLICKEY_SIZE) {
-    dtls_alert("expect length of %d bytes for certificate\n",
+    dtls_alert("expect length of %zu bytes for certificate\n",
 	       DTLS_EC_SUBJECTPUBLICKEY_SIZE);
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
@@ -3677,13 +3690,13 @@ dtls_handle_message(dtls_context_t *ctx,
             security->cseq.bitfield = -1;
           }
         } else if (pkt_seq_nr == security->cseq.cseq) {
-          dtls_info("Duplicate packet arrived (cseq=%llu)\n", security->cseq.cseq);
+          dtls_info("Duplicate packet arrived (cseq=%" PRIu64 ")\n", security->cseq.cseq);
           return 0;
-        } else if ((int64_t)(security->cseq.cseq-pkt_seq_nr) > 0) { //pkt_seq_nr < security->cseq.cseq)
+        } else if ((int64_t)(security->cseq.cseq-pkt_seq_nr) > 0) { /* pkt_seq_nr < security->cseq.cseq */
           if (((security->cseq.cseq-1)-pkt_seq_nr) < 64) {
               if(security->cseq.bitfield & (1<<((security->cseq.cseq-1)-pkt_seq_nr))) {
                 dtls_info("Duplicate packet arrived (bitfield)\n");
-                //seen it
+                /* seen it */
                   return 0;
               } else {
                 dtls_info("Packet arrived out of order\n");
@@ -3696,14 +3709,14 @@ dtls_handle_message(dtls_context_t *ctx,
             dtls_info("Packet from before the bitfield arrived\n");
               return 0;
           }
-        } else { //pkt_seq_nr > security->cseq.cseq
+        } else { /* pkt_seq_nr > security->cseq.cseq */
           data_length = decrypt_verify(peer, msg, rlen, &data);
           if(data_length > 0) {
             security->cseq.bitfield <<= (pkt_seq_nr-security->cseq.cseq);
             security->cseq.bitfield |= 1<<((pkt_seq_nr-security->cseq.cseq)-1);
             security->cseq.cseq = pkt_seq_nr;
-            dtls_debug("new packet arrived with seqNr: %llu\n", pkt_seq_nr);
-            dtls_debug("new bitfield is              : %llx\n", security->cseq.bitfield);
+            dtls_debug("new packet arrived with seq_nr: %" PRIu64 "\n", pkt_seq_nr);
+            dtls_debug("new bitfield is               : %" PRIx64 "\n", security->cseq.bitfield);
           }
         }
       }
