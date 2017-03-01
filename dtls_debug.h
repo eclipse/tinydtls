@@ -33,7 +33,7 @@
 #ifdef CONTIKI_TARGET_MBXXX
 extern char __Stack_Init, _estack;
 
-static inline void check_stack() {
+static inline void check_stack(void) {
   const char *p = &__Stack_Init;
   while (p < &_estack && *p == 0x38) {
     p++;
@@ -42,13 +42,13 @@ static inline void check_stack() {
   PRINTF("Stack: %d bytes used (%d free)\n", &_estack - p, p - &__Stack_Init);
 }
 #else /* CONTIKI_TARGET_MBXXX */
-static inline void check_stack() {
+static inline void check_stack(void) {
 }
 #endif /* CONTIKI_TARGET_MBXXX */
 #else /* WITH_CONTKI */
 #define PRINTF(...)
 
-static inline void check_stack() {
+static inline void check_stack(void) {
 }
 #endif
 
@@ -60,14 +60,14 @@ typedef enum { DTLS_LOG_EMERG=0, DTLS_LOG_ALERT, DTLS_LOG_CRIT, DTLS_LOG_WARN,
 #ifndef WITH_CONTIKI
 /* Contiki does not have the required PACKAGE_ variables configured */
 /** Returns a zero-terminated string with the name of this library. */
-const char *dtls_package_name();
+const char *dtls_package_name(void);
 
 /** Returns a zero-terminated string with the library version. */
-const char *dtls_package_version();
+const char *dtls_package_version(void);
 #endif /* WITH_CONTIKI */
 
 /** Returns the current log level. */
-log_t dtls_get_log_level();
+log_t dtls_get_log_level(void);
 
 /** Sets the log level to the specified value. */
 void dtls_set_log_level(log_t level);
