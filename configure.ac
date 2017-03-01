@@ -29,6 +29,28 @@ AC_PROG_RANLIB
 
 AC_C_BIGENDIAN
 
+# Adding some default warning options for code QS
+# see https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+# and http://www.gnu.org/software/automake/manual/html_node/Flag-Variables-Ordering.html
+WARNING_CFLAGS="\
+-pedantic \
+-Wall \
+-Wextra \
+-Wformat-security \
+-Winline \
+-Wmissing-declarations \
+-Wmissing-prototypes \
+-Wnested-externs \
+-Wpointer-arith \
+-Wshadow \
+-Wstrict-prototypes \
+-Wswitch-default \
+-Wswitch-enum \
+-Wunused \
+"
+
+AC_SUBST([WARNING_CFLAGS])
+
 # Checks for libraries.
 AC_SEARCH_LIBS([gethostbyname], [nsl])
 AC_SEARCH_LIBS([socket], [socket])
