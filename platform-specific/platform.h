@@ -14,6 +14,12 @@
 
 #include "contiki-conf.h"
 
+/* Define to the full name of this package. */
+#define PACKAGE_NAME "tinydtls"
+
+/* Define to the version of this package. */
+#define PACKAGE_VERSION "0.8.6"
+
 /* support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
 #ifndef DTLS_CONF_ECC
 #define DTLS_CONF_ECC 1
