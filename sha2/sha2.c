@@ -637,7 +637,7 @@ void dtls_sha256_final(sha2_byte digest[], dtls_sha256_ctx* context) {
 			*context->buffer = 0x80;
 		}
 		/* Set the bit count: */
-		*(sha2_word64*)&context->buffer[DTLS_SHA256_SHORT_BLOCK_LENGTH] = context->bitcount;
+                *(sha2_word64*)(context->buffer+DTLS_SHA256_SHORT_BLOCK_LENGTH) = context->bitcount;
 
 		/* Final transform: */
 		dtls_sha256_transform(context, (sha2_word32*)context->buffer);
