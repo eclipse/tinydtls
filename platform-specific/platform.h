@@ -77,7 +77,7 @@
 #ifndef BIG_ENDIAN
 #define BIG_ENDIAN    UIP_BIG_ENDIAN
 #endif
-#ifndef UIP_BYTE_ORDER
+#ifndef BYTE_ORDER
 #define BYTE_ORDER    UIP_BYTE_ORDER
 #endif
 
