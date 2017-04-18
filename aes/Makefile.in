@@ -20,6 +20,7 @@ VERSION:=@PACKAGE_VERSION@
 @SET_MAKE@
 SHELL = /bin/sh
 MKDIR = mkdir
+CC=@CC@
 
 abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@

@@ -26,6 +26,7 @@ AC_PATH_PROG(ETAGS, etags, [/bin/false])
 AC_PROG_MAKE_SET
 AC_PROG_CC
 AC_PROG_RANLIB
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR], [AR=ar])
 
 AC_C_BIGENDIAN
 
@@ -81,6 +82,7 @@ AC_SUBST(OPT_OBJS)
 AC_SUBST(NDEBUG)
 AC_SUBST(DTLS_ECC)
 AC_SUBST(DTLS_PSK)
+AC_SUBST(AR)
 
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h unistd.h])

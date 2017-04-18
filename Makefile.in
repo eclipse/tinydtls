@@ -22,6 +22,9 @@ VERSION:=@PACKAGE_VERSION@
 SHELL = /bin/sh
 MKDIR = mkdir
 ETAGS = @ETAGS@
+CC=@CC@
+AR=@AR@
+RANLIB=@RANLIB@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -76,7 +79,7 @@ $(SUB_OBJECTS)::
 
 $(LIB):	$(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^ 
-	ranlib $@
+	$(RANLIB) $@
 
 clean:
 	@rm -f $(PROGRAM) main.o $(LIB) $(OBJECTS)
