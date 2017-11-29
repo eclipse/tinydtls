@@ -6,7 +6,7 @@
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -39,18 +39,18 @@
 #define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
-static int maxlog = DTLS_LOG_WARN;	/* default maximum log level */
+static int maxlog = DTLS_LOG_WARN;      /* default maximum log level */
 
-const char *dtls_package_name() {
+const char *dtls_package_name(void) {
   return PACKAGE_NAME;
 }
 
-const char *dtls_package_version() {
+const char *dtls_package_version(void) {
   return PACKAGE_VERSION;
 }
 
-log_t 
-dtls_get_log_level() {
+log_t
+dtls_get_log_level(void) {
   return maxlog;
 }
 
@@ -65,7 +65,7 @@ dtls_set_log_level(log_t level) {
 
 /* this array has the same order as the type log_t */
 static char *loglevels[] = {
-  "EMRG", "ALRT", "CRIT", "WARN", "NOTE", "INFO", "DEBG" 
+  "EMRG", "ALRT", "CRIT", "WARN", "NOTE", "INFO", "DEBG"
 };
 
 #ifdef HAVE_TIME_H
@@ -82,9 +82,9 @@ print_timestamp(char *s, size_t len, time_t t) {
 static inline size_t
 print_timestamp(char *s, size_t len, clock_time_t t) {
 #ifdef HAVE_SNPRINTF
-  return snprintf(s, len, "%u.%03u", 
-		  (unsigned int)(t / CLOCK_SECOND), 
-		  (unsigned int)(t % CLOCK_SECOND));
+  return snprintf(s, len, "%u.%03u",
+                  (unsigned int)(t / CLOCK_SECOND),
+                  (unsigned int)(t % CLOCK_SECOND));
 #else /* HAVE_SNPRINTF */
   /* @todo do manual conversion of timestamp */
   return 0;
@@ -95,12 +95,12 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
 
 #ifndef NDEBUG
 
-/** 
- * A length-safe strlen() fake. 
- * 
+/**
+ * A length-safe strlen() fake.
+ *
  * @param s      The string to count characters != 0.
  * @param maxlen The maximum length of @p s.
- * 
+ *
  * @return The length of @p s.
  */
 static inline size_t
@@ -119,10 +119,10 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   char *p = buf;
 
   switch (addr->addr.sa.sa_family) {
-  case AF_INET: 
+  case AF_INET:
     if (len < INET_ADDRSTRLEN)
       return 0;
-  
+
     addrptr = &addr->addr.sin.sin_addr;
     port = ntohs(addr->addr.sin.sin_port);
     break;
@@ -151,7 +151,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   if (addr->addr.sa.sa_family == AF_INET6) {
     if (p < buf + len) {
       *p++ = ']';
-    } else 
+    } else
       return 0;
   }
 
@@ -159,9 +159,10 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
   return p - buf;
 #else /* HAVE_ARPA_INET_H */
-# if WITH_CONTIKI
+
+#ifdef WITH_CONTIKI
   char *p = buf;
-#  if NETSTACK_CONF_WITH_IPV6
+#if NETSTACK_CONF_WITH_IPV6
   uint8_t i;
   const char hex[] = "0123456789ABCDEF";
 
@@ -180,38 +181,48 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
     *p++ = hex[(addr->addr.u8[i+1] & 0x0f)];
   }
   *p++ = ']';
-#  else /* NETSTACK_CONF_IPV6 */
+#else /* NETSTACK_CONF_IPV6 */
   if (len < 21)
     return 0;
 
   p += sprintf(p, "%u.%u.%u.%u",
                addr->addr.u8[0], addr->addr.u8[1],
                addr->addr.u8[2], addr->addr.u8[3]);
-#  endif /* NETSTACK_CONF_IPV6 */
+#endif /* NETSTACK_CONF_IPV6 */
   if (buf + len - p < 6)
     return 0;
 
   p += sprintf(p, ":%d", uip_htons(addr->port));
 
   return p - buf;
-# else /* WITH_CONTIKI */
+
+#endif /* WITH_CONTIKI */
+
+#ifdef RIOT_VERSION
+  /* FIXME: Switch to RIOT own DEBUG lines */
+  (void) addr;
+  (void) buf;
+  (void) len;
+#endif /* RIOT_VERSION */
+
+#ifdef WITH_POSIX
   /* TODO: output addresses manually */
-#   warning "inet_ntop() not available, network addresses will not be included in debug output"
-# endif /* WITH_CONTIKI */
+#warning "inet_ntop() not available, network addresses will not be included in debug output"
+#endif /* WITH_POSIX */
   return 0;
-#endif
+#endif /* HAVE_ARPA_INET_H */
 }
 
 #endif /* NDEBUG */
 
 #ifndef WITH_CONTIKI
-void 
+void
 dsrv_log(log_t level, char *format, ...) {
   static char timebuf[32];
   va_list ap;
   FILE *log_fd;
 
-  if (maxlog < (int)level)
+  if (maxlog < (int) level)
     return;
 
   log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
@@ -219,7 +230,7 @@ dsrv_log(log_t level, char *format, ...) {
   if (print_timestamp(timebuf,sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG)
     fprintf(log_fd, "%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -228,7 +239,7 @@ dsrv_log(log_t level, char *format, ...) {
   fflush(log_fd);
 }
 #elif defined (HAVE_VPRINTF) /* WITH_CONTIKI */
-void 
+void
 dsrv_log(log_t level, char *format, ...) {
   static char timebuf[32];
   va_list ap;
@@ -239,7 +250,7 @@ dsrv_log(log_t level, char *format, ...) {
   if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
     PRINTF("%s ", timebuf);
 
-  if (level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG)
     PRINTF("%s ", loglevels[level]);
 
   va_start(ap, format);
@@ -253,25 +264,25 @@ dsrv_log(log_t level, char *format, ...) {
 void hexdump(const unsigned char *packet, int length) {
   int n = 0;
 
-  while (length--) { 
+  while (length--) {
     if (n % 16 == 0)
       printf("%08X ",n);
 
     printf("%02X ", *packet++);
-    
+
     n++;
     if (n % 8 == 0) {
       if (n % 16 == 0)
-	printf("\n");
+        printf("\n");
       else
-	printf(" ");
+        printf(" ");
     }
   }
 }
 
 /** dump as narrow string of hex digits */
 void dump(unsigned char *buf, size_t len) {
-  while (len--) 
+  while (len--)
     printf("%02x", *buf++);
 }
 
@@ -287,13 +298,13 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
 }
 
 #ifndef WITH_CONTIKI
-void 
+void
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
   static char timebuf[32];
   FILE *log_fd;
   int n = 0;
 
-  if (maxlog < (int)level)
+  if (maxlog < (int) level)
     return;
 
   log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
@@ -301,7 +312,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (print_timestamp(timebuf, sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
 
-  if (level <= DTLS_LOG_DEBUG) 
+  if (level <= DTLS_LOG_DEBUG)
     fprintf(log_fd, "%s ", loglevels[level]);
 
   if (extend) {
@@ -309,21 +320,21 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 
     while (length--) {
       if (n % 16 == 0)
-	fprintf(log_fd, "%08X ", n);
+        fprintf(log_fd, "%08X ", n);
 
       fprintf(log_fd, "%02X ", *buf++);
 
       n++;
       if (n % 8 == 0) {
-	if (n % 16 == 0)
-	  fprintf(log_fd, "\n");
-	else
-	  fprintf(log_fd, " ");
+        if (n % 16 == 0)
+          fprintf(log_fd, "\n");
+        else
+          fprintf(log_fd, " ");
       }
     }
   } else {
     fprintf(log_fd, "%s: (%zu bytes): ", name, length);
-    while (length--) 
+    while (length--)
       fprintf(log_fd, "%02X", *buf++);
   }
   fprintf(log_fd, "\n");
@@ -331,7 +342,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   fflush(log_fd);
 }
 #else /* WITH_CONTIKI */
-void 
+void
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
   static char timebuf[32];
   int n = 0;
@@ -342,7 +353,7 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   if (print_timestamp(timebuf,sizeof(timebuf), clock_time()))
     PRINTF("%s ", timebuf);
 
-  if (level >= 0 && level <= DTLS_LOG_DEBUG) 
+  if (level >= 0 && level <= DTLS_LOG_DEBUG)
     PRINTF("%s ", loglevels[level]);
 
   if (extend) {
@@ -350,21 +361,21 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 
     while (length--) {
       if (n % 16 == 0)
-	PRINTF("%08X ", n);
+        PRINTF("%08X ", n);
 
       PRINTF("%02X ", *buf++);
 
       n++;
       if (n % 8 == 0) {
-	if (n % 16 == 0)
-	  PRINTF("\n");
-	else
-	  PRINTF(" ");
+        if (n % 16 == 0)
+          PRINTF("\n");
+        else
+          PRINTF(" ");
       }
     }
   } else {
     PRINTF("%s: (%zu bytes): ", name, length);
-    while (length--) 
+    while (length--)
       PRINTF("%02X", *buf++);
   }
   PRINTF("\n");
