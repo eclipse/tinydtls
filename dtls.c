@@ -193,6 +193,7 @@ void
 dtls_init(void) {
   dtls_clock_init();
   crypto_init();
+  dtls_hmac_storage_init();
   netq_init();
   peer_init();
 }
