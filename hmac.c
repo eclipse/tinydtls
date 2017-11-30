@@ -42,6 +42,10 @@ dtls_hmac_context_free(dtls_hmac_context_t *ctx) {
   free(ctx);
 }
 
+void
+dtls_hmac_storage_init(void) {
+}
+
 #else /* WITH_CONTIKI */
 #include "memb.h"
 MEMB(hmac_context_storage, dtls_hmac_context_t, DTLS_HASH_MAX);
