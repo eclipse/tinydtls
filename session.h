@@ -30,7 +30,15 @@ typedef struct {
   unsigned short port;
   int ifindex;
 } session_t;
-
+ /* TODO: Add support for RIOT over sockets  */
+#elif defined(WITH_RIOT_GNRC)
+#include "net/ipv6/addr.h"
+typedef struct {
+  unsigned char size;
+  ipv6_addr_t addr;
+  unsigned short port;
+  int ifindex;
+} session_t;
 #else /* WITH_CONTIKI */
 
 #include <sys/socket.h>

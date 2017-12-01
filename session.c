@@ -25,13 +25,18 @@
 #endif
 #endif
 
-#ifdef WITH_CONTIKI
+#if defined(WITH_CONTIKI)
 #define _dtls_address_equals_impl(A,B)				\
   ((A)->size == (B)->size					\
    && (A)->port == (B)->port					\
    && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
    && (A)->ifindex == (B)->ifindex)
-
+#elif defined(WITH_RIOT_GNRC)
+#define _dtls_address_equals_impl(A,B)                          \
+  ((A)->size == (B)->size                                       \
+   && (A)->port == (B)->port                                    \
+   && ipv6_addr_equal(&((A)->addr),&((B)->addr))                \
+   && (A)->ifindex == (B)->ifindex)
 #else /* WITH_CONTIKI */
 
 static inline int 
