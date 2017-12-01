@@ -93,18 +93,18 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 #else /* NDEBUG */
 
 static inline void hexdump(const unsigned char *packet, int length)
-{}
+{(void) packet; (void) length;}
 
 static inline void dump(unsigned char *buf, size_t len)
-{}
+{(void) buf; (void) len;}
 
 static inline void
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend)
-{}
+{(void) level; (void) name; (void) buf; (void) length; (void) extend;}
 
 static inline void
 dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
-{}
+{(void) level; (void) name; (void) addr;}
 
 #endif /* NDEBUG */
 

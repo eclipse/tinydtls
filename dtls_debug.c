@@ -209,6 +209,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   /* TODO: output addresses manually */
 #warning "inet_ntop() not available, network addresses will not be included in debug output"
 #endif /* WITH_POSIX */
+
   return 0;
 #endif /* HAVE_ARPA_INET_H */
 }
