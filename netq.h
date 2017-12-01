@@ -56,14 +56,14 @@ typedef struct netq_t {
   unsigned char retransmit_cnt;	/**< retransmission counter, will be removed when zero */
 
   size_t length;		/**< actual length of data */
-#ifndef WITH_CONTIKI
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
   unsigned char data[];		/**< the datagram to send */
 #else
   netq_packet_t data;		/**< the datagram to send */
 #endif
 } netq_t;
 
-#ifndef WITH_CONTIKI
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
 static inline void netq_init(void)
 { }
 #else
