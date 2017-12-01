@@ -1,4 +1,4 @@
-CONTENTS 
+CONTENTS
 
 This library contains functions and structures that can help
 constructing a single-threaded UDP server with DTLS support in
@@ -9,7 +9,7 @@ C99. The following components are available:
 
 * tests
   The subdirectory tests contains test programs that show how each
-  component is used. 
+  component is used.
 
 BUILDING
 
@@ -21,6 +21,8 @@ When using the code from the git repository at sourceforge, invoke
 
 to re-create the configure script.
 
+## Contiki
+
 On Contiki, place the tinydtls library into the apps folder. After
 configuration, invoke make to build the library and associated test
 programs. To add tinydtls as Contiki application, drop it into the
@@ -28,3 +30,11 @@ apps directory and add the following line to your Makefile:
 
   APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
 
+## RIOT
+
+On RIOT, you need to add the line `USEPKG += tinydtls`.
+You can use `RIOT/examples/dtls-echo/` as a guide for integrating tinyDTLS
+to your application.
+
+Also, if you need a specific commit of tinyDTLS you can modify
+`RIOT/pkg/tinydtls/Makefile`.
