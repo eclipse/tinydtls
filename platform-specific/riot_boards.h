@@ -61,7 +61,6 @@
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "0.8.6.X"
 
-
 /*
  * PERFORMANCE AND RESOURCES AVALIABLE TO THE MOTES FOR DTLS SESSIONS
  *
@@ -75,7 +74,11 @@
             for RIOT nodes.
  */
 
-/* TODO: Adapt this to RIOT (currently is only for Contiki) */
+#ifndef DTLS_CONTEXT_MAX
+/** The maximum number of DTLS  context at the same time. */
+#  define DTLS_CONTEXT_MAX 2
+#endif
+
 #ifndef DTLS_PEER_MAX
 /** The maximum number DTLS peers (i.e. sessions). */
 #  define DTLS_PEER_MAX 1
@@ -97,8 +100,8 @@
 #  define DTLS_HASH_MAX (3 * DTLS_PEER_MAX)
 #endif
 
-/** do not use uthash's hash tables (Save ROM memory) */
-//#define DTLS_PEERS_NOHASH 1
+/** do not use uthash's hash tables (the tables uses malloc/free) */
+#define DTLS_PEERS_NOHASH 1
 
 /* The 802.15.4 ACK can provoke very fast re-transmissions with a value
  * higher than one. This is a temporary bad behavior for the RIOT MAC
