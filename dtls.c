@@ -3986,6 +3986,9 @@ dtls_free_context(dtls_context_t *ctx) {
     }
   }
 
+  if (ctx->sendqueue != NULL) {
+    netq_delete_all(&ctx->sendqueue);
+  }
   free_context(ctx);
 }
 
