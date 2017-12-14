@@ -24,28 +24,56 @@
 #include "global.h"
 
 #ifdef WITH_SHA256
+#ifdef RIOT_VERSION
+#include "hashes/sha256.h"
+
+typedef sha256_context_t dtls_hash_ctx;
+#define DTLS_HASH_CTX_SIZE sizeof(sha256_context_t)
+
+#else
+
 /** Aaron D. Gifford's implementation of SHA256
  *  see http://www.aarongifford.com/ */
 #include "sha2/sha2.h"
 
 typedef dtls_sha256_ctx dtls_hash_ctx;
-typedef dtls_hash_ctx *dtls_hash_t;
 #define DTLS_HASH_CTX_SIZE sizeof(dtls_sha256_ctx)
+
+#endif
+
+
+typedef dtls_hash_ctx *dtls_hash_t;
+
 
 static inline void
 dtls_hash_init(dtls_hash_t ctx) {
+#ifdef RIOT_VERSION
+    sha256_init((sha256_context_t *)ctx);
+#else
   dtls_sha256_init((dtls_sha256_ctx *)ctx);
+#endif
 }
 
 static inline void 
 dtls_hash_update(dtls_hash_t ctx, const unsigned char *input, size_t len) {
+#ifdef RIOT_VERSION
+    sha256_update((sha256_context_t *)ctx, input, len);
+#else
   dtls_sha256_update((dtls_sha256_ctx *)ctx, input, len);
+#endif
 }
 
 static inline size_t
 dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
+
+#ifdef RIOT_VERSION
+  sha256_final((sha256_context_t *)ctx, buf);
+  return SHA256_DIGEST_LENGTH;
+#else
   dtls_sha256_final(buf, (dtls_sha256_ctx *)ctx);
   return DTLS_SHA256_DIGEST_LENGTH;
+#endif
+
 }
 #endif /* WITH_SHA256 */
 
