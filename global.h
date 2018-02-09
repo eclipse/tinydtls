@@ -54,7 +54,7 @@ typedef unsigned char uint48[6];
 #endif /* DTLS_ECC */
 #else /* WITH_CONTIKI */
 #define DTLS_MAX_BUF 1400
-#endif /* WITH_CONTIKI */
+#endif /* WITH_CONTIKI || RIOT_VERSION */
 #endif
 
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT
