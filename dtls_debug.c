@@ -383,4 +383,34 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 }
 #endif /* WITH_CONTIKI */
 
+#else /* NDEBUG */
+
+void
+hexdump(const unsigned char *packet, int length) {
+  (void)packet;
+  (void)length;
+}
+
+void
+dump(unsigned char *buf, size_t len) {
+  (void)buf;
+  (void)len;
+}
+
+void
+dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
+  (void)level;
+  (void)name;
+  (void)buf;
+  (void)length;
+  (void)extend;
+}
+
+void
+dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr) {
+  (void)level;
+  (void)name;
+  (void)addr;
+}
+
 #endif /* NDEBUG */
