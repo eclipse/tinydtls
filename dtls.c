@@ -64,11 +64,6 @@
 MEMARRAY(dtlscontext_storage, sizeof(dtls_context_t), DTLS_CONTEXT_MAX)
 #endif /* RIOT_VERSION */
 
-#ifdef RIOT_VERSION
-#include "memarray.h"
-MEMARRAY(dtlscontext_storage, sizeof(dtls_context_t), DTLS_CONTEXT_MAX)
-#endif
-
 #define dtls_set_version(H,V) dtls_int_to_uint16((H)->version, (V))
 #define dtls_set_content_type(H,V) ((H)->content_type = (V) & 0xff)
 #define dtls_set_length(H,V)  ((H)->length = (V))
