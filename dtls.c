@@ -56,7 +56,7 @@
 #include "prng.h"
 
 #ifdef WITH_SHA256
-#  include "sha2/sha2.h"
+#  include "hmac.h"
 #endif /* WITH_SHA256 */
 
 #ifdef RIOT_VERSION
