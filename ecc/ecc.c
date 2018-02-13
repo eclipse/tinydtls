@@ -408,7 +408,7 @@ static void fieldInv(const uint32_t *A, const uint32_t *modulus, const uint32_t 
 	}
 }
 
-void static ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy){
+static void ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint32_t *Dy){
 	uint32_t tempA[8];
 	uint32_t tempB[8];
 	uint32_t tempC[8];
@@ -444,7 +444,7 @@ void static ec_double(const uint32_t *px, const uint32_t *py, uint32_t *Dx, uint
 	fieldSub(tempC, py, ecc_prime_m, Dy); //Dy = lambda * (qx-dx) - px
 }
 
-void static ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy){
+static void ec_add(const uint32_t *px, const uint32_t *py, const uint32_t *qx, const uint32_t *qy, uint32_t *Sx, uint32_t *Sy){
 	uint32_t tempA[8];
 	uint32_t tempB[8];
 	uint32_t tempC[8];
