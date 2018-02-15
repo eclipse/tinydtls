@@ -73,10 +73,10 @@ block0(size_t M,       /* number of auth bytes */
  * \return     The result is written to \p X.
  */
 static void
-add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, size_t la,
+add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, uint64_t la,
 	      unsigned char B[DTLS_CCM_BLOCKSIZE], 
 	      unsigned char X[DTLS_CCM_BLOCKSIZE]) {
-  size_t i,j; 
+  uint64_t i,j;
 
   rijndael_encrypt(ctx, B, X);
 
