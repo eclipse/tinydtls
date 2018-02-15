@@ -36,8 +36,24 @@ dtls_ticks(dtls_tick_t *t) {
   *t = clock_time();
 }
 
-#else /* WITH_CONTIKI */
+#endif /* WITH_CONTIKI */
 
+#ifdef RIOT_VERSION
+dtls_tick_t dtls_clock_offset;
+
+void
+dtls_clock_init(void) {
+  dtls_clock_offset = xtimer_now64().ticks64;
+}
+
+void
+dtls_ticks(dtls_tick_t *t) {
+  *t = xtimer_now64().ticks64 -dtls_clock_offset;
+}
+
+#endif /* RIOT_VERSION */
+
+#ifdef WITH_POSIX
 time_t dtls_clock_offset;
 
 void
@@ -65,6 +81,6 @@ void dtls_ticks(dtls_tick_t *t) {
 #endif
 }
 
-#endif /* WITH_CONTIKI */
+#endif /* WITH_POSIX */
 
 

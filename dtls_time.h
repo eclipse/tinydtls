@@ -36,7 +36,16 @@
 
 #ifdef WITH_CONTIKI
 #include "clock.h"
-#else /* WITH_CONTIKI */
+
+#elif defined(RIOT_VERSION)
+
+#include <xtimer.h>
+
+#define CLOCK_SECOND (xtimer_ticks_from_usec64(1000000UL).ticks64)
+
+typedef uint64_t clock_time_t;
+#else /* WITH_CONTIKI || RIOT_VERSION */
+
 #include <time.h>
 
 #ifndef CLOCK_SECOND
@@ -44,7 +53,7 @@
 #endif
 
 typedef uint32_t clock_time_t;
-#endif /* WITH_CONTIKI */
+#endif /* WITH_CONTIKI || RIOT_VERSION */
 
 typedef clock_time_t dtls_tick_t;
 
