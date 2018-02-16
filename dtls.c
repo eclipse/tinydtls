@@ -3604,7 +3604,6 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 	   uint8 *record_header, uint8 *data, size_t data_length)
 {
   int err;
-  dtls_handshake_parameters_t *handshake = peer->handshake_params;
   (void)record_header;
 
   /* A CCS message is handled after a KeyExchange message was
@@ -3623,7 +3622,7 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 
   /* Just change the cipher when we are on the same epoch */
   if (peer->role == DTLS_SERVER) {
-    err = calculate_key_block(ctx, handshake, peer,
+    err = calculate_key_block(ctx, peer->handshake_params, peer,
 			      &peer->session, peer->role);
     if (err < 0) {
       return err;
