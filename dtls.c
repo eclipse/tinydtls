@@ -1561,11 +1561,6 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   /* if (peer && MUST_HASH(peer, type, buf, buflen)) */
   /*   update_hs_hash(peer, buf, buflen); */
 
-  dtls_debug_hexdump("send header", sendbuf, sizeof(dtls_record_header_t));
-  for (i = 0; i < buf_array_len; i++) {
-    dtls_debug_hexdump("send unencrypted", buf_array[i], buf_len_array[i]);
-    overall_len += buf_len_array[i];
-  }
 
   /* Signal DTLS version 1.0 in the record layer of ClientHello and
    * HelloVerifyRequest handshake messages according to Section 4.2.1
@@ -1576,6 +1571,12 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
         (buf_array[0][0] == DTLS_HT_HELLO_VERIFY_REQUEST)) {
       dtls_int_to_uint16(sendbuf + 1, DTLS10_VERSION);
     }
+  }
+
+  dtls_debug_hexdump("send header", sendbuf, sizeof(dtls_record_header_t));
+  for (i = 0; i < buf_array_len; i++) {
+    dtls_debug_hexdump("send unencrypted", buf_array[i], buf_len_array[i]);
+    overall_len += buf_len_array[i];
   }
 
   if ((type == DTLS_CT_HANDSHAKE && buf_array[0][0] != DTLS_HT_HELLO_VERIFY_REQUEST) ||
