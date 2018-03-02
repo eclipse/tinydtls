@@ -63,7 +63,7 @@
 
 #ifdef RIOT_VERSION
 #include "memarray.h"
-MEMARRAY(dtlscontext_storage, sizeof(dtls_context_t), DTLS_CONTEXT_MAX)
+MEMARRAY(dtlscontext_storage, dtls_context_t, DTLS_CONTEXT_MAX)
 #endif /* RIOT_VERSION */
 
 #define dtls_set_version(H,V) dtls_int_to_uint16((H)->version, (V))
@@ -221,7 +221,7 @@ dtls_init(void) {
   peer_init();
 
 #ifdef RIOT_VERSION
-  memarray_init(&dtlscontext_storage, sizeof(dtls_context_t), DTLS_CONTEXT_MAX);
+  memarray_init(&dtlscontext_storage);
 #endif /* RIOT_VERSION */
 }
 
