@@ -62,7 +62,6 @@
 #define DTLS10_VERSION 0xfeff
 
 #ifdef RIOT_VERSION
-#include "memarray.h"
 MEMARRAY(dtlscontext_storage, dtls_context_t, DTLS_CONTEXT_MAX)
 #endif /* RIOT_VERSION */
 

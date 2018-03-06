@@ -149,5 +149,16 @@
 #  endif
 #endif
 
+/* The memarray API requires declaration of the following structures
+ * over and over, so we define a macro for a cleaner API:
+ */
+#include "memarray.h"
+#define MEMARRAY(name, structure, cnt)                   \
+  structure name ## _data[cnt];                          \
+  memarray_t name = {                                    \
+    .free_data = name ## _data,                          \
+    .size = sizeof(structure),                           \
+    .num = cnt                                           \
+  };
 
 #endif /* _RIOT_BOARDS_H_ */
