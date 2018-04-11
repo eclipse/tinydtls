@@ -62,7 +62,8 @@ netq_init() {
 }
 
 #elif defined (RIOT_VERSION)
-MEMARRAY(netq_storage, netq_t, NETQ_MAXCNT)
+netq_t netq_storage_data[NETQ_MAXCNT];
+memarray_t netq_storage;
 
 static inline netq_t *
 netq_malloc_node(size_t size) {
@@ -77,7 +78,7 @@ netq_free_node(netq_t *node) {
 
 void
 netq_init(void) {
-  memarray_init(&netq_storage);
+  memarray_init(&netq_storage, netq_storage_data, sizeof(netq_t), NETQ_MAXCNT);
 }
 
 #endif /* WITH_CONTIKI */

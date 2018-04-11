@@ -60,11 +60,12 @@ dtls_free_peer(dtls_peer_t *peer) {
 }
 
 #elif defined (RIOT_VERSION)
-MEMARRAY(peer_storage, dtls_peer_t, DTLS_PEER_MAX)
+dtls_peer_t peer_storage_data[DTLS_PEER_MAX];
+memarray_t peer_storage;
 
 void
 peer_init(void) {
-  memarray_init(&peer_storage);
+  memarray_init(&peer_storage, peer_storage_data, sizeof(dtls_peer_t), DTLS_PEER_MAX);
 }
 
 static inline dtls_peer_t *

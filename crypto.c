@@ -39,6 +39,17 @@
 # include <pthread.h>
 #elif defined(RIOT_VERSION)
 # include <mutex.h>
+
+dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
+dtls_security_parameters_t security_storage_data[DTLS_SECURITY_MAX];
+dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
+dtls_security_parameters_t security_storage_data[DTLS_SECURITY_MAX];
+
+memarray_t handshake_storage;
+memarray_t security_storage;
+memarray_t handshake_storage;
+memarray_t security_storage;
+
 #endif
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
@@ -118,12 +129,10 @@ static void dtls_security_dealloc(dtls_security_parameters_t *security) {
 }
 
 #elif defined (RIOT_VERSION)
-MEMARRAY(handshake_storage, dtls_handshake_parameters_t, DTLS_HANDSHAKE_MAX)
-MEMARRAY(security_storage,  dtls_security_parameters_t, DTLS_SECURITY_MAX)
 
 void crypto_init(void) {
-  memarray_init(&handshake_storage);
-  memarray_init(&security_storage);
+  memarray_init(&handshake_storage, handshake_storage_data, sizeof(dtls_handshake_parameters_t), DTLS_HANDSHAKE_MAX);
+  memarray_init(&security_storage, security_storage_data, sizeof(dtls_security_parameters_t), DTLS_SECURITY_MAX);
 }
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc(void) {
