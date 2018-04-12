@@ -60,6 +60,8 @@ dtls_free_peer(dtls_peer_t *peer) {
 }
 
 #elif defined (RIOT_VERSION)
+# include <memarray.h>
+
 dtls_peer_t peer_storage_data[DTLS_PEER_MAX];
 memarray_t peer_storage;
 

@@ -62,6 +62,8 @@ netq_init() {
 }
 
 #elif defined (RIOT_VERSION)
+# include <memarray.h>
+
 netq_t netq_storage_data[NETQ_MAXCNT];
 memarray_t netq_storage;
 

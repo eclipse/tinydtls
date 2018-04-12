@@ -39,6 +39,7 @@
 # include <pthread.h>
 #elif defined(RIOT_VERSION)
 # include <mutex.h>
+# include <memarray.h>
 
 dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
 dtls_security_parameters_t security_storage_data[DTLS_SECURITY_MAX];

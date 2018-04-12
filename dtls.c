@@ -62,6 +62,8 @@
 #define DTLS10_VERSION 0xfeff
 
 #ifdef RIOT_VERSION
+# include <memarray.h>
+
 dtls_context_t dtlscontext_storage_data[DTLS_CONTEXT_MAX];
 memarray_t dtlscontext_storage;
 #endif /* RIOT_VERSION */
@@ -187,7 +189,6 @@ free_context(dtls_context_t *context) {
 #endif /* WITH_CONTIKI */
 
 #ifdef RIOT_VERSION
-
 static inline dtls_context_t *
 malloc_context(void) {
      return (dtls_context_t *) memarray_alloc(&dtlscontext_storage);
