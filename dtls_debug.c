@@ -56,11 +56,7 @@ dtls_get_log_level(void) {
 
 void
 dtls_set_log_level(log_t level) {
-#ifdef NDEBUG
-  maxlog = min(level, DTLS_LOG_INFO);
-#else /* !NDEBUG */
   maxlog = level;
-#endif /* NDEBUG */
 }
 
 /* this array has the same order as the type log_t */

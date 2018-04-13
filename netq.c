@@ -143,13 +143,11 @@ netq_node_new(size_t size) {
   netq_t *node;
   node = netq_malloc_node(size);
 
-#ifndef NDEBUG
-  if (!node)
-    dtls_warn("netq_node_new: malloc\n");
-#endif
-
-  if (node)
+  if (node) {
     memset(node, 0, sizeof(netq_t));
+  } else {
+    dtls_warn("netq_node_new: malloc\n");
+  }
 
   return node;
 }

@@ -3097,9 +3097,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     if (clen < 0)
       dtls_warn("decryption failed\n");
     else {
-#ifndef NDEBUG
-      printf("decrypt_verify(): found %i bytes cleartext\n", clen);
-#endif
+      dtls_debug("decrypt_verify(): found %i bytes cleartext\n", clen);
       dtls_security_params_free_other(peer);
       dtls_debug_dump("cleartext", *cleartext, clen);
     }
