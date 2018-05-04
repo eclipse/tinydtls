@@ -44,7 +44,7 @@ OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) $(SUB_OBJECTS)
 HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h alert.h utlist.h prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h
-CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@ @WARNING_CFLAGS@
+CFLAGS:=-Wall -pedantic -std=c99 -DSHA2_USE_INTTYPES_H @CFLAGS@ @WARNING_CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE -I$(top_srcdir)
 SUBDIRS:=tests doc platform-specific sha2 aes ecc
 DISTSUBDIRS:=$(SUBDIRS)
