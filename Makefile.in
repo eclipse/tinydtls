@@ -69,6 +69,7 @@ check:
 	echo top_builddir: $(top_builddir)
 	$(MAKE) -C tests check
 
+tests: $(LIB)
 dirs:	$(SUBDIRS)
 	for dir in $^; do \
 		$(MAKE) -C $$dir ; \
