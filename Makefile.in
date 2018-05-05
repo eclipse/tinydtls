@@ -51,7 +51,8 @@ DISTSUBDIRS:=$(SUBDIRS)
 DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.in dtls_config.h.in tinydtls.h.in \
   Makefile.tinydtls $(SOURCES) $(HEADERS)
-LIB:=libtinydtls.a
+LIB:=libtinydtls
+LIBS:=$(LIB).a $(LIB).so
 LDFLAGS:=@LIBS@
 ARFLAGS:=cru
 doc:=doc
@@ -62,14 +63,14 @@ ifneq ("@WITH_CONTIKI@", "1")
 .SUFFIXES:
 .SUFFIXES:      .c .o
 
-all:	$(LIB) dirs
+all:	$(LIBS) dirs
 
 check:	
 	echo DISTDIR: $(DISTDIR)
 	echo top_builddir: $(top_builddir)
 	$(MAKE) -C tests check
 
-tests: $(LIB)
+tests: $(LIBS)
 dirs:	$(SUBDIRS)
 	for dir in $^; do \
 		$(MAKE) -C $$dir ; \
@@ -78,7 +79,10 @@ dirs:	$(SUBDIRS)
 $(SUB_OBJECTS)::
 	$(MAKE) -C $(@D) $(@F)
 
-$(LIB):	$(OBJECTS)
+$(LIB).so: $(OBJECTS)
+	$(LD) $(LDFLAGS) -shared $^ -o $@
+
+$(LIB).a: $(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^ 
 	$(RANLIB) $@
 
@@ -104,10 +108,10 @@ dist:	$(FILES) $(DISTSUBDIRS)
 	done
 	tar czf $(package).tar.gz $(DISTDIR)
 
-install:	$(LIB) $(HEADERS) $(SUBDIRS)
+install:	$(LIBS) $(HEADERS) $(SUBDIRS)
 	test -d $(libdir) || mkdir -p $(libdir)
 	test -d $(includedir) || mkdir -p $(includedir)
-	$(install) $(LIB) $(libdir)/
+	$(install) $(LIBS) $(libdir)/
 	$(install) $(HEADERS) $(includedir)/
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
@@ -121,7 +125,7 @@ TAGS:
 # files that should be ignored by git
 GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
  autom4te.cache/ config.h config.log config.status configure \
- doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
+ doc/Doxyfile doc/doxygen.out doc/html/ $(LIBS) tests/ccm-test \
  tests/dtls-client tests/dtls-server tests/prf-test $(package) \
  $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
  \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
