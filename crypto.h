@@ -117,6 +117,13 @@ typedef struct {
 struct netq_t;
 
 typedef struct {
+	uint16 mseq_r;
+	size_t last_offset;
+	size_t packet_length;
+	uint8 *data;
+} dtls_hs_reassemble_t;
+
+typedef struct {
   union {
     struct random_t {
       uint8 client[DTLS_RANDOM_LENGTH];	/**< client random gmt and bytes */
@@ -126,6 +133,7 @@ typedef struct {
     uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
   } tmp;
   struct netq_t *reorder_queue;	/**< the packets to reorder */
+  dtls_hs_reassemble_t *reassemble_buf;
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
   dtls_compression_t compression;		/**< compression method */

@@ -339,6 +339,9 @@ typedef struct __attribute__((__packed__)) {
 #define DTLS_HT_CLIENT_KEY_EXCHANGE 16
 #define DTLS_HT_FINISHED            20
 
+/* Fragmented Handshake Flag */
+#define DTLS_HS_FRAGMENTED 			-244
+
 /** Header structure for the DTLS handshake protocol. */
 typedef struct __attribute__((__packed__)) {
   uint8 msg_type; /**< Type of handshake message  (one of DTLS_HT_) */

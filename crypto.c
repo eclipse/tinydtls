@@ -152,6 +152,8 @@ dtls_handshake_parameters_t *dtls_handshake_new(void)
   }
 
   memset(handshake, 0, sizeof(*handshake));
+	/* Just to be sure */
+	handshake->reassemble_buf = NULL;
 
   if (handshake) {
     /* initialize the handshake hash wrt. the hard-coded DTLS version */
