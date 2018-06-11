@@ -120,9 +120,8 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
-  size_t i;
-  for (i = 0; i < len; i++)
-    printf("%c", data[i]);
+  if (write(STDOUT_FILENO, data, len) == -1)
+    dtls_debug("write failed: %s\n", strerror(errno));
   if (len >= strlen(DTLS_SERVER_CMD_CLOSE) &&
       !memcmp(data, DTLS_SERVER_CMD_CLOSE, strlen(DTLS_SERVER_CMD_CLOSE))) {
     printf("server: closing connection\n");
