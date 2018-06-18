@@ -66,6 +66,35 @@ typedef struct {
  */
 void dtls_session_init(session_t *sess);
 
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+/**
+ * Creates a new ::session_t for the given address.
+ *
+ * @param addr Address which should be stored in the ::session_t.
+ * @param addrlen Length of the @p addr.
+ * @return The new session or @c NULL on error.
+ */
+session_t* dtls_new_session(struct sockaddr *addr, socklen_t addrlen);
+
+/**
+ * Frees memory allocated for a session using ::dtls_new_session.
+ *
+ * @param sess Pointer to a session for which allocated memory should be
+ *     freed.
+ */
+void dtls_free_session(session_t *sess);
+#endif
+
+/**
+ * Extracts the address of the given ::session_t.
+ *
+ * @param sess Session to extract address for.
+ * @param addrlen Pointer to memory location where the address
+ *     length should be stored.
+ * @return The address or @c NULL if @p sess was @c NULL.
+ */
+struct sockaddr* dtls_session_addr(session_t *sess, socklen_t *addrlen);
+
 /**
  * Compares the given session objects. This function returns @c 0
  * when @p a and @p b differ, @c 1 otherwise.
