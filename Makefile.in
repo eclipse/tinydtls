@@ -65,12 +65,14 @@ ifneq ("@WITH_CONTIKI@", "1")
 
 all:	$(LIBS) dirs
 
-check:	
+check:	tests
 	echo DISTDIR: $(DISTDIR)
 	echo top_builddir: $(top_builddir)
 	$(MAKE) -C tests check
 
 tests: $(LIBS)
+	$(MAKE) -C tests
+
 dirs:	$(SUBDIRS)
 	for dir in $^; do \
 		$(MAKE) -C $$dir ; \
