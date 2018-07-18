@@ -36,7 +36,7 @@ HEADERS:=
 CFLAGS:=-Wall @CFLAGS@ 
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) 
-LDLIBS:=-ltinydtls @LIBS@
+LDLIBS:=$(top_srcdir)/libtinydtls.a @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in $(SOURCES) ccm-testdata.c #cbc_aes128-testdata.c
 
