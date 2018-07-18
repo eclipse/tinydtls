@@ -82,7 +82,7 @@ $(SUB_OBJECTS)::
 	$(MAKE) -C $(@D) $(@F)
 
 $(LIB).so: $(OBJECTS)
-	$(LD) $(LDFLAGS) -shared $^ -o $@
+	$(LINK.c) $(LDFLAGS) -shared $^ -o $@
 
 $(LIB).a: $(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^ 
