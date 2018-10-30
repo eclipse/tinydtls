@@ -135,6 +135,8 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
 
     memcpy(result, psk_key, psk_key_length);
     return psk_key_length;
+  case DTLS_PSK_HINT:
+    return 0;
   default:
     dtls_warn("unsupported request type: %d\n", type);
   }
