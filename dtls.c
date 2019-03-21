@@ -1198,7 +1198,7 @@ check_client_keyexchange(dtls_context_t *ctx,
   return 0;
 }
 
-static inline void
+static void
 update_hs_hash(dtls_peer_t *peer, uint8 *data, size_t length) {
   dtls_debug_dump("add MAC data", data, length);
   dtls_hash_update(&peer->handshake_params->hs_state.hs_hash, data, length);
