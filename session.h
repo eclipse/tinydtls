@@ -39,7 +39,7 @@ typedef struct {
   unsigned short port;
   int ifindex;
 } session_t;
-#else /* WITH_CONTIKI */
+#else /* ! WITH_CONTIKI && ! WITH_RIOT_GNRC */
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -53,9 +53,9 @@ typedef struct {
     struct sockaddr_in  sin;
     struct sockaddr_in6 sin6;
   } addr;
-  uint8_t ifindex;
+  int ifindex;
 } session_t;
-#endif /* WITH_CONTIKI */
+#endif /* ! WITH_CONTIKI && ! WITH_RIOT_GNRC */
 
 /** 
  * Resets the given session_t object @p sess to its default
