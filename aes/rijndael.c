@@ -722,6 +722,7 @@ static const aes_u32 rcon[] = {
 #define GETU32(pt) (((aes_u32)(pt)[0] << 24) ^ ((aes_u32)(pt)[1] << 16) ^ ((aes_u32)(pt)[2] <<  8) ^ ((aes_u32)(pt)[3]))
 #define PUTU32(ct, st) { (ct)[0] = (aes_u8)((st) >> 24); (ct)[1] = (aes_u8)((st) >> 16); (ct)[2] = (aes_u8)((st) >>  8); (ct)[3] = (aes_u8)(st); }
 
+#ifndef ESPIDF_VERSION
 /**
  * Expand the cipher key into the encryption key schedule.
  *
@@ -808,6 +809,7 @@ rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 	}
 	return 0;
 }
+#endif /* ! ESPIDF_VERSION */
 
 #ifdef WITH_AES_DECRYPT
 /**
@@ -859,6 +861,7 @@ rijndaelKeySetupDec(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 }
 #endif
 
+#ifndef ESPIDF_VERSION
 void
 rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
     aes_u8 ct[16])
@@ -1042,6 +1045,7 @@ rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
 		rk[3];
 	PUTU32(ct + 12, s3);
 }
+#endif /* ! ESPIDF_VERSION */
 
 #ifdef WITH_AES_DECRYPT
 static void
