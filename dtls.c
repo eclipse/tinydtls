@@ -53,7 +53,7 @@
 
 #include "alert.h"
 #include "session.h"
-#include "prng.h"
+#include "dtls_prng.h"
 
 #ifdef WITH_SHA256
 #  include "hmac.h"
@@ -3972,37 +3972,9 @@ dtls_context_t *
 dtls_new_context(void *app_data) {
   dtls_context_t *c;
   dtls_tick_t now;
-#ifdef WITH_POSIX
-  FILE *urandom = fopen("/dev/urandom", "r");
-  unsigned char buf[sizeof(unsigned long)];
-#endif /* WITH_POSIX */
 
   dtls_ticks(&now);
-
-#ifdef WITH_CONTIKI
-/* FIXME: need something better to init PRNG here */
-dtls_prng_init(now);
-#endif /* WITH_CONTIKI */
-
-#ifdef RIOT_VERSION
-  /* FIXME: Integrate RIOT's own PRNG  */
   dtls_prng_init(now);
-#endif /* RIOT_VERSION */
-
-#ifdef WITH_POSIX
-  if (!urandom) {
-    dtls_emerg("cannot initialize PRNG\n");
-    return NULL;
-  }
-
-  if (fread(buf, 1, sizeof(buf), urandom) != sizeof(buf)) {
-    dtls_emerg("cannot initialize PRNG\n");
-    return NULL;
-  }
-
-  fclose(urandom);
-  dtls_prng_init((unsigned long)*buf);
-#endif /* WITH_POSIX */
 
   c = malloc_context();
   if (!c)

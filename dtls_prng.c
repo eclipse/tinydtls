@@ -16,41 +16,22 @@
  *
  *******************************************************************************/
 
-/** 
- * @file prng.h
- * @brief Pseudo Random Numbers
- */
-
-#ifndef _DTLS_PRNG_H_
-#define _DTLS_PRNG_H_
-
+#include "dtls_config.h"
 #include "tinydtls.h"
-#include <stdlib.h>
 
-/** 
- * @defgroup prng Pseudo Random Numbers
- * @{
- */
+#if defined (WITH_CONTIKI)
+#include "platform-specific/dtls_prng_contiki.c"
 
-/**
- * Fills \p buf with \p len random bytes. This is the default
- * implementation for prng().  You might want to change prng() to use
- * a better PRNG on your specific platform.
- *
- * @buf The buffer to fill
- * @len the length of the buffer to fill
- *
- * @return 1 buffer filled
- */
-int dtls_prng(unsigned char *buf, size_t len);
+#elif defined (ESPIDF_VERSION)
+#include "platform-specific/dtls_prng_espidf.c"
 
-/**
- * Seeds the random number generator used by the function dtls_prng()
- *
- * @seed The seed to prime the random number generator
- */
-void dtls_prng_init(unsigned seed);
+#elif defined (RIOT_VERSION)
+#include "platform-specific/dtls_prng_riot.c"
 
-/** @} */
+#elif defined (WITH_POSIX)
+#include "platform-specific/dtls_prng_posix.c"
 
-#endif /* _DTLS_PRNG_H_ */
+#else
+#error platform specific prng not defined
+
+#endif

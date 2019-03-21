@@ -32,7 +32,7 @@
 #include "crypto.h"
 #include "ccm.h"
 #include "ecc/ecc.h"
-#include "prng.h"
+#include "dtls_prng.h"
 #include "netq.h"
 
 #if !(defined(WITH_CONTIKI)) && !(defined(RIOT_VERSION))

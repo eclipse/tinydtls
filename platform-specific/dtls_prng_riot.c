@@ -6,51 +6,37 @@
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Olaf Bergmann  - initial API and implementation
  *    Hauke Mehrtens - memory optimization, ECC integration
+ *    Achim Kraus    - session recovery
+ *    Sachin Agrawal - rehandshake support
  *    Jon Shallow    - platform dependent prng support
  *
  *******************************************************************************/
 
-/** 
- * @file prng.h
- * @brief Pseudo Random Numbers
- */
-
-#ifndef _DTLS_PRNG_H_
-#define _DTLS_PRNG_H_
-
 #include "tinydtls.h"
-#include <stdlib.h>
+#include "dtls_prng.h"
 
-/** 
- * @defgroup prng Pseudo Random Numbers
- * @{
- */
+#include <stdlib.h>
 
 /**
  * Fills \p buf with \p len random bytes. This is the default
  * implementation for prng().  You might want to change prng() to use
  * a better PRNG on your specific platform.
- *
- * @buf The buffer to fill
- * @len the length of the buffer to fill
- *
- * @return 1 buffer filled
  */
-int dtls_prng(unsigned char *buf, size_t len);
+int
+dtls_prng(unsigned char *buf, size_t len) {
+  while (len--)
+    *buf++ = rand() & 0xFF;
+  return 1;
+}
 
-/**
- * Seeds the random number generator used by the function dtls_prng()
- *
- * @seed The seed to prime the random number generator
- */
-void dtls_prng_init(unsigned seed);
+void
+dtls_prng_init(unsigned seed) {
+  srand(seed);
+}
 
-/** @} */
-
-#endif /* _DTLS_PRNG_H_ */

@@ -10,7 +10,7 @@ top_builddir = @top_builddir@
 
 THIS=platform-specific
 DISTDIR?=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
-FILES:=Makefile.in $(wildcard *.h)
+FILES:=Makefile.in $(wildcard *.h) $(wildcard *.c)
 
 clean:
 
