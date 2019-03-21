@@ -16,7 +16,6 @@
  *
  *******************************************************************************/
 
-#include "dtls_config.h"
 #include "tinydtls.h"
 
 #if defined (WITH_CONTIKI)
