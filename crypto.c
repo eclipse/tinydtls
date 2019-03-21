@@ -486,13 +486,13 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
   int ret;
   uint32_t priv[8];
   uint32_t hash[8];
-  uint32_t rand[8];
+  uint32_t randv[8];
   
   dtls_ec_key_to_uint32(priv_key, key_size, priv);
   dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
   do {
-    dtls_prng((unsigned char *)rand, key_size);
-    ret = ecc_ecdsa_sign(priv, hash, rand, point_r, point_s);
+    dtls_prng((unsigned char *)randv, key_size);
+    ret = ecc_ecdsa_sign(priv, hash, randv, point_r, point_s);
   } while (ret);
 }
 
