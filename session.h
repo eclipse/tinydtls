@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+ * Copyright (c) 2011-2019 Olaf Bergmann (TZI) and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -83,7 +83,6 @@ session_t* dtls_new_session(struct sockaddr *addr, socklen_t addrlen);
  *     freed.
  */
 void dtls_free_session(session_t *sess);
-#endif
 
 /**
  * Extracts the address of the given ::session_t.
@@ -94,6 +93,7 @@ void dtls_free_session(session_t *sess);
  * @return The address or @c NULL if @p sess was @c NULL.
  */
 struct sockaddr* dtls_session_addr(session_t *sess, socklen_t *addrlen);
+#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
 
 /**
  * Compares the given session objects. This function returns @c 0

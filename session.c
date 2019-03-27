@@ -106,7 +106,6 @@ void
 dtls_free_session(session_t *sess) {
   free(sess);
 }
-#endif
 
 struct sockaddr*
 dtls_session_addr(session_t *sess, socklen_t *addrlen) {
@@ -116,6 +115,7 @@ dtls_session_addr(session_t *sess, socklen_t *addrlen) {
   *addrlen = sess->size;
   return &sess->addr.sa;
 }
+#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
 
 int
 dtls_session_equals(const session_t *a, const session_t *b) {
