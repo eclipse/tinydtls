@@ -671,7 +671,7 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
   * see IANA for a full list of types:
   * https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-7
   */
-static char *dtls_handshake_type_to_name(int type)
+static const char *dtls_handshake_type_to_name(int type)
 {
   switch (type) {
   case DTLS_HT_HELLO_REQUEST:

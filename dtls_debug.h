@@ -74,7 +74,11 @@ void dtls_set_log_level(log_t level);
  * level is below or equal to the log level that set by
  * set_log_level(). */
 #ifdef HAVE_VPRINTF
-void dsrv_log(log_t level, char *format, ...);
+#if (defined(__GNUC__))
+void dsrv_log(log_t level, const char *format, ...) __attribute__ ((format(printf, 2, 3)));
+#else /* !__GNUC__ */
+void dsrv_log(log_t level, const char *format, ...);
+#endif /* !__GNUC__ */
 #else
 #define dsrv_log(level, format, ...) PRINTF(format, ##__VA_ARGS__)
 #endif
