@@ -20,6 +20,7 @@
 
 #include "tinydtls.h"
 #include "dtls_prng.h"
+#include <esp_system.h>
 
 #include <stdlib.h>
 
