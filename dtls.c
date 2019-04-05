@@ -3691,7 +3691,10 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
    * used by peer is released.
    */
   if (data[0] == DTLS_ALERT_LEVEL_FATAL || data[1] == DTLS_ALERT_CLOSE_NOTIFY) {
-    dtls_alert("%d invalidate peer\n", data[1]);
+    if (data[1] == DTLS_ALERT_CLOSE_NOTIFY)
+      dtls_info("invalidate peer (Close Notify)\n");
+    else
+      dtls_alert("%d invalidate peer\n", data[1]);
 
     DEL_PEER(ctx->peers, peer);
 
@@ -3896,7 +3899,10 @@ dtls_handle_message(dtls_context_t *ctx,
       }
       err = handle_alert(ctx, peer, msg, data, data_length);
       if (err < 0 || err == 1) {
-         dtls_warn("received alert, peer has been invalidated\n");
+         if (data[1] == DTLS_ALERT_CLOSE_NOTIFY)
+            dtls_info("received alert, peer has been invalidated\n");
+         else
+           dtls_warn("received alert, peer has been invalidated\n");
          /* handle alert has invalidated peer */
          peer = NULL;
          return err < 0 ?err:-1;
