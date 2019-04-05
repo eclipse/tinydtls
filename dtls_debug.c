@@ -60,7 +60,7 @@ dtls_set_log_level(log_t level) {
 }
 
 /* this array has the same order as the type log_t */
-static char *loglevels[] = {
+static const char *loglevels[] = {
   "EMRG", "ALRT", "CRIT", "WARN", "NOTE", "INFO", "DEBG"
 };
 
@@ -214,7 +214,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
 #ifndef WITH_CONTIKI
 void
-dsrv_log(log_t level, char *format, ...) {
+dsrv_log(log_t level, const char *format, ...) {
   static char timebuf[32];
   va_list ap;
   FILE *log_fd;
