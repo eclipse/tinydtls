@@ -169,7 +169,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     dtls_debug("got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
     if (sizeof(buf) < len) {
-      dtls_warn("packet was truncated (%d bytes lost)\n", len - sizeof(buf));
+      dtls_warn("packet was truncated (%ld bytes lost)\n", len - sizeof(buf));
     }
   }
 

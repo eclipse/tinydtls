@@ -114,7 +114,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
   switch (type) {
   case DTLS_PSK_IDENTITY:
     if (id_len) {
-      dtls_debug("got psk_identity_hint: '%.*s'\n", id_len, id);
+      dtls_debug("got psk_identity_hint: '%.*s'\n", (int)id_len, id);
     }
 
     if (result_length < psk_id_length) {
