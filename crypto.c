@@ -35,10 +35,9 @@
 #include "dtls_prng.h"
 #include "netq.h"
 
-#if !(defined(WITH_CONTIKI)) && !(defined(RIOT_VERSION))
-# include <pthread.h>
-#elif defined(RIOT_VERSION)
-# include <mutex.h>
+#include "dtls_mutex.h"
+
+#if defined(RIOT_VERSION)
 # include <memarray.h>
 
 dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
@@ -51,35 +50,23 @@ memarray_t security_storage;
 memarray_t handshake_storage;
 memarray_t security_storage;
 
-#endif
+#endif /* RIOT_VERSION */
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 
 static struct dtls_cipher_context_t cipher_context;
-#if !(defined(WITH_CONTIKI)) && !(defined(RIOT_VERSION))
-static pthread_mutex_t cipher_context_mutex = PTHREAD_MUTEX_INITIALIZER;
-#elif defined(RIOT_VERSION)
-static mutex_t cipher_context_mutex = MUTEX_INIT;
-#endif
+static dtls_mutex_t cipher_context_mutex = DTLS_MUTEX_INITIALIZER;
 
 static struct dtls_cipher_context_t *dtls_cipher_context_get(void)
 {
-#if !(defined(WITH_CONTIKI)) && !(defined(RIOT_VERSION))
-  pthread_mutex_lock(&cipher_context_mutex);
-#elif defined(RIOT_VERSION)
-  mutex_lock(&cipher_context_mutex);
-#endif
+  dtls_mutex_lock(&cipher_context_mutex);
   return &cipher_context;
 }
 
 static void dtls_cipher_context_release(void)
 {
-#if !(defined(WITH_CONTIKI)) && !(defined(RIOT_VERSION))
-  pthread_mutex_unlock(&cipher_context_mutex);
-#elif defined(RIOT_VERSION)
-  mutex_unlock(&cipher_context_mutex);
-#endif
+  dtls_mutex_unlock(&cipher_context_mutex);
 }
 
 #if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
