@@ -1635,7 +1635,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   res = CALL(ctx, write, session, sendbuf, len);
 
 return_unlock:
-#if DTLS_CONSTRAINED_STACK
+#ifdef DTLS_CONSTRAINED_STACK
   dtls_mutex_unlock(&static_mutex);
 #endif /* DTLS_CONSTRAINED_STACK */
 
@@ -4169,7 +4169,7 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 
       (void)CALL(context, write, &node->peer->session, sendbuf, len);
 return_unlock:
-#if DTLS_CONSTRAINED_STACK
+#ifdef DTLS_CONSTRAINED_STACK
       dtls_mutex_unlock(&static_mutex);
 #endif /* DTLS_CONSTRAINED_STACK */
 
