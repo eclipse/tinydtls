@@ -2333,6 +2333,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 
   p = buf;
 
+  memset(buf, 0, sizeof(buf));
   switch (handshake->cipher) {
 #ifdef DTLS_PSK
   case TLS_PSK_WITH_AES_128_CCM_8: {
