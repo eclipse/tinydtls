@@ -26,7 +26,7 @@ abs_builddir = @abs_builddir@
 top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
-SOURCES:= rijndael.c
+SOURCES:= rijndael.c rijndael_wrap.c
 HEADERS:= rijndael.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@
