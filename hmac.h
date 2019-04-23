@@ -36,7 +36,19 @@ typedef sha256_context_t dtls_sha256_ctx;
 #define dtls_sha256_update(Ctx,Input,Len) sha256_update((Ctx), (Input), (Len))
 #define dtls_sha256_final(Buf,Ctx)        sha256_final((Ctx), (Buf))
 
-#else /* RIOT_VERSION */
+#elif defined ESP_PLATFORM && defined CONFIG_LIBSODIUM_USE_MBEDTLS_SHA
+#include "sodium/crypto_hash_sha256.h"
+
+typedef crypto_hash_sha256_state dtls_hash_ctx;
+typedef crypto_hash_sha256_state dtls_sha256_ctx;
+#define DTLS_HASH_CTX_SIZE sizeof(crypto_hash_sha256_state)
+#define DTLS_SHA256_DIGEST_LENGTH (crypto_hash_sha256_BYTES)
+
+#define dtls_sha256_init(Ctx)             crypto_hash_sha256_init((Ctx))
+#define dtls_sha256_update(Ctx,Input,Len) crypto_hash_sha256_update((Ctx), (Input), (Len))
+#define dtls_sha256_final(Buf,Ctx)        crypto_hash_sha256_final((Ctx), (Buf))
+
+#else /* ! RIOT_VERSION && ! ESP_PLATFORM */
 
 /** Aaron D. Gifford's implementation of SHA256
  *  see http://www.aarongifford.com/ */
@@ -45,7 +57,7 @@ typedef sha256_context_t dtls_sha256_ctx;
 typedef dtls_sha256_ctx dtls_hash_ctx;
 #define DTLS_HASH_CTX_SIZE sizeof(dtls_sha256_ctx)
 
-#endif /* RIOT_VERSION */
+#endif /* ! RIOT_VERSION && ! ESP_PLATFORM */
 
 
 typedef dtls_hash_ctx *dtls_hash_t;
