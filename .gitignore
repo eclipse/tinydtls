@@ -14,6 +14,7 @@ doc/Doxyfile
 doc/doxygen.out
 doc/html/
 libtinydtls.a
+libtinydtls.so
 tests/ccm-test
 tests/dtls-client
 tests/dtls-server

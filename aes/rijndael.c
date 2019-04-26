@@ -722,7 +722,6 @@ static const aes_u32 rcon[] = {
 #define GETU32(pt) (((aes_u32)(pt)[0] << 24) ^ ((aes_u32)(pt)[1] << 16) ^ ((aes_u32)(pt)[2] <<  8) ^ ((aes_u32)(pt)[3]))
 #define PUTU32(ct, st) { (ct)[0] = (aes_u8)((st) >> 24); (ct)[1] = (aes_u8)((st) >> 16); (ct)[2] = (aes_u8)((st) >>  8); (ct)[3] = (aes_u8)(st); }
 
-#ifndef DTLS_EXT_RIJNDAEL
 /**
  * Expand the cipher key into the encryption key schedule.
  *
@@ -809,7 +808,6 @@ rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 	}
 	return 0;
 }
-#endif /* ! DTLS_EXT_RIJNDAEL */
 
 #ifdef WITH_AES_DECRYPT
 /**
@@ -861,7 +859,6 @@ rijndaelKeySetupDec(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int ke
 }
 #endif
 
-#ifndef DTLS_EXT_RIJNDAEL
 void
 rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
     aes_u8 ct[16])
@@ -1047,7 +1044,7 @@ rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16],
 }
 
 #ifdef WITH_AES_DECRYPT
-static void
+void
 rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16],
     aes_u8 pt[16])
 {
@@ -1231,54 +1228,4 @@ rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16],
 	PUTU32(pt + 12, s3);
 }
 #endif /* WITH_AES_DECRYPT */
-#endif /* ! DTLS_EXT_RIJNDAEL */
 
-/* setup key context for encryption only */
-int
-rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
-{
-	int rounds;
-
-	rounds = rijndaelKeySetupEnc(ctx->ek, key, bits);
-	if (rounds == 0)
-		return -1;
-
-	ctx->Nr = rounds;
-#ifdef WITH_AES_DECRYPT
-	ctx->enc_only = 1;
-#endif
-
-	return 0;
-}
-
-#ifdef WITH_AES_DECRYPT
-/* setup key context for both encryption and decryption */
-int
-rijndael_set_key(rijndael_ctx *ctx, const u_char *key, int bits)
-{
-	int rounds;
-
-	rounds = rijndaelKeySetupEnc(ctx->ek, key, bits);
-	if (rounds == 0)
-		return -1;
-	if (rijndaelKeySetupDec(ctx->dk, key, bits) != rounds)
-		return -1;
-
-	ctx->Nr = rounds;
-	ctx->enc_only = 0;
-
-	return 0;
-}
-
-void
-rijndael_decrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
-{
-	rijndaelDecrypt(ctx->dk, ctx->Nr, src, dst);
-}
-#endif
-
-void
-rijndael_encrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
-{
-	rijndaelEncrypt(ctx->ek, ctx->Nr, src, dst);
-}
