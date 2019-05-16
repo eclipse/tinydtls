@@ -343,7 +343,7 @@ dtls_create_cookie(dtls_context_t *ctx,
 		   uint8 *msg, size_t msglen,
 		   uint8 *cookie, int *clen) {
   unsigned char buf[DTLS_HMAC_MAX];
-  size_t e;
+  size_t e, fragment_length;
   int len;
 
   /* create cookie with HMAC-SHA256 over:
@@ -383,9 +383,13 @@ dtls_create_cookie(dtls_context_t *ctx,
   if (e + DTLS_HS_LENGTH > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
+  fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
+  if ((fragment_length < e) || (e + DTLS_HS_LENGTH + fragment_length) > msglen)
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+
   dtls_hmac_update(&hmac_context,
 		   msg + DTLS_HS_LENGTH + e,
-		   dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg)) - e);
+		   fragment_length - e);
 
   len = dtls_hmac_finalize(&hmac_context, buf);
 
