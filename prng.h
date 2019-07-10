@@ -32,6 +32,7 @@
 
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
+#include <sys/random.h>
 
 /**
  * Fills \p buf with \p len random bytes. This is the default
@@ -40,14 +41,13 @@
  */
 static inline int
 dtls_prng(unsigned char *buf, size_t len) {
-  while (len--)
-    *buf++ = rand() & 0xFF;
+  getrandom(buf, len, 0);
   return 1;
 }
 
 static inline void
 dtls_prng_init(unsigned short seed) {
-	srand(seed);
+  // nothing to do on linux
 }
 #else /* WITH_CONTIKI */
 #include <string.h>
