@@ -1075,7 +1075,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   data_length -= sizeof(uint16) + i;
 
   ok = 0;
-  while (i && !ok) {
+  while ((i >= (int)sizeof(uint16)) && !ok) {
     config->cipher = dtls_uint16_to_int(data);
     ok = known_cipher(ctx, config->cipher, 0);
     i -= sizeof(uint16);
