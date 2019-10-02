@@ -79,7 +79,9 @@ typedef struct {
 
 /* This is the maximal supported length of the psk client identity and psk
  * server identity hint */
+#ifndef DTLS_PSK_MAX_CLIENT_IDENTITY_LEN
 #define DTLS_PSK_MAX_CLIENT_IDENTITY_LEN   32
+#endif /* DTLS_PSK_MAX_CLIENT_IDENTITY_LEN */
 
 /* This is the maximal supported length of the pre-shared key. */
 #define DTLS_PSK_MAX_KEY_LEN DTLS_KEY_LENGTH
