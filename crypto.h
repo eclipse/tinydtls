@@ -59,6 +59,9 @@ typedef enum {
 /** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
 typedef struct {
   rijndael_ctx ctx;		       /**< AES-128 encryption context */
+  uint8_t tag_length;                  /**< length of MAC tag (=M) */
+  uint8_t l;                           /**< number of bytes in length
+                                        *   field (= L) */
 } aes128_ccm_t;
 
 typedef struct dtls_cipher_context_t {
@@ -240,6 +243,42 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
 	      const unsigned char *packet, size_t length,
 	      unsigned char *buf);
 
+/**
+ * Represents AEAD parameters for dtls_encrypt_params().
+ */
+typedef struct {
+  uint8_t *nonce;               /**< must be exactly 15 - l bytes */
+  uint8_t tag_length;           /**< the MAC tag length (M) */
+  uint8_t l;                    /**< number of bytes in the length
+                                 *   field (L) */
+} dtls_ccm_params_t;
+
+/**
+ * Encrypts the specified \p src of given \p length, writing the
+ * result to \p buf. The cipher implementation may add more data to
+ * the result buffer such as an initialization vector or padding
+ * (e.g. for block cipers in CBC mode). The caller therefore must
+ * ensure that \p buf provides sufficient storage to hold the result.
+ * Usually this means ( 2 + \p length / blocksize ) * blocksize.  The
+ * function returns a value less than zero on error or otherwise the
+ * number of bytes written.
+ *
+ * \param params AEAD parameters: Nonce, M and L.
+ * \param src    The data to encrypt.
+ * \param length The actual size of of \p src.
+ * \param buf    The result buffer. \p src and \p buf must not
+ *               overlap.
+ * \param aad    additional data for AEAD ciphers
+ * \param aad_length actual size of @p aad
+ * \return The number of encrypted bytes on success, less than zero
+ *         otherwise.
+ */
+int dtls_encrypt_params(const dtls_ccm_params_t *params,
+                        const unsigned char *src, size_t length,
+                        unsigned char *buf,
+                        const unsigned char *key, size_t keylen,
+                        const unsigned char *aad, size_t aad_length);
+
 /** 
  * Encrypts the specified \p src of given \p length, writing the
  * result to \p buf. The cipher implementation may add more data to
@@ -250,21 +289,48 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * function returns a value less than zero on error or otherwise the
  * number of bytes written.
  *
- * \param ctx    The cipher context to use.
  * \param src    The data to encrypt.
  * \param length The actual size of of \p src.
  * \param buf    The result buffer. \p src and \p buf must not 
  *               overlap.
+ * \param nonce  The nonce used for encryption. Must be exactly 13
+ *               bytes, because L is set to 2.
  * \param aad    additional data for AEAD ciphers
  * \param aad_length actual size of @p aad
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
+ *
+ * \deprecated dtls_encrypt() always sets M=8, L=2. Use
+ *             dtls_encrypt_params() instead.
  */
 int dtls_encrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
-		 unsigned char *nounce,
+		 unsigned char *nonce,
 		 unsigned char *key, size_t keylen,
 		 const unsigned char *aad, size_t aad_length);
+
+/**
+ * Decrypts the given buffer \p src of given \p length, writing the
+ * result to \p buf. The function returns \c -1 in case of an error,
+ * or the number of bytes written. Note that for block ciphers, \p
+ * length must be a multiple of the cipher's block size. A return
+ * value between \c 0 and the actual length indicates that only \c n-1
+ * block have been processed. Unlike dtls_encrypt(), the source
+ * and destination of dtls_decrypt() may overlap.
+ *
+ * \param params AEAD parameters: Nonce, M and L.
+ * \param length  The length of the input buffer.
+ * \param buf     The result buffer.
+ * \param aad     additional authentication data for AEAD ciphers
+ * \param aad_length actual size of @p aad
+ * \return Less than zero on error, the number of decrypted bytes
+ *         otherwise.
+ */
+int dtls_decrypt_params(const dtls_ccm_params_t *params,
+                        const unsigned char *src, size_t length,
+                        unsigned char *buf,
+                        const unsigned char *key, size_t keylen,
+                        const unsigned char *aad, size_t aad_length);
 
 /** 
  * Decrypts the given buffer \p src of given \p length, writing the
@@ -275,18 +341,22 @@ int dtls_encrypt(const unsigned char *src, size_t length,
  * block have been processed. Unlike dtls_encrypt(), the source
  * and destination of dtls_decrypt() may overlap. 
  * 
- * \param ctx     The cipher context to use.
  * \param src     The buffer to decrypt.
- * \param length  The length of the input buffer. 
+ * \param length  The length of the input buffer.
  * \param buf     The result buffer.
+ * \param nonce  The nonce used for encryption. Must be exactly 13
+ *               bytes, because L is set to 2.
  * \param aad     additional authentication data for AEAD ciphers
  * \param aad_length actual size of @p aad
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
+ *
+ * \deprecated dtls_decrypt() always sets M=8, L=2. Use
+ *             dtls_decrypt_params() instead.
  */
 int dtls_decrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
-		 unsigned char *nounce,
+		 unsigned char *nonce,
 		 unsigned char *key, size_t keylen,
 		 const unsigned char *a_data, size_t a_data_length);
 
