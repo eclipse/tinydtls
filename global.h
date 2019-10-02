@@ -50,7 +50,7 @@ typedef unsigned char uint48[6];
 #ifdef DTLS_ECC
 #define DTLS_MAX_BUF 200
 #else /* DTLS_ECC */
-#define DTLS_MAX_BUF 100
+#define DTLS_MAX_BUF 120
 #endif /* DTLS_ECC */
 #else /* WITH_CONTIKI */
 #define DTLS_MAX_BUF 1400
