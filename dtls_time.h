@@ -41,7 +41,11 @@
 
 #include <xtimer.h>
 
+/* this macro is already present on FreeBSD
+   which causes a redefine error otherwise */
+#ifndef CLOCK_SECOND
 #define CLOCK_SECOND (xtimer_ticks_from_usec64(1000000UL).ticks64)
+#endif
 
 typedef uint64_t clock_time_t;
 #else /* WITH_CONTIKI || RIOT_VERSION */
