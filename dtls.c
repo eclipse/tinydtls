@@ -384,7 +384,7 @@ dtls_create_cookie(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
   fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
-  if ((fragment_length < e) || (e + DTLS_HS_LENGTH + fragment_length) > msglen)
+  if ((fragment_length < e) || ((DTLS_HS_LENGTH + fragment_length) > msglen))
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
   dtls_hmac_update(&hmac_context,
