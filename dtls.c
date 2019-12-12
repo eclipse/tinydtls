@@ -371,7 +371,8 @@ dtls_create_cookie(dtls_context_t *ctx,
   /* feed in the beginning of the Client Hello up to and including the
      session id */
   e = sizeof(dtls_client_hello_t);
-  e += (*(msg + DTLS_HS_LENGTH + e) & 0xff) + sizeof(uint8);
+  e += *(uint8_t *)(msg + DTLS_HS_LENGTH + e) & 0xff;
+  e += sizeof(uint8);
   if (e + DTLS_HS_LENGTH > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
