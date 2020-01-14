@@ -43,7 +43,7 @@ block0(size_t M,       /* number of auth bytes */
        size_t L,       /* number of bytes to encode message length */
        size_t la,      /* l(a) octets additional authenticated data */
        size_t lm,      /* l(m) message length */
-       unsigned char nonce[DTLS_CCM_BLOCKSIZE],
+       const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
        unsigned char *result) {
   unsigned int i;
 
@@ -166,7 +166,7 @@ mac(rijndael_ctx *ctx,
 
 long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
-			 unsigned char nonce[DTLS_CCM_BLOCKSIZE], 
+			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la) {
   size_t i, len;
@@ -230,7 +230,7 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 
 long int
 dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
-			 unsigned char nonce[DTLS_CCM_BLOCKSIZE], 
+			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la) {
   

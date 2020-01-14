@@ -249,7 +249,7 @@ void dtls_mac(dtls_hmac_context_t *hmac_ctx,
  * Represents AEAD parameters for dtls_encrypt_params().
  */
 typedef struct {
-  uint8_t *nonce;               /**< must be exactly 15 - l bytes */
+  const uint8_t *nonce;         /**< must be exactly 15 - l bytes */
   uint8_t tag_length;           /**< the MAC tag length (M) */
   uint8_t l;                    /**< number of bytes in the length
                                  *   field (L) */
@@ -307,8 +307,8 @@ int dtls_encrypt_params(const dtls_ccm_params_t *params,
  */
 int dtls_encrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
-		 unsigned char *nonce,
-		 unsigned char *key, size_t keylen,
+		 const unsigned char *nonce,
+		 const unsigned char *key, size_t keylen,
 		 const unsigned char *aad, size_t aad_length);
 
 /**
@@ -358,8 +358,8 @@ int dtls_decrypt_params(const dtls_ccm_params_t *params,
  */
 int dtls_decrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
-		 unsigned char *nonce,
-		 unsigned char *key, size_t keylen,
+		 const unsigned char *nonce,
+		 const unsigned char *key, size_t keylen,
 		 const unsigned char *a_data, size_t a_data_length);
 
 /* helper functions */

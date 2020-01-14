@@ -304,7 +304,7 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
 static size_t
 dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 		 unsigned char *buf, 
-		 unsigned char *nounce,
+		 const unsigned char *nonce,
 		 const unsigned char *aad, size_t la) {
   long int len;
   (void)src;
@@ -314,7 +314,7 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
   len = dtls_ccm_encrypt_message(&ccm_ctx->ctx,
                                  ccm_ctx->tag_length /* M */,
 				 ccm_ctx->l /* L */,
-				 nounce,
+				 nonce,
 				 buf, srclen,
 				 aad, la);
   return len;
@@ -323,7 +323,7 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 static size_t
 dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 		 size_t srclen, unsigned char *buf,
-		 unsigned char *nounce,
+		 const unsigned char *nonce,
 		 const unsigned char *aad, size_t la) {
   long int len;
   (void)src;
@@ -333,7 +333,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
   len = dtls_ccm_decrypt_message(&ccm_ctx->ctx,
                                  ccm_ctx->tag_length /* M */,
 				 ccm_ctx->l /* L */,
-				 nounce,
+				 nonce,
 				 buf, srclen,
 				 aad, la);
   return len;
@@ -576,13 +576,13 @@ error:
 int 
 dtls_encrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
-	     unsigned char *nonce,
-	     unsigned char *key, size_t keylen,
+	     const unsigned char *nonce,
+	     const unsigned char *key, size_t keylen,
 	     const unsigned char *aad, size_t la)
 {
   /* For backwards-compatibility, dtls_encrypt_params is called with
    * M=8 and L=2. */
-  dtls_ccm_params_t params = { nonce, 8, 2 };
+  const dtls_ccm_params_t params = { nonce, 8, 2 };
 
   return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
@@ -618,13 +618,13 @@ error:
 int
 dtls_decrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
-	     unsigned char *nonce,
-	     unsigned char *key, size_t keylen,
+	     const unsigned char *nonce,
+	     const unsigned char *key, size_t keylen,
 	     const unsigned char *aad, size_t la)
 {
   /* For backwards-compatibility, dtls_encrypt_params is called with
    * M=8 and L=2. */
-  dtls_ccm_params_t params = { nonce, 8, 2 };
+  const dtls_ccm_params_t params = { nonce, 8, 2 };
 
   return dtls_decrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
