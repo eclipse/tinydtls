@@ -53,7 +53,7 @@ FILES:=Makefile.in configure configure.ac dtls_config.h.in \
   Makefile.tinydtls $(SOURCES) $(HEADERS)
 LIB:=libtinydtls
 LIBS:=$(LIB).a $(LIB).so
-LDFLAGS:=@LIBS@
+LDFLAGS:=@LDFLAGS@ @LIBS@
 ARFLAGS:=cru
 doc:=doc
 
@@ -111,10 +111,10 @@ dist:	$(FILES) $(DISTSUBDIRS)
 	tar czf $(package).tar.gz $(DISTDIR)
 
 install:	$(LIBS) $(HEADERS) $(SUBDIRS)
-	test -d $(libdir) || mkdir -p $(libdir)
-	test -d $(includedir) || mkdir -p $(includedir)
-	$(install) $(LIBS) $(libdir)/
-	$(install) $(HEADERS) $(includedir)/
+	test -d $(DESTDIR)$(libdir) || mkdir -p $(DESTDIR)$(libdir)
+	test -d $(DESTDIR)$(includedir) || mkdir -p $(DESTDIR)$(includedir)
+	$(install) $(LIBS) $(DESTDIR)$(libdir)/
+	$(install) $(HEADERS) $(DESTDIR)$(includedir)/
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done

@@ -31,6 +31,7 @@ HEADERS:= rijndael.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@
 CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@
+LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) 
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
@@ -61,8 +62,8 @@ dist:	$(FILES)
 	cp -p $(FILES) $(DISTDIR)/aes
 
 install:	$(HEADERS)
-	test -d $(includedir)/aes || mkdir -p $(includedir)/aes
-	$(install) $(HEADERS) $(includedir)/aes
+	test -d $(DESTDIR)$(includedir)/aes || mkdir -p $(DESTDIR)$(includedir)/aes
+	$(install) $(HEADERS) $(DESTDIR)$(includedir)/aes
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
