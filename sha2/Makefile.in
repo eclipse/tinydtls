@@ -31,6 +31,7 @@ HEADERS:=sha2.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@ -I$(top_srcdir)
 CFLAGS=-DSHA2_USE_INTTYPES_H -Wall -std=c99 -pedantic @CFLAGS@
+LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) README sha2prog.c sha2speed.c sha2test.pl 
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
@@ -63,8 +64,8 @@ dist:	$(FILES)
 	cp -pr testvectors $(DISTDIR)/sha2/testvectors
 
 install:	$(HEADERS)
-	test -d $(includedir)/sha2 || mkdir -p $(includedir)/sha2
-	$(install) $(HEADERS) $(includedir)/sha2
+	test -d $(DESTDIR)$(includedir)/sha2 || mkdir -p $(DESTDIR)$(includedir)/sha2
+	$(install) $(HEADERS) $(DESTDIR)$(includedir)/sha2
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@
