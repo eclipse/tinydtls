@@ -52,7 +52,10 @@ DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.ac dtls_config.h.in \
   Makefile.tinydtls $(SOURCES) $(HEADERS)
 LIB:=libtinydtls
-LIBS:=$(LIB).a $(LIB).so
+LIBS:=$(LIB).a
+ifeq ("@ENABLE_SHARED@", "1")
+LIBS:=$(LIBS) $(LIB).so
+endif
 LDFLAGS:=@LDFLAGS@ @LIBS@
 ARFLAGS:=cru
 doc:=doc

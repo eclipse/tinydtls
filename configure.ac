@@ -98,6 +98,14 @@ fi
 
 AC_SUBST(have_cunit)
 
+AC_ARG_ENABLE(shared,
+  [AS_HELP_STRING([--disable-shared],[disable build of shared library])],
+  [],
+  [enable_shared=yes])
+if test "$enable_shared" = "yes" ; then
+  ENABLE_SHARED=1
+fi
+
 CPPFLAGS="${CPPFLAGS} -DDTLSv12 -DWITH_SHA256"
 OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
@@ -105,6 +113,7 @@ AC_SUBST(OPT_OBJS)
 AC_SUBST(NDEBUG)
 AC_SUBST(DTLS_ECC)
 AC_SUBST(DTLS_PSK)
+AC_SUBST(ENABLE_SHARED)
 AC_SUBST(AR)
 
 # Checks for header files.
