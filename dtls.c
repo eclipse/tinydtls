@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+ * Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -2970,7 +2970,15 @@ check_certificate_request(dtls_context_t *ctx,
 
   hash_alg = 0;
   sig_alg = 0;
-  for (; i > 0 ; i -= sizeof(uint16)) {
+
+  /* Signal error if we do not have an even number of remaining
+   * bytes. */
+  if ((i & 1) != 0) {
+    dtls_alert("illegal certificate request\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+  
+  for (; i >= sizeof(uint16); i -= sizeof(uint16)) {
     int current_hash_alg;
     int current_sig_alg;
 
@@ -2988,7 +2996,7 @@ check_certificate_request(dtls_context_t *ctx,
 
   if (hash_alg != TLS_EXT_SIG_HASH_ALGO_SHA256 ||
       sig_alg != TLS_EXT_SIG_HASH_ALGO_ECDSA) {
-    dtls_alert("no supported hash and signature algorithem\n");
+    dtls_alert("no supported hash and signature algorithm\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
