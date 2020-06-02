@@ -80,6 +80,24 @@ AC_ARG_WITH(psk,
   [AC_DEFINE(DTLS_PSK, 1, [Define to 1 if building with PSK support])
    DTLS_PSK=1])
 
+# configure options
+# __tests__
+AC_ARG_ENABLE([tests],
+              [AS_HELP_STRING([--enable-tests],
+                              [Enable building the binary testsuite [default=no]])],
+              [build_tests="$enableval"],
+              [build_tests="no"])
+
+if test "x$build_tests" = "xyes"; then
+    PKG_CHECK_MODULES([CUNIT],
+                      [cunit],
+                      [have_cunit=yes
+                       AC_DEFINE(HAVE_LIBCUNIT, [1], [Define if the system has libcunit])],
+                      [have_cunit=no])
+fi
+
+AC_SUBST(have_cunit)
+
 CPPFLAGS="${CPPFLAGS} -DDTLSv12 -DWITH_SHA256"
 OPT_OBJS="${OPT_OBJS} sha2/sha2.o"
 
@@ -114,6 +132,7 @@ AC_CONFIG_FILES([Makefile
                  doc/Makefile
                  doc/Doxyfile
                  tests/Makefile
+                 tests/unit-tests/Makefile
                  platform-specific/Makefile
 		 sha2/Makefile
 		 aes/Makefile
