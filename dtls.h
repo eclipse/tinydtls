@@ -226,8 +226,6 @@ typedef struct dtls_context_t {
   void *app;			/**< application-specific data */
 
   dtls_handler_t *h;		/**< callback handlers */
-
-  unsigned char readbuf[DTLS_MAX_BUF];
 } dtls_context_t;
 
 /** 
