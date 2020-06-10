@@ -581,8 +581,8 @@ dtls_encrypt(const unsigned char *src, size_t length,
 	     const unsigned char *aad, size_t la)
 {
   /* For backwards-compatibility, dtls_encrypt_params is called with
-   * M=8 and L=2. */
-  const dtls_ccm_params_t params = { nonce, 8, 2 };
+   * M=8 and L=3. */
+  const dtls_ccm_params_t params = { nonce, 8, 3 };
 
   return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
@@ -623,8 +623,8 @@ dtls_decrypt(const unsigned char *src, size_t length,
 	     const unsigned char *aad, size_t la)
 {
   /* For backwards-compatibility, dtls_encrypt_params is called with
-   * M=8 and L=2. */
-  const dtls_ccm_params_t params = { nonce, 8, 2 };
+   * M=8 and L=3. */
+  const dtls_ccm_params_t params = { nonce, 8, 3 };
 
   return dtls_decrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
