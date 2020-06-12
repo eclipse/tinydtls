@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -132,7 +132,7 @@ AC_CHECK_MEMBER([struct sockaddr_in6.sin6_len],
 		[#include <netinet/in.h>])
 
 # Checks for library functions.
-AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf])
+AC_CHECK_FUNCS([memset select socket strdup strerror strnlen fls vprintf getrandom])
 
 AC_CONFIG_HEADERS([dtls_config.h])
 
