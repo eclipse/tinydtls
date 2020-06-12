@@ -1493,7 +1493,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 
     uint8 last_fragment = (remaining_data_length < DTLS_MAX_HS_PAYLOAD);
 
-    dtls_debug("sending (fragmented) handshake, %i bytes remaining\n", remaining_data_length);
+    dtls_debug("sending (fragmented) handshake, %zu bytes remaining\n", remaining_data_length);
 
     // Create single fragment header for full data and hash it,  see RFC6347 Section 4.2.6
     // TODO: Do not create same header twice for non-fragmented packets
@@ -1522,7 +1522,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     dtls_debug("send handshake packet of type: %s (%i)\n",
                dtls_handshake_type_to_name(header_type), header_type);
 
-    dtls_debug("sending fragment: offset: %i, length: %i \n",
+    dtls_debug("sending fragment: offset: %zu, length: %zu \n",
                data_length-remaining_data_length, (last_fragment ? remaining_data_length : DTLS_MAX_HS_PAYLOAD));
 
     // TODO: Treat send errors here
@@ -3643,15 +3643,15 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   size_t fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
 
   if (packet_length > fragment_length){
-    dtls_debug("received fragmented handshake packet: length %i, fragment length %i.\n",
+    dtls_debug("received fragmented handshake packet: length %zu, fragment length %zu.\n",
                packet_length, fragment_length);
     /* If (reassembled) packet is larger than our buffer, drop with error */
     if(packet_length > DTLS_MAX_BUF){
-      dtls_warn("reassembled packet (%i) would be larger than buffer (%i)\n", packet_length, DTLS_MAX_BUF);
+      dtls_warn("reassembled packet (%zu) would be larger than buffer (%i)\n", packet_length, DTLS_MAX_BUF);
       return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
     }
     if((fragment_offset + fragment_length) > packet_length){
-        dtls_warn("fragment_offset (%i) + fragment_length (%i) > packet length (%i)\n",
+        dtls_warn("fragment_offset (%zu) + fragment_length (%zu) > packet length (%zu)\n",
                   fragment_offset, fragment_length, packet_length);
 		return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
     }
@@ -3678,7 +3678,7 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE); // TODO: Is this the correct alert?
     }
     /* Looks good: copy fragment in buffer */
-    dtls_debug("copying fragment to buffer: offset (%i), length (%i).\n", fragment_offset,
+    dtls_debug("copying fragment to buffer: offset (%zu), length (%zu).\n", fragment_offset,
                fragment_length);
     memcpy(peer->handshake_params->reassemble_buf->data + fragment_offset + (fragment_offset != 0 ? sizeof(dtls_handshake_header_t) : 0),
            data, (size_t)fragment_length + (fragment_offset == 0 ? sizeof(dtls_handshake_header_t) : 0));
