@@ -3595,7 +3595,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   return err;
 }
 
-void dtls_free_reassemble_buffer(dtls_handshake_parameters_t *handshake_params){
+static void
+dtls_free_reassemble_buffer(dtls_handshake_parameters_t *handshake_params){
   if(handshake_params != NULL && handshake_params->reassemble_buf != NULL){
     free(handshake_params->reassemble_buf->data);
     free(handshake_params->reassemble_buf);
@@ -3603,7 +3604,8 @@ void dtls_free_reassemble_buffer(dtls_handshake_parameters_t *handshake_params){
   }
 }
 
-int dtls_init_reassemble_buffer(dtls_handshake_parameters_t *handshake_params, size_t packet_length){
+static int
+dtls_init_reassemble_buffer(dtls_handshake_parameters_t *handshake_params, size_t packet_length){
   /* Allocate buffer for full packet */
   void *ret;
   ret = malloc(sizeof(dtls_hs_reassemble_t));
