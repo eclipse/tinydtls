@@ -115,6 +115,33 @@
 #endif
 
 /*
+ * Macros for copying blocks of memory and for zeroing out ranges
+ * of memory.  Using these macros makes it easy to switch from
+ * using memset()/memcpy() and using bzero()/bcopy().
+ *
+ * Please define either SHA2_USE_MEMSET_MEMCPY or define
+ * SHA2_USE_BZERO_BCOPY depending on which function set you
+ * choose to use:
+ */
+#if !defined(SHA2_USE_MEMSET_MEMCPY) && !defined(SHA2_USE_BZERO_BCOPY)
+/* Default to memset()/memcpy() if no option is specified */
+#define	SHA2_USE_MEMSET_MEMCPY	1
+#endif
+#if defined(SHA2_USE_MEMSET_MEMCPY) && defined(SHA2_USE_BZERO_BCOPY)
+/* Abort with an error if BOTH options are defined */
+#error Define either SHA2_USE_MEMSET_MEMCPY or SHA2_USE_BZERO_BCOPY, not both!
+#endif
+
+#ifdef SHA2_USE_MEMSET_MEMCPY
+#define MEMSET_BZERO(p,l)	memset((p), 0, (l))
+#define MEMCPY_BCOPY(d,s,l)	memcpy((d), (s), (l))
+#endif
+#ifdef SHA2_USE_BZERO_BCOPY
+#define MEMSET_BZERO(p,l)	bzero((p), (l))
+#define MEMCPY_BCOPY(d,s,l)	bcopy((s), (d), (l))
+#endif
+
+/*
  * Define the followingsha2_* types to types of the correct length on
  * the native archtecture.   Most BSD systems and Linux define u_intXX_t
  * types.  Machines with very recent ANSI C headers, can use the
@@ -174,7 +201,7 @@ static inline void put32be(sha2_byte* data, sha2_word32 val)
 	data[1] = val; val >>= 8;
 	data[0] = val;
 #else /* BYTE_ORDER != LITTLE_ENDIAN */
-	MEMCPY_BCOPY(data, &val, sizeof(tmp));
+	MEMCPY_BCOPY(data, &val, sizeof(val));
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */
 }
 
@@ -209,7 +236,7 @@ static inline void put64be(sha2_byte* data, sha2_word64 val)
 	data[1] = val; val >>= 8;
 	data[0] = val;
 #else /* BYTE_ORDER != LITTLE_ENDIAN */
-	MEMCPY_BCOPY(data, &val, sizeof(tmp));
+	MEMCPY_BCOPY(data, &val, sizeof(val));
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */
 }
 
@@ -224,33 +251,6 @@ static inline void put64be(sha2_byte* data, sha2_word64 val)
 		(w)[1]++; \
 	} \
 }
-
-/*
- * Macros for copying blocks of memory and for zeroing out ranges
- * of memory.  Using these macros makes it easy to switch from
- * using memset()/memcpy() and using bzero()/bcopy().
- *
- * Please define either SHA2_USE_MEMSET_MEMCPY or define
- * SHA2_USE_BZERO_BCOPY depending on which function set you
- * choose to use:
- */
-#if !defined(SHA2_USE_MEMSET_MEMCPY) && !defined(SHA2_USE_BZERO_BCOPY)
-/* Default to memset()/memcpy() if no option is specified */
-#define	SHA2_USE_MEMSET_MEMCPY	1
-#endif
-#if defined(SHA2_USE_MEMSET_MEMCPY) && defined(SHA2_USE_BZERO_BCOPY)
-/* Abort with an error if BOTH options are defined */
-#error Define either SHA2_USE_MEMSET_MEMCPY or SHA2_USE_BZERO_BCOPY, not both!
-#endif
-
-#ifdef SHA2_USE_MEMSET_MEMCPY
-#define MEMSET_BZERO(p,l)	memset((p), 0, (l))
-#define MEMCPY_BCOPY(d,s,l)	memcpy((d), (s), (l))
-#endif
-#ifdef SHA2_USE_BZERO_BCOPY
-#define MEMSET_BZERO(p,l)	bzero((p), (l))
-#define MEMCPY_BCOPY(d,s,l)	bcopy((s), (d), (l))
-#endif
 
 
 /*** THE SIX LOGICAL FUNCTIONS ****************************************/
