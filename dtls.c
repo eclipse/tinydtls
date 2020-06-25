@@ -502,6 +502,8 @@ dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
   return buf + sizeof(uint16);
 }
 
+enum seq_inc_t { DTLS_SEQ_NR_DONT_INCREASE, DTLS_SEQ_NR_INCREASE };
+
 /**
  * Initializes \p buf as handshake header. The caller must ensure that \p
  * buf is capable of holding at least \c sizeof(dtls_handshake_header_t)
@@ -512,7 +514,7 @@ static inline uint8 *
 dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
                           int length, int frag_offset,
                           int frag_length, uint8 *buf,
-                          int seq_nr_inc) {
+                          enum seq_inc_t seq_nr_inc) {
 
   dtls_int_to_uint8(buf, type);
   buf += sizeof(uint8);
@@ -525,7 +527,7 @@ dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
     dtls_int_to_uint16(buf, peer->handshake_params->hs_state.mseq_s);
 
     /* increment handshake message sequence counter by 1 */
-    if(seq_nr_inc) {
+    if(seq_nr_inc == DTLS_SEQ_NR_INCREASE) {
       peer->handshake_params->hs_state.mseq_s++;
     }
   } else {
@@ -1481,48 +1483,70 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 			     uint8 *data, size_t data_length,
 			     int add_hash)
 {
-  int ret = 0;
+  int ret = 0, result;
   int last_fragment = 0; /* indicates if the fragment being processed is the last one */
   size_t remaining_data_length = data_length;
 
   uint8 buf[DTLS_HS_LENGTH];
-  uint8 *end; /* a pointer used to calculate the amount of data written into buf */
+  uint8 *end = NULL; /* a pointer used to calculate the amount of data written into buf */
   uint8 *data_array[2];
   size_t data_len_array[2];
   dtls_security_parameters_t *security = peer ? dtls_security_params(peer) : NULL;
   const size_t fragment_size = DTLS_MAXIMUM_HANDSHAKE_FRAGMENT_SIZE;
 
-  do {
-    size_t i = 0;
+  last_fragment = (data_length <= fragment_size);
 
-    last_fragment = (remaining_data_length <= fragment_size);
+  if (add_hash) {
+    /* Update hash values for Finished MAC. The hash value is
+     * calculated as if the data has been sent in a single
+     * fragment. Setting the end pointer != NULL indicates that buf
+     * already contains a handshake header for a single fragment. If
+     * there is only one fragment so send, the sequence number will be
+     * increased as indicated by inc. */
+    enum seq_inc_t inc = last_fragment ? DTLS_SEQ_NR_INCREASE : DTLS_SEQ_NR_DONT_INCREASE;
+    end = dtls_set_handshake_header(header_type, peer, data_length,
+                                    0, data_length, /* fragment offset and length */
+                                    buf, inc);    
+    update_hs_hash(peer, buf, end - buf);
+    if (data)
+      update_hs_hash(peer, data, data_length);
+
+    /* clear end pointer if message is fragmented. */
+    if (!last_fragment)
+      end = NULL;
+  }
+
+  do {
+    size_t data_array_len = 1;
+    size_t len = remaining_data_length; /* data length of current fragment */
 
     dtls_debug("sending (fragmented) handshake, %zu bytes remaining\n", remaining_data_length);
 
-    // Create single fragment header for full data and hash it,  see RFC6347 Section 4.2.6
-    // TODO: Do not create same header twice for non-fragmented packets
-    if (add_hash && remaining_data_length == data_length) {
-      end = dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
-                                      min(remaining_data_length, fragment_size),
-                                      buf, 0);
-      update_hs_hash(peer, buf, end - buf);
-    }
+    /* Create fragment header, see RFC6347 Section 4.2.6. If end is
+     * set, the message is not fragmented and buf already contains the
+     * handshake header. */
+    if (!end) {
+      enum seq_inc_t inc;
 
-    end = dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
-                                    min(remaining_data_length, fragment_size), buf, last_fragment);
-
-    data_array[i] = buf;
-    data_len_array[i] = end - buf;
-    i++;
-
-    if (data != NULL) {
-      // Hash full data while sending first fragment, see RFC6347 Section 4.2.6
-      if (add_hash && remaining_data_length == data_length) {
-        update_hs_hash(peer, data, data_length);
+      if (last_fragment) {
+        inc = DTLS_SEQ_NR_INCREASE;
+      } else {
+        len = fragment_size;
+        inc = DTLS_SEQ_NR_DONT_INCREASE;
       }
-      data_array[i] = data;
-      data_len_array[i] = (last_fragment ? remaining_data_length : fragment_size);
-      i++;
+      end = dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
+                                      len, buf, inc);
+    }
+    data_array[0] = buf;
+    data_len_array[0] = end - buf;
+
+    end = NULL;
+
+    /* set data to send in this fragment */
+    if (data != NULL) {
+      data_array[1] = data;
+      data_len_array[1] = len;
+      data_array_len = 2;
     }
     dtls_debug("send handshake packet of type: %s (%i)\n",
                dtls_handshake_type_to_name(header_type), header_type);
@@ -1530,17 +1554,19 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     dtls_debug("sending fragment: offset: %zu, length: %zu \n",
                data_length-remaining_data_length, (last_fragment ? remaining_data_length : fragment_size));
 
-    // TODO: Treat send errors here
-    ret += dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
-                           data_array, data_len_array, i);
-
-    // If not in last fragment
-    if(last_fragment){
-      remaining_data_length = 0;
-    } else {
-      remaining_data_length -= fragment_size;
-      data += fragment_size;
+    result = dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
+                             data_array, data_len_array, data_array_len);
+    if (result < 0) {
+      dtls_debug("error %d from dtls_send_multi()\n", result);
+      return result;
     }
+    ret += result;
+
+    /* update data pointer and length */
+    remaining_data_length -= len;
+    data += len;
+
+    last_fragment = (remaining_data_length <= fragment_size);
   } while(remaining_data_length > 0);
 
   return ret;
