@@ -509,8 +509,10 @@ dtls_set_record_header(uint8 type, dtls_security_parameters_t *security,
  * \return pointer to the next byte after \p buf
  */
 static inline uint8 *
-dtls_set_handshake_header(uint8 type, dtls_peer_t *peer, int length, int frag_offset, int frag_length, uint8 *buf,
-                          uint8 seq_nr_inc) {
+dtls_set_handshake_header(uint8 type, dtls_peer_t *peer,
+                          int length, int frag_offset,
+                          int frag_length, uint8 *buf,
+                          int seq_nr_inc) {
 
   dtls_int_to_uint8(buf, type);
   buf += sizeof(uint8);
@@ -1471,7 +1473,6 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 }
 
 
-#define DTLS_MAX_HS_PAYLOAD (1280 - 40 - 8) /* Minimial IPv6 MTU (1280B) - IPv6 Header (40B) - UDP Header (8B) */
 static int
 dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 			     dtls_peer_t *peer,
@@ -1481,33 +1482,37 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 			     int add_hash)
 {
   int ret = 0;
+  int last_fragment = 0; /* indicates if the fragment being processed is the last one */
   size_t remaining_data_length = data_length;
 
   uint8 buf[DTLS_HS_LENGTH];
+  uint8 *end; /* a pointer used to calculate the amount of data written into buf */
   uint8 *data_array[2];
   size_t data_len_array[2];
   dtls_security_parameters_t *security = peer ? dtls_security_params(peer) : NULL;
+  const size_t fragment_size = DTLS_MAXIMUM_HANDSHAKE_FRAGMENT_SIZE;
 
   do {
-    int i = 0;
+    size_t i = 0;
 
-    uint8 last_fragment = (remaining_data_length < DTLS_MAX_HS_PAYLOAD);
+    last_fragment = (remaining_data_length < fragment_size);
 
     dtls_debug("sending (fragmented) handshake, %zu bytes remaining\n", remaining_data_length);
 
     // Create single fragment header for full data and hash it,  see RFC6347 Section 4.2.6
     // TODO: Do not create same header twice for non-fragmented packets
     if (add_hash && remaining_data_length == data_length) {
-      dtls_set_handshake_header(header_type, peer, data_length, 0, data_length,
-                                buf, 0);
-      update_hs_hash(peer, buf, sizeof(buf));
+      end = dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
+                                      min(remaining_data_length, fragment_size),
+                                      buf, 0);
+      update_hs_hash(peer, buf, end - buf);
     }
 
-    dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
-                              min(remaining_data_length, DTLS_MAX_HS_PAYLOAD), buf, last_fragment);
+    end = dtls_set_handshake_header(header_type, peer, data_length, data_length - remaining_data_length,
+                                    min(remaining_data_length, fragment_size), buf, last_fragment);
 
     data_array[i] = buf;
-    data_len_array[i] = sizeof(buf);
+    data_len_array[i] = end - buf;
     i++;
 
     if (data != NULL) {
@@ -1516,14 +1521,14 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
         update_hs_hash(peer, data, data_length);
       }
       data_array[i] = data;
-      data_len_array[i] = (last_fragment ? remaining_data_length : DTLS_MAX_HS_PAYLOAD);
+      data_len_array[i] = (last_fragment ? remaining_data_length : fragment_size);
       i++;
     }
     dtls_debug("send handshake packet of type: %s (%i)\n",
                dtls_handshake_type_to_name(header_type), header_type);
 
     dtls_debug("sending fragment: offset: %zu, length: %zu \n",
-               data_length-remaining_data_length, (last_fragment ? remaining_data_length : DTLS_MAX_HS_PAYLOAD));
+               data_length-remaining_data_length, (last_fragment ? remaining_data_length : fragment_size));
 
     // TODO: Treat send errors here
     ret += dtls_send_multi(ctx, peer, security, session, DTLS_CT_HANDSHAKE,
@@ -1533,8 +1538,8 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
     if(last_fragment){
       remaining_data_length = 0;
     } else {
-      remaining_data_length -= DTLS_MAX_HS_PAYLOAD;
-      data += DTLS_MAX_HS_PAYLOAD;
+      remaining_data_length -= fragment_size;
+      data += fragment_size;
     }
   } while(remaining_data_length > 0);
 

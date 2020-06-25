@@ -62,6 +62,15 @@ typedef unsigned char uint48[6];
 #define DTLS_DEFAULT_MAX_RETRANSMIT 7
 #endif
 
+#ifndef DTLS_MAXIMUM_HANDSHAKE_FRAGMENT_SIZE
+/**
+ * The maximum handshake fragment size as defined in Section 4.2.3 of
+ * RFC 6347.  The default value is 1232 
+ * (= minimial IPv6 MTU (1280 B) * - IPv6 Header (40 B) - UDP Header (8 B))
+ */
+#define DTLS_MAXIMUM_HANDSHAKE_FRAGMENT_SIZE (1280U - 40 - 8)
+#endif
+
 /** Known cipher suites.*/
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
