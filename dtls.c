@@ -1495,7 +1495,7 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   do {
     size_t i = 0;
 
-    last_fragment = (remaining_data_length < fragment_size);
+    last_fragment = (remaining_data_length <= fragment_size);
 
     dtls_debug("sending (fragmented) handshake, %zu bytes remaining\n", remaining_data_length);
 
