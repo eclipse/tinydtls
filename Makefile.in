@@ -1,7 +1,7 @@
 # Makefile for tinydtls
 #
 #
-# Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -36,6 +36,7 @@ includedir = @includedir@/@PACKAGE_NAME@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
 install := cp
+RMDIR?=rmdir
 
 # files and flags
 SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c dtls_debug.c dtls_prng.c
@@ -60,7 +61,7 @@ LDFLAGS:=@LDFLAGS@ @LIBS@
 ARFLAGS:=cru
 doc:=doc
 
-.PHONY: all dirs clean install dist distclean .gitignore doc TAGS
+.PHONY: all dirs clean install dist distclean .gitignore doc TAGS uninstall
 
 ifneq ("@WITH_CONTIKI@", "1")
 .SUFFIXES:
@@ -121,6 +122,18 @@ install:	$(LIBS) $(HEADERS) $(SUBDIRS)
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done
+
+uninstall:
+	for file in $(LIBS); do \
+		if test -f $(DESTDIR)$(libdir)/$$file ; then $(RM) $(DESTDIR)$(libdir)/$$file ; fi ;\
+	done
+	for file in $(HEADERS); do \
+		if test -f $(DESTDIR)$(includedir)/$$file ; then $(RM) $(DESTDIR)$(includedir)/$$file ; fi ;\
+	done
+	for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) RMDIR=$(RMDIR) uninstall; \
+	done
+	if test -d $(DESTDIR)$(includedir) ; then $(RMDIR) $(DESTDIR)$(includedir) ; fi
 
 TAGS:	
 	$(ETAGS) -o $@.new $(SOURCES) 

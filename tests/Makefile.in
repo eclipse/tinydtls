@@ -40,7 +40,7 @@ LDLIBS:=$(top_srcdir)/libtinydtls.a @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in $(SOURCES) ccm-testdata.c #cbc_aes128-testdata.c
 
-.PHONY: all dirs clean distclean .gitignore doc
+.PHONY: all dirs clean distclean .gitignore doc install uninstall
 
 .SUFFIXES:
 .SUFFIXES:      .c .o
@@ -70,6 +70,9 @@ dist:	$(FILES)
 
 # this directory contains no installation candidates
 install:
+	:
+
+uninstall:
 	:
 
 .gitignore:
