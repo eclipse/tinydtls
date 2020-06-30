@@ -1595,11 +1595,15 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   /* Signal DTLS version 1.0 in the record layer of ClientHello and
    * HelloVerifyRequest handshake messages according to Section 4.2.1
    * of RFC 6347.
+   *
+   * This does not apply to a renegotation Client Hello
    */
-  if (type == DTLS_CT_HANDSHAKE) {
-    if ((buf_array[0][0] == DTLS_HT_CLIENT_HELLO) ||
-        (buf_array[0][0] == DTLS_HT_HELLO_VERIFY_REQUEST)) {
-      dtls_int_to_uint16(sendbuf + 1, DTLS10_VERSION);
+  if (!security || security->epoch == 0) {
+    if (type == DTLS_CT_HANDSHAKE) {
+      if ((buf_array[0][0] == DTLS_HT_CLIENT_HELLO) ||
+          (buf_array[0][0] == DTLS_HT_HELLO_VERIFY_REQUEST)) {
+        dtls_int_to_uint16(sendbuf + 1, DTLS10_VERSION);
+      }
     }
   }
 
