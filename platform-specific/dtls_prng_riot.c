@@ -20,23 +20,16 @@
 
 #include "tinydtls.h"
 #include "dtls_prng.h"
+#include "random.h"
 
-#include <stdlib.h>
-
-/**
- * Fills \p buf with \p len random bytes. This is the default
- * implementation for prng().  You might want to change prng() to use
- * a better PRNG on your specific platform.
- */
 int
 dtls_prng(unsigned char *buf, size_t len) {
-  while (len--)
-    *buf++ = rand() & 0xFF;
+  random_bytes(buf, len);
   return 1;
 }
 
 void
 dtls_prng_init(unsigned seed) {
-  srand(seed);
+  (void) seed;
 }
 
