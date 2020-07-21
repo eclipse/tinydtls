@@ -92,7 +92,8 @@ if test "x$build_tests" = "xyes"; then
     PKG_CHECK_MODULES([CUNIT],
                       [cunit],
                       [have_cunit=yes
-                       AC_DEFINE(HAVE_LIBCUNIT, [1], [Define if the system has libcunit])],
+                       AC_DEFINE(HAVE_LIBCUNIT, [1], [Define if the system has libcunit])]
+                       AC_DEFINE(TEST_INCLUDE, [1], [Define to include test wrappers for static functions])],
                       [have_cunit=no])
 fi
 
