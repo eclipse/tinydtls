@@ -19,6 +19,11 @@ When using the code from the git repository at sourceforge, invoke
   $ autoheader
   $ ./configure
 
+or if there is an update to configure.ac
+
+  $ autoreconf --force --install
+  $ ./configure
+
 to re-create the configure script.
 
 ## Contiki
