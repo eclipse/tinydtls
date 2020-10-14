@@ -131,6 +131,7 @@ typedef struct {
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
   unsigned int do_client_auth:1;
+  unsigned int extended_master_secret:1;
   union {
 #ifdef DTLS_ECC
     dtls_handshake_parameters_ecdsa_t ecdsa;
