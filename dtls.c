@@ -19,7 +19,9 @@
 
 #include "tinydtls.h"
 #include "dtls_time.h"
-
+#ifdef WITH_CONTIKI
+#include "dtls-support.h"
+#endif /* WITH_CONTIKI */
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_ASSERT_H
@@ -365,9 +367,15 @@ dtls_create_cookie(dtls_context_t *ctx,
   dtls_hmac_context_t hmac_context;
   dtls_hmac_init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
 
+  #ifdef WITH_CONTIKI
+  dtls_hmac_update(&hmac_context,
+		   (unsigned char *)dtls_session_get_address(session),
+        dtls_session_get_address_size(session));
+  #else /* WITH_CONTIKI */
   dtls_hmac_update(&hmac_context,
 		   (unsigned char *)&session->addr, session->size);
 
+  #endif /* WITH_CONTIKI */
   /* feed in the beginning of the Client Hello up to and including the
      session id */
   e = DTLS_CH_LENGTH;
@@ -3853,7 +3861,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 #ifdef WITH_CONTIKI
 #ifndef NDEBUG
     PRINTF("removed peer [");
-    PRINT6ADDR(&peer->session.addr);
+    PRINT6ADDR(dtls_session_get_address(&peer->session));
     PRINTF("]:%d\n", uip_ntohs(peer->session.port));
 #endif
 #endif /* WITH_CONTIKI */

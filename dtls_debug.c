@@ -171,10 +171,10 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
     if (i) {
       *p++ = ':';
     }
-    *p++ = hex[(addr->addr.u8[i] & 0xf0) >> 4];
-    *p++ = hex[(addr->addr.u8[i] & 0x0f)];
-    *p++ = hex[(addr->addr.u8[i+1] & 0xf0) >> 4];
-    *p++ = hex[(addr->addr.u8[i+1] & 0x0f)];
+    *p++ = hex[(addr->ipaddr.u8[i] & 0xf0) >> 4];
+    *p++ = hex[(addr->ipaddr.u8[i] & 0x0f)];
+    *p++ = hex[(addr->ipaddr.u8[i+1] & 0xf0) >> 4];
+    *p++ = hex[(addr->ipaddr.u8[i+1] & 0x0f)];
   }
   *p++ = ']';
 #else /* NETSTACK_CONF_IPV6 */
