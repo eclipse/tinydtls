@@ -60,9 +60,15 @@ void printspeed(char *caption, unsigned long bytes, double time) {
 
 
 int main(int argc, char **argv) {
+	#ifdef WITH_SHA256
 	dtls_sha256_ctx	c256;
+	#endif /*WITH_SHA256*/
+	#ifdef WITH_SHA384
 	dtls_sha384_ctx	c384;
+	#endif /*WITH_SHA384*/
+	#ifdef WITH_SHA512
 	dtls_sha512_ctx	c512;
+	#endif /*WITH_SHA512*/
 	char		buf[BUFSIZE];
 	char		md[DTLS_SHA512_DIGEST_STRING_LENGTH];
 	int		bytes, blocks, rep, i, j;
@@ -97,9 +103,8 @@ int main(int argc, char **argv) {
 	ave256 = ave384 = ave512 = 0;
 	best256 = best384 = best512 = 100000;
 	for (i = 0; i < rep; i++) {
+		#ifdef WITH_SHA256
 		dtls_sha256_init(&c256);
-		dtls_sha384_init(&c384);
-		dtls_sha512_init(&c512);
 	
 		gettimeofday(&start, (struct timezone*)0);
 		for (j = 0; j < blocks; j++) {
@@ -116,7 +121,10 @@ int main(int argc, char **argv) {
 			best256 = t;
 		}
 		printf("SHA-256[%d] (%.4f/%.4f/%.4f seconds) = 0x%s\n", i+1, t, ave256/(i+1), best256, md);
-
+		#endif /*WITH_SHA256*/
+		#ifdef WITH_SHA384
+		dtls_sha384_init(&c384);
+		
 		gettimeofday(&start, (struct timezone*)0);
 		for (j = 0; j < blocks; j++) {
 			dtls_sha384_update(&c384, (unsigned char*)buf, BUFSIZE);
@@ -132,6 +140,9 @@ int main(int argc, char **argv) {
 			best384 = t;
 		}
 		printf("SHA-384[%d] (%.4f/%.4f/%.4f seconds) = 0x%s\n", i+1, t, ave384/(i+1), best384, md);
+		#endif /*WITH_SHA384*/
+		#ifdef WITH_SHA512
+		dtls_sha512_init(&c512);
 
 		gettimeofday(&start, (struct timezone*)0);
 		for (j = 0; j < blocks; j++) {
@@ -148,6 +159,7 @@ int main(int argc, char **argv) {
 			best512 = t;
 		}
 		printf("SHA-512[%d] (%.4f/%.4f/%.4f seconds) = 0x%s\n", i+1, t, ave512/(i+1), best512, md);
+		#endif	/*WITH_SHA512*/
 	}
 	ave256 /= rep;
 	ave384 /= rep;

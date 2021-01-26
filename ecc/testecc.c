@@ -115,6 +115,8 @@ static const uint32_t ecdsaTestRand2[] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0
 static const uint32_t ecdsaTestresultR2[] = { 0x14146C91, 0xE878724D, 0xCD4FF928, 0xCC24BC04, 0xAC403390, 0x650C0060, 0x4A30B3F1, 0x9C69B726};
 static const uint32_t ecdsaTestresultS2[] = { 0x433AAB6F, 0x808250B1, 0xE46F90F4, 0xB342E972, 0x18B2F7E4, 0x2DB981A2, 0x6A288FA4, 0x41CF59DB};
 
+#ifdef TEST_INCLUDE
+
 void addTest(){
 	uint32_t tempx[8];
 	uint32_t tempy[8];
@@ -224,3 +226,4 @@ int main(int argc, char const *argv[])
 	return 0;
 }
 #endif /* CONTIKI */
+#endif /*TEST_INCLUDE*/
