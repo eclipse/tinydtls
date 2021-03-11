@@ -2593,7 +2593,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   ecdsa = is_ecdsa_supported(ctx, 1);
 
   cipher_size = 2 + ((ecdsa) ? 2 : 0) + ((psk) ? 2 : 0);
-  extension_size = (ecdsa) ? 2 + 6 + 6 + 8 + 6 + 8 + 4: 0;
+  extension_size = 4 + ((ecdsa) ? 6 + 6 + 8 + 6 + 8: 0);
 
   if (cipher_size == 0) {
     dtls_crit("no cipher callbacks implemented\n");
@@ -2651,11 +2651,9 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint8(p, TLS_COMPRESSION_NULL);
   p += sizeof(uint8);
 
-  if (extension_size) {
-    /* length of the extensions */
-    dtls_int_to_uint16(p, extension_size - 2);
-    p += sizeof(uint16);
-  }
+  /* length of the extensions */
+  dtls_int_to_uint16(p, extension_size);
+  p += sizeof(uint16);
 
   if (ecdsa) {
     /* client certificate type extension */
@@ -2738,16 +2736,15 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint8(p, TLS_EXT_SIG_HASH_ALGO_ECDSA);
     p += sizeof(uint8);
 
-    /* extended master secret */
-    dtls_int_to_uint16(p, TLS_EXT_EXTENDED_MASTER_SECRET);
-    p += sizeof(uint16);
-
-    /* length of this extension type */
-    dtls_int_to_uint16(p, 0);
-    p += sizeof(uint16);
-    handshake->extended_master_secret = 1;
-
   }
+  /* extended master secret */
+  dtls_int_to_uint16(p, TLS_EXT_EXTENDED_MASTER_SECRET);
+  p += sizeof(uint16);
+
+  /* length of this extension type */
+  dtls_int_to_uint16(p, 0);
+  p += sizeof(uint16);
+  handshake->extended_master_secret = 1;
 
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));
 
