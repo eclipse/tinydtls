@@ -1732,7 +1732,8 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   peer = dtls_get_peer(ctx, remote);
 
   if (peer) {
-    res = dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+    res = dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
+                          DTLS_ALERT_CLOSE_NOTIFY);
     /* indicate tear down */
     peer->state = DTLS_STATE_CLOSING;
   }
@@ -3870,7 +3871,8 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
      * close_notify so, do not send that again. */
     if (peer->state != DTLS_STATE_CLOSING) {
       peer->state = DTLS_STATE_CLOSING;
-      dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+      dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
+                      DTLS_ALERT_CLOSE_NOTIFY);
     } else
       peer->state = DTLS_STATE_CLOSED;
     break;
