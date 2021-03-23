@@ -387,38 +387,34 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
 
 int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
 				 unsigned char *buf) {
-  int i;
-  unsigned char *buf_orig = buf;
-  int first = 1; 
-
-  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
-    if (key[i] == 0)
-      continue;
-    /* the first bit has to be set to zero, to indicate a poritive integer */
-    if (first && key[i] & 0x80000000) {
-      *buf = 0;
-      buf++;
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;      
-    } else if (first && !(key[i] & 0xFF800000)) {
-      buf[0] = (key[i] >> 16) & 0xff;
-      buf[1] = (key[i] >> 8) & 0xff;
-      buf[2] = key[i] & 0xff;
-      buf += 3;
-    } else if (first && !(key[i] & 0xFFFF8000)) {
-      buf[0] = (key[i] >> 8) & 0xff;
-      buf[1] = key[i] & 0xff;
-      buf += 2;
-    } else if (first && !(key[i] & 0xFFFFFF80)) {
-      buf[0] = key[i] & 0xff;
-      buf += 1;
-    } else {
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;
-    }
-    first = 0;
+  int i = 0;
+   
+  dtls_ec_key_from_uint32(key, key_size, buf);
+  
+  /* skip leading 0's */
+  while (i < (int)key_size && buf[i] == 0) {
+     ++i;
   }
-  return buf - buf_orig;
+  assert(i != (int)key_size);
+  if (i == (int)key_size) {
+      dtls_alert("ec key is all zero\n");
+      return 0;
+  }
+  if (buf[i] >= 0x80) {
+     /* preserve unsigned, add leading 0 */
+     --i;
+  }
+  if (i > 0) {
+      /* remove leading 0's */
+      key_size -= i;
+      memmove(buf, buf + i, key_size);
+  } else if (i == -1) {
+      /* add leading 0 */
+      memmove(buf +1, buf, key_size);
+      buf[0] = 0;
+      key_size++;
+  }
+  return key_size; 
 }
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
