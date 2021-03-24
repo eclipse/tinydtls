@@ -117,10 +117,9 @@ typedef struct {
 struct netq_t;
 
 typedef struct {
-	uint16 mseq_r;
-	size_t last_offset;
-	size_t packet_length;
-	uint8 *data;
+  size_t last_offset;
+  size_t data_length;
+  uint8 *data;
 } dtls_hs_reassemble_t;
 
 typedef struct {
