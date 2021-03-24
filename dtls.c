@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
+ * Copyright (c) 2011-2021 Olaf Bergmann (TZI) and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -2763,17 +2763,19 @@ check_server_hello(dtls_context_t *ctx,
 {
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
 
-  /* This function is called when we expect a ServerHello (i.e. we
-   * have sent a ClientHello).  We might instead receive a HelloVerify
-   * request containing a cookie. If so, we must repeat the
-   * ClientHello with the given Cookie.
+  /*
+   * Check we have enough data for the ServerHello
+   *   2 bytes for the version number
+   *   1 byte for the session id length
+   *   2 bytes for the selected cipher suite
+   *   1 byte null compression
    */
-  if (data_length < DTLS_HS_LENGTH + DTLS_HS_LENGTH)
+  if (data_length < DTLS_HS_LENGTH + 2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1) {
+    dtls_alert("Insufficient length for ServerHello\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
 
   update_hs_hash(peer, data, data_length);
-
-  /* FIXME: check data_length before accessing fields */
 
   /* Get the server's random data and store selected cipher suite
    * and compression method (like dtls_update_parameters().
@@ -2799,6 +2801,15 @@ check_server_hello(dtls_context_t *ctx,
   data_length -= DTLS_RANDOM_LENGTH;
 
   SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
+  /*
+   * Need to re-check in case session id was not empty
+   *   2 bytes for the selected cipher suite
+   *   1 byte null compression
+   */
+  if (data_length < 2 + 1) {
+    dtls_alert("Insufficient length for ServerHello\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
 
   /* Check cipher suite. As we offer all we have, it is sufficient
    * to check if the cipher suite selected by the server is in our
