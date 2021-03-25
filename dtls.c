@@ -3675,7 +3675,11 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   size_t fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
   size_t fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
 
-  if (packet_length > fragment_length){
+  if (fragment_length > packet_length) {
+    dtls_warn("fragment length > header length\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  else if (packet_length > fragment_length){
     dtls_debug("received fragmented handshake packet: length %zu, fragment length %zu.\n",
                packet_length, fragment_length);
     /* If (reassembled) packet is larger than our buffer, drop with error */
