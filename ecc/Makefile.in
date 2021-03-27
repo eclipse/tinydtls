@@ -38,7 +38,7 @@ else
 ECC_OBJECTS:= $(patsubst %.c, %.o, $(ECC_SOURCES)) ecc_test.o
 PROGRAMS:= testecc testfield
 CPPFLAGS=@CPPFLAGS@
-CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ -DTEST_INCLUDE
+CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ $(EXTRA_CFLAGS) -DTEST_INCLUDE
 LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 

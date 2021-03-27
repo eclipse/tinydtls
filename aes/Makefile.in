@@ -30,7 +30,7 @@ SOURCES:= rijndael.c rijndael_wrap.c
 HEADERS:= rijndael.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@
-CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@
+CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ $(EXTRA_CFLAGS)
 LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) 

@@ -1,0 +1,45 @@
+name: Build Tests
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - release-*
+      - gh-workflows
+  pull_request:
+    branches:
+      - master
+      - develop
+
+env:
+  PLATFORM: posix
+  TESTS: yes
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        CC: ["gcc"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: setup
+        run: |
+          sudo apt-get update && sudo apt-get install -y libcunit1-dev libtool libtool-bin exuberant-ctags valgrind
+          autoreconf --force --install
+      - name: configure
+        run: |
+          # mkdir build-${{matrix.CC}}
+          # cd build-${{matrix.CC}}
+          $GITHUB_WORKSPACE/configure --enable-tests
+      - name: compile
+        run: |
+          # cd build-${{matrix.CC}}
+          make EXTRA_CFLAGS=-Werror
+      - name: tests
+        run: |
+          # cd build-${{matrix.CC}}
+          libtool --mode=execute valgrind --track-origins=yes --leak-check=yes --show-reachable=yes --error-exitcode=123 --quiet tests/unit-tests/testdriver
+          libtool --mode=execute valgrind --track-origins=yes --leak-check=yes --show-reachable=yes --error-exitcode=123 --quiet tests/ccm-test
+          libtool --mode=execute valgrind --track-origins=yes --leak-check=yes --show-reachable=yes --error-exitcode=123 --quiet tests/prf-test

@@ -30,7 +30,7 @@ SOURCES:= sha2.c
 HEADERS:=sha2.h
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 CPPFLAGS=@CPPFLAGS@ -I$(top_srcdir)
-CFLAGS=-DSHA2_USE_INTTYPES_H -Wall -std=c99 -pedantic @CFLAGS@
+CFLAGS=-DSHA2_USE_INTTYPES_H -Wall -std=c99 -pedantic @CFLAGS@ $(EXTRA_CFLAGS)
 LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 FILES:=Makefile.in $(SOURCES) $(HEADERS) README sha2prog.c sha2speed.c sha2test.pl 
