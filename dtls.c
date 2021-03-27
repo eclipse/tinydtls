@@ -1474,7 +1474,6 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
   return 0;
 }
 
-
 static int
 dtls_send_handshake_msg_hash(dtls_context_t *ctx,
 			     dtls_peer_t *peer,
@@ -3636,7 +3635,8 @@ dtls_free_reassemble_buffer(dtls_handshake_parameters_t *handshake_params){
 }
 
 static int
-dtls_init_reassemble_buffer(dtls_handshake_parameters_t *handshake_params, size_t packet_length){
+dtls_init_reassemble_buffer(dtls_handshake_parameters_t *handshake_params,
+                            size_t hs_size){
   /* Allocate buffer for full packet */
   void *ret;
   ret = malloc(sizeof(dtls_hs_reassemble_t));
@@ -3645,14 +3645,14 @@ dtls_init_reassemble_buffer(dtls_handshake_parameters_t *handshake_params, size_
   } else {
     handshake_params->reassemble_buf = (dtls_hs_reassemble_t *)ret;
   }
-  ret = malloc(packet_length + sizeof(dtls_handshake_header_t));
+  ret = malloc(hs_size + DTLS_HS_LENGTH);
   if(ret == NULL){
     free(handshake_params->reassemble_buf);
     return 0;
   } else {
     handshake_params->reassemble_buf->data = (uint8 *)ret;
   }
-  handshake_params->reassemble_buf->packet_length = packet_length;
+  handshake_params->reassemble_buf->data_length = hs_size + DTLS_HS_LENGTH;
   handshake_params->reassemble_buf->last_offset = 0;
   return 1;
 }
@@ -3664,6 +3664,9 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 {
   dtls_handshake_header_t *hs_header;
   int res;
+  size_t hs_size;
+  size_t fragment_length;
+  size_t fragment_offset;
 
   if (data_length < DTLS_HS_LENGTH) {
     dtls_warn("handshake message too short\n");
@@ -3671,53 +3674,84 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   }
   hs_header = DTLS_HANDSHAKE_HEADER(data);
 
-  size_t packet_length = dtls_uint24_to_int(hs_header->length);
-  size_t fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
-  size_t fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
+  hs_size = dtls_uint24_to_int(hs_header->length);
+  fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
+  fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
 
-  if (packet_length > fragment_length){
-    dtls_debug("received fragmented handshake packet: length %zu, fragment length %zu.\n",
-               packet_length, fragment_length);
-    /* If (reassembled) packet is larger than our buffer, drop with error */
-    if(packet_length > DTLS_MAX_BUF){
-      dtls_warn("reassembled packet (%zu) would be larger than buffer (%i)\n", packet_length, DTLS_MAX_BUF);
-      return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
-    }
-    if((fragment_offset + fragment_length) > packet_length){
-        dtls_warn("fragment_offset (%zu) + fragment_length (%zu) > packet length (%zu)\n",
-                  fragment_offset, fragment_length, packet_length);
-		return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
-    }
+  if (fragment_length + DTLS_HS_LENGTH != data_length) {
+    dtls_warn("Fragment size does not match packet size\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  if (fragment_offset + fragment_length > hs_size) {
+    /* Fragment extension larger than handshake */
+    dtls_warn("fragment_offset (%zu) + fragment_length (%zu) >"
+              " handshake length (%zu)\n", fragment_offset,
+              fragment_length, hs_size);
+    return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
+  }
+  else if (hs_size > fragment_length) {
+
     /* Handle fragmented packet */
 
-    /* First fragment */
-    if(fragment_offset == 0 && packet_length <= DTLS_MAX_BUF){
+    if (!peer || !peer->handshake_params) {
+      /* This is the initial ClientHello - can't handle fragmented */
+      dtls_alert("Cannot handle initial fragmented ClientHello\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+    }
+    dtls_debug("received fragmented handshake packet: handshake length %zu,"
+               " fragment length %zu.\n", hs_size, fragment_length);
+
+    if (DTLS_HS_LENGTH + hs_size > DTLS_MAX_BUF) {
+      /* Reassembled handshake is larger than our buffer, drop with error */
+      dtls_warn("reassembled packet (%zu) would be larger than buffer (%i)\n",
+                DTLS_HS_LENGTH + hs_size, DTLS_MAX_BUF);
+      return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
+    }
+
+    if (fragment_offset == 0) {
+      /* First fragment */
       dtls_debug("received first packet of fragmented.\n");
       dtls_free_reassemble_buffer(peer->handshake_params);
 
       /* Allocate buffer for full packet */
-      if(!dtls_init_reassemble_buffer(peer->handshake_params, packet_length)){
-          return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
+      if (!dtls_init_reassemble_buffer(peer->handshake_params, hs_size)) {
+        return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
       }
+      /* Save handshake at the start */
+      memcpy(peer->handshake_params->reassemble_buf->data, data,
+             DTLS_HS_LENGTH);
     } else {
-      /* Not first fragment, skip over handshake header */
-      data += sizeof(dtls_handshake_header_t);
+      /* Subsequent fragment */
+      if (memcmp(peer->handshake_params->reassemble_buf->data, data,
+          offsetof(dtls_handshake_header_t, fragment_offset)) != 0) {
+        /* Not a continuation fragment - msg_type+length+message_seq mismatch */
+        dtls_warn("fragment does not match fragment #0\n");
+        return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE); // TODO: Is this the correct alert?
+      }
+      if (peer->handshake_params->reassemble_buf->last_offset !=
+          fragment_offset) {
+        dtls_warn("Received fragment out of order\n");
+        return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE); // TODO: Is this the correct alert?
+      }
     }
 
-    /* Check if we have fragment buffer, (possibly earlier fragments) and offset is consecutive */
-    if(peer->handshake_params->reassemble_buf == NULL ||
-            peer->handshake_params->reassemble_buf->last_offset != fragment_offset ){
-      dtls_warn("Received fragment out of order\n");
-      return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE); // TODO: Is this the correct alert?
+    if (fragment_length > data_length - DTLS_HS_LENGTH) {
+      dtls_warn("insufficient data provided for fragment\n");
+      return dtls_alert_fatal_create(DTLS_ALERT_RECORD_OVERFLOW); // TODO: Is this the correct alert?
     }
+    
     /* Looks good: copy fragment in buffer */
-    dtls_debug("copying fragment to buffer: offset (%zu), length (%zu).\n", fragment_offset,
-               fragment_length);
-    memcpy(peer->handshake_params->reassemble_buf->data + fragment_offset + (fragment_offset != 0 ? sizeof(dtls_handshake_header_t) : 0),
-           data, (size_t)fragment_length + (fragment_offset == 0 ? sizeof(dtls_handshake_header_t) : 0));
+    dtls_debug("copying fragment to buffer: offset (%zu), length (%zu),"
+               " handshake length (%zu).\n", fragment_offset, fragment_length,
+               hs_size);
+
+    memcpy(peer->handshake_params->reassemble_buf->data +
+             DTLS_HS_LENGTH + fragment_offset,
+           data + DTLS_HS_LENGTH, fragment_length);
     peer->handshake_params->reassemble_buf->last_offset = fragment_offset + fragment_length;
 
-    if(peer->handshake_params->reassemble_buf->last_offset < packet_length){
+    if(peer->handshake_params->reassemble_buf->last_offset < hs_size){
       dtls_debug("waiting for next fragment\n");
       return DTLS_HS_FRAGMENTED;
     }
@@ -3726,16 +3760,18 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     dtls_debug("last hs fragment received.\n");
     /* Last fragment received, packet reassembled */
     data = peer->handshake_params->reassemble_buf->data;
-    /* packet_length is handshake payload size, data_length is record length (including header) */
-    data_length = peer->handshake_params->reassemble_buf->packet_length + DTLS_HS_LENGTH;
+    data_length = peer->handshake_params->reassemble_buf->data_length;
 
-    /* Rewrite header as if this package was received unfragmented. Needed for the hs_hash, see rfc6347#section-4.2.6 */
+    /*
+     * Rewrite header as if this package was received unfragmented.
+     * Needed for the hs_hash, see rfc6347#section-4.2.6
+     */
     hs_header = DTLS_HANDSHAKE_HEADER(data);
-    dtls_int_to_uint24(hs_header->fragment_offset, 0); //Should already be this way
-    dtls_int_to_uint24(hs_header->length, peer->handshake_params->reassemble_buf->packet_length);
-    dtls_int_to_uint24(hs_header->fragment_length, peer->handshake_params->reassemble_buf->packet_length);
+    dtls_int_to_uint24(hs_header->fragment_length, hs_size);
 
-    dtls_debug_dump("reassembled fragment header", (const unsigned char*)hs_header, sizeof(dtls_handshake_header_t));
+    dtls_debug_dump("reassembled fragment header",
+                    (const unsigned char*)hs_header,
+                    sizeof(dtls_handshake_header_t));
   }
 
   dtls_debug("received handshake packet of type: %s (%i)\n",
