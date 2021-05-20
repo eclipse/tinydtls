@@ -4200,7 +4200,8 @@ dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   /* check if the same peer is already in our list */
   if (peer == dtls_get_peer(ctx, &peer->session)) {
     dtls_debug("found peer, try to re-connect\n");
-    return dtls_renegotiate(ctx, &peer->session);
+    res = dtls_renegotiate(ctx, &peer->session);
+    return res < 0 ? -1 : 0;
   }
 
   /* set local peer role to client, remote is server */
