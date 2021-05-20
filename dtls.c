@@ -3676,6 +3676,9 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 {
   dtls_handshake_header_t *hs_header;
   int res;
+  size_t packet_length;
+  size_t fragment_length;
+  size_t fragment_offset;
 
   if (data_length < DTLS_HS_LENGTH) {
     dtls_warn("handshake message too short\n");
@@ -3685,6 +3688,18 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   dtls_debug("received handshake packet of type: %s (%i)\n",
 	     dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
+
+  packet_length = dtls_uint24_to_int(hs_header->length);
+  fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
+  fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
+  if (packet_length != fragment_length || fragment_offset != 0) {
+    dtls_warn("No fragment support (yet)\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+  if (fragment_length + DTLS_HS_LENGTH != data_length) {
+    dtls_warn("Fragment size does not match packet size\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
 
   if (!peer || !peer->handshake_params) {
     /* This is the initial ClientHello */
