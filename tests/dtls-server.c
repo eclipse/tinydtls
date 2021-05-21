@@ -20,6 +20,8 @@
 
 #define DEFAULT_PORT 20220
 
+static dtls_context_t *the_context = NULL;
+
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
 			0xD9, 0xE2, 0x70, 0x7A, 0x72, 0xDA, 0x6A, 0x05,
@@ -176,6 +178,13 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   return dtls_handle_message(ctx, &session, buf, len);
 }    
 
+static void dtls_handle_signal(int sig)
+{
+  dtls_free_context(the_context);
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
+
 static int
 resolve_address(const char *server, struct sockaddr *dst) {
   
@@ -249,13 +258,13 @@ static dtls_handler_t cb = {
 
 int 
 main(int argc, char **argv) {
-  dtls_context_t *the_context = NULL;
   log_t log_level = DTLS_LOG_WARN;
   fd_set rfds, wfds;
   struct timeval timeout;
   int fd, opt, result;
   int on = 1;
   struct sockaddr_in6 listen_addr;
+  struct sigaction sa;
 
   memset(&listen_addr, 0, sizeof(struct sockaddr_in6));
 
@@ -323,6 +332,16 @@ main(int argc, char **argv) {
   }
 
   dtls_init();
+
+  memset (&sa, 0, sizeof(sa));
+  sigemptyset(&sa.sa_mask);
+  sa.sa_handler = dtls_handle_signal;
+  sa.sa_flags = 0;
+  sigaction (SIGINT, &sa, NULL);
+  sigaction (SIGTERM, &sa, NULL);
+  /* So we do not exit on a SIGPIPE */
+  sa.sa_handler = SIG_IGN;
+  sigaction (SIGPIPE, &sa, NULL);
 
   the_context = dtls_new_context(&fd);
 
