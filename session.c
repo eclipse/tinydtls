@@ -68,7 +68,9 @@ void
 dtls_session_init(session_t *sess) {
   assert(sess);
   memset(sess, 0, sizeof(session_t));
-  sess->size = sizeof(sess->addr);
+  #ifndef WITH_CONTIKI
+    sess->size = sizeof(sess->addr);
+  #endif
 }
 
 /* These functions are primarly needed for the tinydtls ruby gem.
@@ -117,8 +119,10 @@ dtls_session_addr(session_t *sess, socklen_t *addrlen) {
 }
 #endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
 
+#ifndef WITH_CONTIKI
 int
 dtls_session_equals(const session_t *a, const session_t *b) {
   assert(a); assert(b);
   return _dtls_address_equals_impl(a, b);
-}
+} 
+#endif

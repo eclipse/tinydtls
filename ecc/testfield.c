@@ -106,6 +106,8 @@ void nullEverything(){
 	memset(temp2, 0, sizeof(temp));
 }
 
+#ifdef TEST_INCLUDE
+
 void fieldAddTest(){
 	assert(ecc_isSame(one, one, arrayLength));
 	ecc_fieldAdd(one, null, ecc_prime_r, temp);
@@ -288,3 +290,4 @@ int main(int argc, char const *argv[])
 	return 0;
 }
 #endif /* CONTIKI */
+#endif /*TEST_INCLUDE*/

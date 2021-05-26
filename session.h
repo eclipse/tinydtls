@@ -23,13 +23,18 @@
 #include "global.h"
 
 #ifdef WITH_CONTIKI
-#include "ip/uip.h"
+#ifdef BUILD_WITH_COAP
+#include "coap-endpoint.h"
+typedef coap_endpoint_t session_t;
+#else /*BUILD_WITH_COAP*/
+#include "uip.h"
 typedef struct {
   unsigned char size;
-  uip_ipaddr_t addr;
+  uip_ipaddr_t ipaddr;
   unsigned short port;
   int ifindex;
 } session_t;
+#endif /*BUILD_WITH_COAP*/
  /* TODO: Add support for RIOT over sockets  */
 #elif defined(WITH_RIOT_GNRC)
 #include "net/ipv6/addr.h"

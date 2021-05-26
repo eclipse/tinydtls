@@ -30,6 +30,7 @@
 
 #ifdef CONTIKI
 #include "platform-specific/platform.h"
+#include "dtls-support-conf.h"
 #endif /* CONTIKI */
 
 #ifndef CONTIKI
