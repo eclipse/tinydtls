@@ -65,13 +65,15 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
     { (unsigned char *)"\0", 2,
       (unsigned char *)"", 1 }
   };
+  (void)ctx;
+  (void)session;
 
   if (type != DTLS_PSK_KEY) {
     return 0;
   }
 
   if (id) {
-    int i;
+    size_t i;
     for (i = 0; i < sizeof(psk)/sizeof(struct keymap_t); i++) {
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
 	if (result_length < psk[i].key_length) {
@@ -101,6 +103,8 @@ get_ecdsa_key(struct dtls_context_t *ctx,
     .pub_key_x = ecdsa_pub_key_x,
     .pub_key_y = ecdsa_pub_key_y
   };
+  (void)ctx;
+  (void)session;
 
   *result = &ecdsa_key;
   return 0;
@@ -112,6 +116,11 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const unsigned char *other_pub_x,
 		 const unsigned char *other_pub_y,
 		 size_t key_size) {
+  (void)ctx;
+  (void)session;
+  (void)other_pub_x;
+  (void)other_pub_y;
+  (void)key_size;
   return 0;
 }
 #endif /* DTLS_ECC */
@@ -170,7 +179,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   } else {
     dtls_debug("got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
-    if (sizeof(buf) < len) {
+    if (sizeof(buf) < (size_t)len) {
       dtls_warn("packet was truncated (%ld bytes lost)\n", len - sizeof(buf));
     }
   }

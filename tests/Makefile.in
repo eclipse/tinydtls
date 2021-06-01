@@ -33,7 +33,7 @@ SOURCES:= dtls-server.c ccm-test.c prf-test.c \
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
-CFLAGS:=-Wall @CFLAGS@ 
+CFLAGS:=-Wall -std=c99 @CFLAGS@ @WARNING_CFLAGS@ -D_GNU_SOURCE
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) @LDFLAGS@
 LDLIBS:=$(top_srcdir)/libtinydtls.a @LIBS@

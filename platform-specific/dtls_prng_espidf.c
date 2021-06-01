@@ -32,7 +32,7 @@
 int
 dtls_prng(unsigned char *buf, size_t len) {
   esp_fill_random(buf, len);
-  return 1;
+  return len;
 }
 
 void

@@ -27,7 +27,7 @@ static uint8_t buf[1024];
 static void
 t_test_encrypt_message(void) {
   long int len;
-  int n;
+  size_t n;
   rijndael_ctx ctx;
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
@@ -41,14 +41,15 @@ t_test_encrypt_message(void) {
 				   data[n].lm - data[n].la,
 				   data[n].msg, data[n].la);
 
-    CU_ASSERT(len == data[n].r_lm - data[n].la);
+    CU_ASSERT((size_t)len == data[n].r_lm - data[n].la);
     CU_ASSERT(memcmp(buf, data[n].result + data[n].la, len) == 0);
   }
 }
 
 static void
 t_test_decrypt_message(void) {
-  int n, len;
+  size_t n;
+  int len;
   rijndael_ctx ctx;
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
@@ -62,14 +63,15 @@ t_test_decrypt_message(void) {
 				   buf, data[n].r_lm - data[n].la,
 				   data[n].result, data[n].la);
 
-    CU_ASSERT(len == data[n].lm - data[n].la);
+    CU_ASSERT((size_t)len == data[n].lm - data[n].la);
     CU_ASSERT(memcmp(buf, data[n].msg + data[n].la, len) == 0);
   }
 }
 
 static void
 t_test_dtls_encrypt_params(void) {
-  int n, len;
+  size_t n;
+  int len;
   
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
@@ -87,14 +89,15 @@ t_test_dtls_encrypt_params(void) {
                               data[n].msg,
                               data[n].la);
 
-    CU_ASSERT(len == data[n].r_lm - data[n].la);
+    CU_ASSERT((size_t)len == data[n].r_lm - data[n].la);
     CU_ASSERT(memcmp(data[n].result + data[n].la, buf, len) == 0);
   }
 }
 
 static void
 t_test_dtls_decrypt_params(void) {
-  int n, len;
+  size_t n;
+  int len;
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
@@ -114,14 +117,15 @@ t_test_dtls_decrypt_params(void) {
                               data[n].result,
                               data[n].la);
 
-    CU_ASSERT(len == data[n].lm - data[n].la);
+    CU_ASSERT((size_t)len == data[n].lm - data[n].la);
     CU_ASSERT(memcmp(data[n].msg + data[n].la, buf, len) == 0);
   }
 }
 
 static void
 t_test_dtls_encrypt(void) {
-  int n, len;
+  size_t n;
+  int len;
   
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     /* The backwards-compatible dtls_encrypt() and dtls_decrypt()
@@ -135,7 +139,7 @@ t_test_dtls_encrypt(void) {
                          sizeof(data[n].key),
                          data[n].msg,
                          data[n].la);
-      CU_ASSERT(len == data[n].r_lm - data[n].la);
+      CU_ASSERT((size_t)len == data[n].r_lm - data[n].la);
       CU_ASSERT(memcmp(data[n].result + data[n].la, buf, len) == 0);
     }
   }
@@ -143,7 +147,8 @@ t_test_dtls_encrypt(void) {
 
 static void
 t_test_dtls_decrypt(void) {
-  int n, len;
+  size_t n;
+  int len;
   
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     /* The backwards-compatible dtls_encrypt() and dtls_decrypt()
@@ -157,7 +162,7 @@ t_test_dtls_decrypt(void) {
                          data[n].key,
                          sizeof(data[n].key),
                          data[n].msg, data[n].la);
-      CU_ASSERT(len == data[n].r_lm - data[n].la - data[n].M);
+      CU_ASSERT((size_t)len == data[n].r_lm - data[n].la - data[n].M);
       CU_ASSERT(memcmp(data[n].msg + data[n].la, buf, len) == 0);
     }
   }

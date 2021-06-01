@@ -18,16 +18,7 @@
 
 #include "ccm-testdata.c"
 
-#ifndef HAVE_FLS
-int fls(unsigned int i) {
-  int n;
-  for (n = 0; i; n++)
-    i >>= 1;
-  return n;
-}
-#endif
-
-void 
+static void 
 dump(unsigned char *buf, size_t len) {
   size_t i = 0;
   while (i < len) {
@@ -47,9 +38,11 @@ PROCESS_THREAD(ccm_test_process, ev, d)
 {
 #else  /* WITH_CONTIKI */
 int main(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
 #endif /* WITH_CONTIKI */
   long int len;
-  int n;
+  size_t n;
 
   rijndael_ctx ctx;
 
@@ -70,8 +63,8 @@ int main(int argc, char **argv) {
 				   data[n].msg, data[n].la);
     
     len +=  + data[n].la;
-    printf("Packet Vector #%d ", n+1);
-    if (len != data[n].r_lm || memcmp(data[n].msg, data[n].result, len))
+    printf("Packet Vector #%lu ", n+1);
+    if ((size_t)len != data[n].r_lm || memcmp(data[n].msg, data[n].result, len))
       printf("FAILED, ");
     else 
       printf("OK, ");
@@ -84,7 +77,7 @@ int main(int argc, char **argv) {
 				   data[n].msg, data[n].la);
     
     if (len < 0)
-      printf("Packet Vector #%d: cannot decrypt message\n", n+1);
+      printf("Packet Vector #%lu: cannot decrypt message\n", n+1);
     else 
       printf("\t*** MAC verified (total length = %lu) ***\n", len + data[n].la);
   }
