@@ -385,10 +385,28 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
   }
 }
 
-int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
-				 unsigned char *buf) {
+/* Build the EC KEY as a ASN.1 positive integer */
+/*
+ * The public EC key consists of two positive numbers. Converting them into
+ * ASN.1 INTEGER requires removing leading zeros, but special care must be
+ * taken of the resulting sign. If the first non-zero byte of the 32 byte
+ * ec-key has bit 7 set (highest bit), the resultant ASN.1 INTEGER would be
+ * interpreted as a negative number. In order to prevent this, a zero in the
+ * ASN.1 presentation is prepended if that bit 7 is set.
+*/
+int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
+				 uint8_t *buf) {
   int i = 0;
+  uint8_t *lptr;
    
+  /* ASN.1 Integer r */
+  dtls_int_to_uint8(buf, 0x02);
+  buf += sizeof(uint8);
+
+  lptr = buf;
+  /* Length will be filled in later */
+  buf += sizeof(uint8);
+
   dtls_ec_key_from_uint32(key, key_size, buf);
   
   /* skip leading 0's */
@@ -401,7 +419,11 @@ int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
       return 0;
   }
   if (buf[i] >= 0x80) {
-     /* preserve unsigned, add leading 0 */
+    /* 
+     * Preserve unsigned by adding leading 0 (i may go negative which is
+     * explicitely handled below with the assumption that buf is at least 33
+     * bytes in size).
+     */
      --i;
   }
   if (i > 0) {
@@ -414,7 +436,9 @@ int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
       buf[0] = 0;
       key_size++;
   }
-  return key_size; 
+  /* Update the length of positive ASN.1 integer */
+  dtls_int_to_uint8(lptr, key_size);
+  return key_size + 2; 
 }
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,

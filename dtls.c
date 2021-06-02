@@ -1841,8 +1841,38 @@ dtls_verify_peer(dtls_context_t *ctx,
 }
 
 #ifdef DTLS_ECC
+/*
+ * Assumes that data_len is at least 1 */
+static size_t
+dtls_asn1_len(uint8 **data, size_t *data_len)
+{
+  size_t len = 0;
+
+  if ((**data) & 0x80) {
+    size_t octets = (**data) & 0x7f;
+    (*data)++;
+    (*data_len)--;
+    if (octets && *data_len == 0)
+      return (size_t)-1;
+    while (octets) {
+      len = (len << 8) + (**data);
+      (*data)++;
+      if (*data_len == 0)
+        return (size_t)-1;
+      (*data_len)--;
+      octets--;
+    }
+  }
+  else {
+    len = (**data) & 0x7f;
+    (*data)++;
+    (*data_len)--;
+  }
+  return len;
+}
+
 static int
-dtls_asn1_integer_ec_key(uint8 *data, size_t data_len, uint8 *key,
+dtls_asn1_integer_to_ec_key(uint8 *data, size_t data_len, uint8 *key,
                          size_t key_len)
 {
   size_t length;
@@ -1858,13 +1888,11 @@ dtls_asn1_integer_ec_key(uint8 *data, size_t data_len, uint8 *key,
   data += sizeof(uint8);
   data_len -= sizeof(uint8);
 
-  length = dtls_uint8_to_int(data);
-  if (length > data_len - 1) {
+  length = dtls_asn1_len(&data, &data_len);
+  if (length > data_len) {
     dtls_alert("asn1 integer length too long\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
-  data += sizeof(uint8);
-  data_len -= sizeof(uint8);
 
   if (length < key_len) {
     /* pad with leading 0s */
@@ -1886,6 +1914,13 @@ dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
   int ret;
   uint8 *data_orig = data;
 
+  /*
+   * 1 sig hash sha256
+   * 1 sig hash ecdsa
+   * 2 data length
+   * 1 sequence
+   * 1 sequence length
+   */
   if (data_length < 1 + 1 + 2 + 1 + 1) {
     dtls_alert("signature data length short\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
@@ -1925,13 +1960,13 @@ dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  ret = dtls_asn1_integer_ec_key(data, data_length, result_r, DTLS_EC_KEY_SIZE);
+  ret = dtls_asn1_integer_to_ec_key(data, data_length, result_r, DTLS_EC_KEY_SIZE);
   if (ret <= 0)
     return ret;
   data += ret;
   data_length -= ret;
 
-  ret = dtls_asn1_integer_ec_key(data, data_length, result_s, DTLS_EC_KEY_SIZE);
+  ret = dtls_asn1_integer_to_ec_key(data, data_length, result_s, DTLS_EC_KEY_SIZE);
   if (ret <= 0)
     return ret;
   data += ret;
@@ -2140,11 +2175,11 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   int len_r;
   int len_s;
 
-#define R_KEY_OFFSET (1 + 1 + 2 + 1 + 1 + 1 + 1)
-#define S_KEY_OFFSET(len_a) (R_KEY_OFFSET + (len_a) + 1 + 1)
+#define R_KEY_OFFSET (1 + 1 + 2 + 1 + 1)
+#define S_KEY_OFFSET(len_a) (R_KEY_OFFSET + (len_a))
   /* store the pointer to the r component of the signature and make space */
-  len_r = dtls_ec_key_from_uint32_asn1(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
-  len_s = dtls_ec_key_from_uint32_asn1(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
+  len_r = dtls_ec_key_asn1_from_uint32(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
+  len_s = dtls_ec_key_asn1_from_uint32(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
 
 #undef R_KEY_OFFSET
 #undef S_KEY_OFFSET
@@ -2158,34 +2193,24 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   p += sizeof(uint8);
 
   /* length of signature */
-  dtls_int_to_uint16(p, len_r + len_s + 2 + 2 + 2);
+  dtls_int_to_uint16(p, len_r + len_s + 2);
   p += sizeof(uint16);
 
   /* ASN.1 SEQUENCE */
   dtls_int_to_uint8(p, 0x30);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_r + len_s + 2 + 2);
+  dtls_int_to_uint8(p, len_r + len_s);
   p += sizeof(uint8);
 
   /* ASN.1 Integer r */
-  dtls_int_to_uint8(p, 0x02);
-  p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_r);
-  p += sizeof(uint8);
-
-  /* the pint r was added here */
+  /* the point r ASN.1 integer was added here so skip */
   p += len_r;
 
   /* ASN.1 Integer s */
-  dtls_int_to_uint8(p, 0x02);
-  p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_s);
-  p += sizeof(uint8);
-
-  /* the pint s was added here */
+  /* the point s ASN.1 integer was added here so skip */
   p += len_s;
 
   return p;
