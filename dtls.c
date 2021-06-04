@@ -2851,6 +2851,8 @@ check_server_hello_verify_request(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
   hv = (dtls_hello_verify_t *)(data + DTLS_HS_LENGTH);
+  if (data_length < DTLS_HS_LENGTH + DTLS_HV_LENGTH + hv->cookie_length)
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 
   res = dtls_send_client_hello(ctx, peer, hv->cookie, hv->cookie_length);
 
