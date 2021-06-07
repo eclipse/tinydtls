@@ -3291,6 +3291,8 @@ dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
 
   peer->handshake_params->hs_state.mseq_r = 0;
   peer->handshake_params->hs_state.mseq_s = 0;
+  peer->serverkeyexchange = 0;
+  peer->certificaterequest = 0;
 
   if (peer->role == DTLS_CLIENT) {
     /* send ClientHello with empty Cookie */
@@ -3400,7 +3402,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
     if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
-      if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+      if (state != DTLS_STATE_WAIT_SERVERHELLODONE ||
+          peer->serverkeyexchange || peer->certificaterequest) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
       err = check_server_key_exchange_psk(ctx, peer, data, data_length);
@@ -3412,6 +3415,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return err;
     }
     peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
+    peer->serverkeyexchange = 1;
     /* update_hs_hash(peer, data, data_length); */
 
     break;
@@ -3434,7 +3438,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
 
   case DTLS_HT_CERTIFICATE_REQUEST:
 
-    if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+    if (state != DTLS_STATE_WAIT_SERVERHELLODONE || peer->certificaterequest) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
 
@@ -3443,6 +3447,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       dtls_warn("error in check_certificate_request err: %i\n", err);
       return err;
     }
+    peer->certificaterequest = 1;
 
     break;
 
@@ -3668,6 +3673,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       return err;
     }
     peer->state = DTLS_STATE_CLIENTHELLO;
+    peer->serverkeyexchange = 0;
+    peer->certificaterequest = 0;
     break;
 
   default:
