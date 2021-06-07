@@ -130,6 +130,7 @@ typedef struct {
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
+  uint16_t hs_epoch;         /**< Epoch primarily used for handshake */
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   union {
