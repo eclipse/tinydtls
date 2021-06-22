@@ -200,7 +200,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
   struct addrinfo *res, *ainfo;
   struct addrinfo hints;
   static char addrstr[256];
-  int error;
+  int error, len=-1;
 
   memset(addrstr, 0, sizeof(addrstr));
   if (server && strlen(server) > 0)
@@ -220,19 +220,20 @@ resolve_address(const char *server, struct sockaddr *dst) {
   }
 
   for (ainfo = res; ainfo != NULL; ainfo = ainfo->ai_next) {
-
     switch (ainfo->ai_family) {
     case AF_INET6:
-
-      memcpy(dst, ainfo->ai_addr, ainfo->ai_addrlen);
-      return ainfo->ai_addrlen;
+    case AF_INET:
+      len = (int)ainfo->ai_addrlen;
+      memcpy(dst, ainfo->ai_addr, len);
+      goto finish;
     default:
       ;
     }
   }
 
+finish:
   freeaddrinfo(res);
-  return -1;
+  return len;
 }
 
 static void
@@ -272,8 +273,10 @@ main(int argc, char **argv) {
   struct timeval timeout;
   int fd, opt, result;
   int on = 1;
+  int off = 0;
   struct sockaddr_in6 listen_addr;
   struct sigaction sa;
+  uint16_t port = htons(DEFAULT_PORT);
 
   memset(&listen_addr, 0, sizeof(struct sockaddr_in6));
 
@@ -283,7 +286,6 @@ main(int argc, char **argv) {
 #endif
 
   listen_addr.sin6_family = AF_INET6;
-  listen_addr.sin6_port = htons(DEFAULT_PORT);
   listen_addr.sin6_addr = in6addr_any;
 
   while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
@@ -295,7 +297,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      listen_addr.sin6_port = htons(atoi(optarg));
+      port = htons(atoi(optarg));
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
@@ -305,6 +307,7 @@ main(int argc, char **argv) {
       exit(1);
     }
   }
+  listen_addr.sin6_port = port;
 
   dtls_set_log_level(log_level);
 
@@ -327,15 +330,25 @@ main(int argc, char **argv) {
   }
 #endif
   on = 1;
+  if (listen_addr.sin6_family == AF_INET6) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off)) < 0) {
+      dtls_alert("setsockopt IPV6_V6ONLY: %s\n", strerror(errno));
+    }
 #ifdef IPV6_RECVPKTINFO
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
 #else /* IPV6_RECVPKTINFO */
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+      dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+  if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on)) < 0) {
+    dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
   }
 
-  if (bind(fd, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0) {
+  if (bind(fd, (struct sockaddr *)&listen_addr,
+           listen_addr.sin6_family == AF_INET ? sizeof(struct sockaddr_in) :
+                                                sizeof(listen_addr)) < 0) {
     dtls_alert("bind: %s\n", strerror(errno));
     goto error;
   }

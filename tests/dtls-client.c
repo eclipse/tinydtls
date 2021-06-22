@@ -453,12 +453,19 @@ main(int argc, char **argv) {
   }
 #endif
   on = 1;
+  if (dst.addr.sa.sa_family == AF_INET6) {
 #ifdef IPV6_RECVPKTINFO
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
 #else /* IPV6_RECVPKTINFO */
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+      dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+  else {
+    if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on) ) < 0) {
+      dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
+    }
   }
 
   if (signal(SIGINT, dtls_handle_signal) == SIG_ERR) {
