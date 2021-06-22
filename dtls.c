@@ -1841,14 +1841,90 @@ dtls_verify_peer(dtls_context_t *ctx,
 }
 
 #ifdef DTLS_ECC
+/*
+ * Assumes that data_len is at least 1 */
+static size_t
+dtls_asn1_len(uint8 **data, size_t *data_len)
+{
+  size_t len = 0;
+
+  if ((**data) & 0x80) {
+    size_t octets = (**data) & 0x7f;
+    (*data)++;
+    (*data_len)--;
+    if (octets && *data_len == 0)
+      return (size_t)-1;
+    while (octets) {
+      len = (len << 8) + (**data);
+      (*data)++;
+      if (*data_len == 0)
+        return (size_t)-1;
+      (*data_len)--;
+      octets--;
+    }
+  }
+  else {
+    len = (**data) & 0x7f;
+    (*data)++;
+    (*data_len)--;
+  }
+  return len;
+}
+
+static int
+dtls_asn1_integer_to_ec_key(uint8 *data, size_t data_len, uint8 *key,
+                         size_t key_len)
+{
+  size_t length;
+
+  if (data_len < 2) {
+    dtls_alert("signature data length short\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  if (dtls_uint8_to_int(data) != 0x02) {
+    dtls_alert("wrong ASN.1 struct, expected Integer\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  data += sizeof(uint8);
+  data_len -= sizeof(uint8);
+
+  length = dtls_asn1_len(&data, &data_len);
+  if (length > data_len) {
+    dtls_alert("asn1 integer length too long\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+
+  if (length < key_len) {
+    /* pad with leading 0s */
+    memset(key, 0, key_len - length);
+    memcpy(key + key_len - length, data, length); 
+  }
+  else {
+    /* drop leading 0s if needed */
+    memcpy(key, data + length - key_len, key_len); 
+  }
+  return length + 2;
+}
+
 static int
 dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
-				unsigned char **result_r,
-				unsigned char **result_s)
+				unsigned char *result_r,
+				unsigned char *result_s)
 {
-  int i;
+  int ret;
   uint8 *data_orig = data;
 
+  /*
+   * 1 sig hash sha256
+   * 1 sig hash ecdsa
+   * 2 data length
+   * 1 sequence
+   * 1 sequence length
+   */
+  if (data_length < 1 + 1 + 2 + 1 + 1) {
+    dtls_alert("signature data length short\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
   if (dtls_uint8_to_int(data) != TLS_EXT_SIG_HASH_ALGO_SHA256) {
     dtls_alert("only sha256 is supported in certificate verify\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
@@ -1884,39 +1960,17 @@ dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
-  if (dtls_uint8_to_int(data) != 0x02) {
-    dtls_alert("wrong ASN.1 struct, expected Integer\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
+  ret = dtls_asn1_integer_to_ec_key(data, data_length, result_r, DTLS_EC_KEY_SIZE);
+  if (ret <= 0)
+    return ret;
+  data += ret;
+  data_length -= ret;
 
-  i = dtls_uint8_to_int(data);
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
-
-  /* Sometimes these values have a leeding 0 byte */
-  *result_r = data + i - DTLS_EC_KEY_SIZE;
-
-  data += i;
-  data_length -= i;
-
-  if (dtls_uint8_to_int(data) != 0x02) {
-    dtls_alert("wrong ASN.1 struct, expected Integer\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
-
-  i = dtls_uint8_to_int(data);
-  data += sizeof(uint8);
-  data_length -= sizeof(uint8);
-
-  /* Sometimes these values have a leeding 0 byte */
-  *result_s = data + i - DTLS_EC_KEY_SIZE;
-
-  data += i;
-  data_length -= i;
+  ret = dtls_asn1_integer_to_ec_key(data, data_length, result_s, DTLS_EC_KEY_SIZE);
+  if (ret <= 0)
+    return ret;
+  data += ret;
+  data_length -= ret;
 
   return data - data_orig;
 }
@@ -1929,21 +1983,27 @@ check_client_certificate_verify(dtls_context_t *ctx,
   (void) ctx;
   dtls_handshake_parameters_t *config = peer->handshake_params;
   int ret;
-  unsigned char *result_r;
-  unsigned char *result_s;
+  unsigned char result_r[DTLS_EC_KEY_SIZE];
+  unsigned char result_s[DTLS_EC_KEY_SIZE];
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
   assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
+  data_length -= DTLS_HS_LENGTH;
 
-  if (data_length < DTLS_HS_LENGTH + DTLS_CV_LENGTH) {
+  if (data_length < DTLS_CV_LENGTH - 2 * DTLS_EC_KEY_SIZE) {
+    /*
+     * Some of the ASN.1 integer in the signature may be less than
+     * DTLS_EC_KEY_SIZE if leading bits are 0.
+     * dtls_check_ecdsa_signature_elem() knows how to handle this undersize.
+     */
     dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
-  ret = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
+  ret = dtls_check_ecdsa_signature_elem(data, data_length, result_r, result_s);
   if (ret < 0) {
     return ret;
   }
@@ -2115,11 +2175,11 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   int len_r;
   int len_s;
 
-#define R_KEY_OFFSET (1 + 1 + 2 + 1 + 1 + 1 + 1)
-#define S_KEY_OFFSET(len_a) (R_KEY_OFFSET + (len_a) + 1 + 1)
+#define R_KEY_OFFSET (1 + 1 + 2 + 1 + 1)
+#define S_KEY_OFFSET(len_a) (R_KEY_OFFSET + (len_a))
   /* store the pointer to the r component of the signature and make space */
-  len_r = dtls_ec_key_from_uint32_asn1(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
-  len_s = dtls_ec_key_from_uint32_asn1(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
+  len_r = dtls_ec_key_asn1_from_uint32(point_r, DTLS_EC_KEY_SIZE, p + R_KEY_OFFSET);
+  len_s = dtls_ec_key_asn1_from_uint32(point_s, DTLS_EC_KEY_SIZE, p + S_KEY_OFFSET(len_r));
 
 #undef R_KEY_OFFSET
 #undef S_KEY_OFFSET
@@ -2133,34 +2193,24 @@ dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
   p += sizeof(uint8);
 
   /* length of signature */
-  dtls_int_to_uint16(p, len_r + len_s + 2 + 2 + 2);
+  dtls_int_to_uint16(p, len_r + len_s + 2);
   p += sizeof(uint16);
 
   /* ASN.1 SEQUENCE */
   dtls_int_to_uint8(p, 0x30);
   p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_r + len_s + 2 + 2);
+  dtls_int_to_uint8(p, len_r + len_s);
   p += sizeof(uint8);
 
   /* ASN.1 Integer r */
-  dtls_int_to_uint8(p, 0x02);
-  p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_r);
-  p += sizeof(uint8);
-
-  /* the pint r was added here */
+  /* the point r ASN.1 integer was added here so skip */
   p += len_r;
 
   /* ASN.1 Integer s */
-  dtls_int_to_uint8(p, 0x02);
-  p += sizeof(uint8);
 
-  dtls_int_to_uint8(p, len_s);
-  p += sizeof(uint8);
-
-  /* the pint s was added here */
+  /* the point s ASN.1 integer was added here so skip */
   p += len_s;
 
   return p;
@@ -2918,8 +2968,8 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   (void) ctx;
   dtls_handshake_parameters_t *config = peer->handshake_params;
   int ret;
-  unsigned char *result_r;
-  unsigned char *result_s;
+  unsigned char result_r[DTLS_EC_KEY_SIZE];
+  unsigned char result_s[DTLS_EC_KEY_SIZE];
   unsigned char *key_params;
 
   update_hs_hash(peer, data, data_length);
@@ -2927,8 +2977,14 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
 
   data += DTLS_HS_LENGTH;
+  data_length -= DTLS_HS_LENGTH;
 
-  if (data_length < DTLS_HS_LENGTH + DTLS_SKEXEC_LENGTH) {
+  if (data_length < DTLS_SKEXEC_LENGTH - 2 * DTLS_EC_KEY_SIZE) {
+    /*
+     * Some of the ASN.1 integer in the signature may be less than
+     * DTLS_EC_KEY_SIZE if leading bits are 0.
+     * dtls_check_ecdsa_signature_elem() knows how to handle this undersize.
+     */
     dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
@@ -2970,7 +3026,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   data += sizeof(config->keyx.ecdsa.other_eph_pub_y);
   data_length -= sizeof(config->keyx.ecdsa.other_eph_pub_y);
 
-  ret = dtls_check_ecdsa_signature_elem(data, data_length, &result_r, &result_s);
+  ret = dtls_check_ecdsa_signature_elem(data, data_length, result_r, result_s);
   if (ret < 0) {
     return ret;
   }

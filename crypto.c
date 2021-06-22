@@ -385,40 +385,60 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
   }
 }
 
-int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
-				 unsigned char *buf) {
-  int i;
-  unsigned char *buf_orig = buf;
-  int first = 1; 
+/* Build the EC KEY as a ASN.1 positive integer */
+/*
+ * The public EC key consists of two positive numbers. Converting them into
+ * ASN.1 INTEGER requires removing leading zeros, but special care must be
+ * taken of the resulting sign. If the first non-zero byte of the 32 byte
+ * ec-key has bit 7 set (highest bit), the resultant ASN.1 INTEGER would be
+ * interpreted as a negative number. In order to prevent this, a zero in the
+ * ASN.1 presentation is prepended if that bit 7 is set.
+*/
+int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
+				 uint8_t *buf) {
+  int i = 0;
+  uint8_t *lptr;
+   
+  /* ASN.1 Integer r */
+  dtls_int_to_uint8(buf, 0x02);
+  buf += sizeof(uint8);
 
-  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
-    if (key[i] == 0)
-      continue;
-    /* the first bit has to be set to zero, to indicate a poritive integer */
-    if (first && key[i] & 0x80000000) {
-      *buf = 0;
-      buf++;
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;      
-    } else if (first && !(key[i] & 0xFF800000)) {
-      buf[0] = (key[i] >> 16) & 0xff;
-      buf[1] = (key[i] >> 8) & 0xff;
-      buf[2] = key[i] & 0xff;
-      buf += 3;
-    } else if (first && !(key[i] & 0xFFFF8000)) {
-      buf[0] = (key[i] >> 8) & 0xff;
-      buf[1] = key[i] & 0xff;
-      buf += 2;
-    } else if (first && !(key[i] & 0xFFFFFF80)) {
-      buf[0] = key[i] & 0xff;
-      buf += 1;
-    } else {
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;
-    }
-    first = 0;
+  lptr = buf;
+  /* Length will be filled in later */
+  buf += sizeof(uint8);
+
+  dtls_ec_key_from_uint32(key, key_size, buf);
+  
+  /* skip leading 0's */
+  while (i < (int)key_size && buf[i] == 0) {
+     ++i;
   }
-  return buf - buf_orig;
+  assert(i != (int)key_size);
+  if (i == (int)key_size) {
+      dtls_alert("ec key is all zero\n");
+      return 0;
+  }
+  if (buf[i] >= 0x80) {
+    /* 
+     * Preserve unsigned by adding leading 0 (i may go negative which is
+     * explicitely handled below with the assumption that buf is at least 33
+     * bytes in size).
+     */
+     --i;
+  }
+  if (i > 0) {
+      /* remove leading 0's */
+      key_size -= i;
+      memmove(buf, buf + i, key_size);
+  } else if (i == -1) {
+      /* add leading 0 */
+      memmove(buf +1, buf, key_size);
+      buf[0] = 0;
+      key_size++;
+  }
+  /* Update the length of positive ASN.1 integer */
+  dtls_int_to_uint8(lptr, key_size);
+  return key_size + 2; 
 }
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
