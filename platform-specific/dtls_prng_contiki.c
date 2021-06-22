@@ -43,7 +43,7 @@ dtls_prng(unsigned char *buf, size_t len)
   }
 
   memcpy(buf, &v, len);
-  return 1;
+  return len;
 }
 #endif /* ! HAVE_PRNG */
 

@@ -6,7 +6,9 @@
 #include "crypto.h"
 
 int 
-main() {
+main(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
   /* see http://www.ietf.org/mail-archive/web/tls/current/msg03416.html */
   unsigned char key[] = { 0x9b, 0xbe, 0x43, 0x6b, 0xa9, 0x40, 0xf0, 0x17, 
 			  0xb1, 0x76, 0x52, 0x84, 0x9a, 0x71, 0xdb, 0x35 };

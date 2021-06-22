@@ -310,8 +310,8 @@ static void fieldModO(const uint32_t *A, uint32_t *result, uint8_t length) {
  * @return 1 if all elements in @val are zero, 0 otherwise.
  */
 static int is_zero(const uint32_t* val, size_t count) {
-  int result = 0;
-  int idx;
+  size_t result = 0;
+  size_t idx;
 
   for (idx = 0; idx < count; idx++) {
     result += val[idx] == 0;
