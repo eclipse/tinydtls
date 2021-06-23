@@ -688,7 +688,8 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
   * see IANA for a full list of types:
   * https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-7
   */
-static const char *dtls_handshake_type_to_name(int type)
+static const char *
+dtls_handshake_type_to_name(int type)
 {
   switch (type) {
   case DTLS_HT_HELLO_REQUEST:
@@ -717,6 +718,24 @@ static const char *dtls_handshake_type_to_name(int type)
     return "unknown";
   }
 }
+
+static const char *
+dtls_message_type_to_name(int type)
+{
+  switch (type) {
+  case DTLS_CT_CHANGE_CIPHER_SPEC:
+    return "change_cipher_spec";
+  case DTLS_CT_ALERT:
+    return "alert";
+  case DTLS_CT_HANDSHAKE:
+    return "handshake";
+  case DTLS_CT_APPLICATION_DATA:
+    return "application_data";
+  default:
+    return NULL;
+  }
+}
+
 
 /**
  * Calculate the pre master secret and after that calculate the master-secret.
@@ -3756,7 +3775,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   hs_header = DTLS_HANDSHAKE_HEADER(data);
 
   dtls_debug("received handshake packet of type: %s (%i)\n",
-	     dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
+             dtls_handshake_type_to_name(hs_header->msg_type),
+             hs_header->msg_type);
 
   packet_length = dtls_uint24_to_int(hs_header->length);
   fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
@@ -4024,17 +4044,25 @@ dtls_handle_message(dtls_context_t *ctx,
   while ((rlen = is_record(msg,msglen))) {
     dtls_peer_type role;
     dtls_state_t state;
+    dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
+    uint64_t pkt_seq_nr = dtls_uint48_to_int(header->sequence_number);
+    const char *name = dtls_message_type_to_name(msg[0]);
 
-    dtls_debug("got packet %d (%d bytes)\n", msg[0], rlen);
+    if (name) {
+      dtls_debug("got '%s' epoch %u sequence %" PRIu64 " (%d bytes)\n",
+                 name, dtls_get_epoch(header), pkt_seq_nr, rlen);
+    }
+    else {
+      dtls_debug("got 'unknown %d' epoch %u sequence %" PRIu64 " (%d bytes)\n",
+                 msg[0], dtls_get_epoch(header), pkt_seq_nr, rlen);
+    }
+
     if (peer) {
-      dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
-
       dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
       if (!security) {
         dtls_alert("No security context for epoch: %i\n", dtls_get_epoch(header));
         data_length = -1;
       } else {
-        uint64_t pkt_seq_nr = dtls_uint48_to_int(header->sequence_number);
         if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
           data_length = decrypt_verify(peer, msg, rlen, &data);
           if (data_length) {
@@ -4075,8 +4103,9 @@ dtls_handle_message(dtls_context_t *ctx,
             security->cseq.bitfield |= 1;
             /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
             security->cseq.cseq = pkt_seq_nr;
-            dtls_debug("new packet arrived with seq_nr: %" PRIu64 "\n", pkt_seq_nr);
-            dtls_debug("new bitfield is               : %" PRIx64 "\n", security->cseq.bitfield);
+            dtls_debug(
+                   "new bitfield is %" PRIx64 " sequence base %" PRIx64 "\n",
+                      security->cseq.bitfield, security->cseq.cseq);
           }
         }
       }
@@ -4378,7 +4407,8 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 	dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
 
 	dtls_debug("** retransmit handshake packet of type: %s (%i)\n",
-	           dtls_handshake_type_to_name(hs_header->msg_type), hs_header->msg_type);
+                   dtls_handshake_type_to_name(hs_header->msg_type),
+                   hs_header->msg_type);
       } else {
 	dtls_debug("** retransmit packet\n");
       }
