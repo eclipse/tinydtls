@@ -4215,7 +4215,15 @@ dtls_handle_message(dtls_context_t *ctx,
       if (err < 0) {
 	dtls_warn("error while handling handshake packet\n");
 	dtls_alert_send_from_err(ctx, peer, session, err);
-	return err;
+
+        if (DTLS_ALERT_LEVEL_FATAL == ((-err) & 0xff00) >> 8) {
+          /* invalidate peer */
+          peer->state = DTLS_STATE_CLOSED;
+          dtls_stop_retransmission(ctx, peer);
+          dtls_destroy_peer(ctx, peer, 1);
+          peer = NULL;
+        }
+        return err;
       }
       if (peer && peer->state == DTLS_STATE_CONNECTED) {
 	/* stop retransmissions */
