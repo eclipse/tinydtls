@@ -47,6 +47,8 @@ typedef struct {
   uint16_t mseq_s;	     /**< send handshake message sequence number counter */
   uint16_t mseq_r;	     /**< received handshake message sequence number counter */
 
+  uint16_t read_epoch;   /**< handshake's current read epoch */
+
   /** pending config that is updated during handshake */
   /* FIXME: dtls_security_parameters_t pending_config; */
 
