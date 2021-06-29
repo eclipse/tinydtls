@@ -1369,7 +1369,7 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   /* compare verify data and create DTLS alert code when they differ */
   return equals(data + DTLS_HS_LENGTH, b.verify_data, sizeof(b.verify_data))
     ? 0
-    : dtls_alert_create(DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_HANDSHAKE_FAILURE);
+    : dtls_alert_create(DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_DECRYPT_ERROR);
 }
 
 /**
