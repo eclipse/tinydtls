@@ -4110,22 +4110,8 @@ dtls_handle_message(dtls_context_t *ctx,
         }
       }
       if (data_length < 0) {
-        if (hs_attempt_with_existing_peer(msg, rlen, peer)) {
-          data = msg + DTLS_RH_LENGTH;
-          data_length = rlen - DTLS_RH_LENGTH;
-          state = DTLS_STATE_WAIT_CLIENTHELLO;
-          role = DTLS_SERVER;
-        } else {
-	  err =  dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
-          dtls_info("decrypt_verify() failed\n");
-	  if (peer->state < DTLS_STATE_CONNECTED) {
-	    dtls_alert_send_from_err(ctx, peer, &peer->session, err);
-	    peer->state = DTLS_STATE_CLOSED;
-	    dtls_stop_retransmission(ctx, peer);
-	    dtls_destroy_peer(ctx, peer, 1);
-	  }
-          return err;
-        }
+        dtls_info("decrypt_verify() failed, drop message.\n");
+        return 0;
       } else {
         role = peer->role;
         state = peer->state;
