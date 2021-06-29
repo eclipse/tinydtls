@@ -96,6 +96,8 @@ static inline void dtls_security_params_free_other(dtls_peer_t *peer)
 
   dtls_security_free(security1);
   peer->security_params[1] = NULL;
+  if (peer->handshake_params)
+    peer->handshake_params->hs_epoch = security0->epoch;
 }
 
 static inline void dtls_security_params_switch(dtls_peer_t *peer)

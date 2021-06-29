@@ -2816,6 +2816,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint16);
   handshake->extended_master_secret = 1;
 
+  handshake->hs_epoch = dtls_security_params(peer)->epoch;
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));
 
   clear_hs_hash(peer);
@@ -4061,11 +4062,21 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
       if (!security) {
         dtls_alert("No security context for epoch: %i\n", dtls_get_epoch(header));
-        data_length = -1;
+        return 0;
       } else {
+        uint16_t msg_epoch = dtls_get_epoch(header);
+
+        if (peer->handshake_params &&
+            peer->handshake_params->hs_epoch != msg_epoch &&
+            peer->state != DTLS_STATE_WAIT_FINISHED) {
+          if ((uint16_t)(peer->handshake_params->hs_epoch + 1) == msg_epoch) {
+            dtls_info("Next epoch packet arrived before handshake complete\n");
+          }
+          return 0;
+        }
         if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
           data_length = decrypt_verify(peer, msg, rlen, &data);
-          if (data_length) {
+          if (data_length > 0) {
             security->cseq.cseq = 0;
             /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
             security->cseq.bitfield = 1;
