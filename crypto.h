@@ -205,11 +205,15 @@ typedef struct {
  * \param h       Identifier of the hash function to use.
  * \param key     The secret.
  * \param keylen  Length of \p key.
- * \param seed    The seed. 
- * \param seedlen Length of \p seed.
+ * \param label    The label.
+ * \param labellen Length of \p label.
+ * \param random1 The random pt 1. 
+ * \param random1len Length of \p random1.
+ * \param random2 The random pt 2. 
+ * \param random2len Length of \p random2.
  * \param buf     Output buffer where the result is XORed into
- *                The buffe must be capable to hold at least
- *                \p buflen bytes.
+ * \param buflen  The available space for \p buf
+ *
  * \return The actual number of bytes written to \p buf or 0
  * on error.
  */
@@ -275,7 +279,10 @@ typedef struct {
  * \param params AEAD parameters: Nonce, M and L.
  * \param src    The data to encrypt.
  * \param length The actual size of of \p src.
- * \param buf    The result buffer.
+ * \param buf    The result buffer. \p src and \p buf must not
+ *               overlap.
+ * \param key     The key to use
+ * \param keylen  The length of the key
  * \param aad    additional data for AEAD ciphers
  * \param aad_length actual size of @p aad
  * \return The number of encrypted bytes on success, less than zero
@@ -302,8 +309,11 @@ int dtls_encrypt_params(const dtls_ccm_params_t *params,
  * \param buf    The result buffer.
  * \param nonce  The nonce used for encryption. Must be exactly 13
  *               bytes, because L is set to 2.
+ * \param key    The key to use
+ * \param keylen The length of the key
  * \param aad    additional data for AEAD ciphers
  * \param aad_length actual size of @p aad
+ *
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise. 
  *
@@ -325,11 +335,14 @@ int dtls_encrypt(const unsigned char *src, size_t length,
  * block have been processed. The provided \p src and \p buf may overlap.
  *
  * \param params AEAD parameters: Nonce, M and L.
- * \param src     The buffer to decrypt.
+ * \param src     The input buffer to decrypt.
  * \param length  The length of the input buffer.
  * \param buf     The result buffer.
+ * \param key     The key to use
+ * \param keylen  The length of the key
  * \param aad     additional authentication data for AEAD ciphers
  * \param aad_length actual size of @p aad
+ *
  * \return Less than zero on error, the number of decrypted bytes
  *         otherwise.
  */
@@ -352,8 +365,10 @@ int dtls_decrypt_params(const dtls_ccm_params_t *params,
  * \param buf     The result buffer.
  * \param nonce  The nonce used for encryption. Must be exactly 13
  *               bytes, because L is set to 2.
- * \param aad     additional authentication data for AEAD ciphers
- * \param aad_length actual size of @p aad
+ * \param key     The key to use
+ * \param keylen  The key to use
+ * \param a_data  additional authentication data for AEAD ciphers
+ * \param a_data_length actual size of @p aad
  * \return Less than zero on error, the number of decrypted bytes 
  *         otherwise.
  *
@@ -376,6 +391,7 @@ int dtls_decrypt(const unsigned char *src, size_t length,
  * @param key    The shared key.
  * @param keylen Length of @p key in bytes.
  * @param result The derived pre master secret.
+ * @param result_len The length of derived pre master secret.
  * @return The actual length of @p result.
  */
 int dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
