@@ -18,7 +18,8 @@ DISTDIR?=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in Doxyfile.in html
 
 doc:	Doxyfile
-	$(DOXYGEN) $< >./doxygen.out 2>&1 
+	$(DOXYGEN) -l
+	$(DOXYGEN) $< >./doxygen.out
 
 clean:
 	@rm -rf html

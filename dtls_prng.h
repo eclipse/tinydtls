@@ -17,7 +17,7 @@
  *******************************************************************************/
 
 /** 
- * @file prng.h
+ * @file dtls_prng.h
  * @brief Pseudo Random Numbers
  */
 
@@ -37,8 +37,8 @@
  * implementation for prng().  You might want to change prng() to use
  * a better PRNG on your specific platform.
  *
- * @buf The buffer to fill
- * @len the length of the buffer to fill
+ * @param buf The buffer to fill
+ * @param len the length of the buffer to fill
  *
  * @return 1 buffer filled
  */
@@ -47,7 +47,7 @@ int dtls_prng(unsigned char *buf, size_t len);
 /**
  * Seeds the random number generator used by the function dtls_prng()
  *
- * @seed The seed to prime the random number generator
+ * @param seed The seed to prime the random number generator
  */
 void dtls_prng_init(unsigned seed);
 

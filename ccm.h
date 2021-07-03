@@ -33,7 +33,7 @@
  * \param ctx The initialized rijndael_ctx object to be used for AES operations.
  * \param M   The number of authentication octets.
  * \param L   The number of bytes used to encode the message length.
- * \param N   The nonce value to use. You must provide \c DTLS_CCM_BLOCKSIZE 
+ * \param nonce The nonce value to use. You must provide \c DTLS_CCM_BLOCKSIZE 
  *            nonce octets, although only the first \c 16 - \p L - 1 are used.
  * \param msg The message to encrypt. The first \p la octets are additional
  *            authentication data that will be cleartext. Note that the 
