@@ -245,6 +245,10 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
 		unsigned char type, uint8 *buf_array[],
 		size_t buf_len_array[], size_t buf_array_len);
 
+static int
+handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
+		uint8 *record_header, uint8 *data, size_t data_length);
+
 /**
  * Sends the fragment of length \p buflen given in \p buf to the
  * specified \p peer. The data will be MAC-protected and encrypted
@@ -1766,6 +1770,7 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
       n->peer = peer;
       n->epoch = (security) ? security->epoch : 0;
       n->type = type;
+      n->job = RESEND;
       n->length = 0;
       for (i = 0; i < buf_array_len; i++) {
         memcpy(n->data + n->length, buf_array[i], buf_len_array[i]);
@@ -1773,20 +1778,21 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
       }
 
       if (!netq_insert_node(&ctx->sendqueue, n)) {
-	dtls_warn("cannot add packet to retransmit buffer\n");
-	netq_node_free(n);
+        dtls_warn("cannot add packet to retransmit buffer\n");
+        netq_node_free(n);
 #ifdef WITH_CONTIKI
       } else {
-	/* must set timer within the context of the retransmit process */
-	PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
-	etimer_set(&ctx->retransmit_timer, n->timeout);
-	PROCESS_CONTEXT_END(&dtls_retransmit_process);
+        /* must set timer within the context of the retransmit process */
+        PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
+        etimer_set(&ctx->retransmit_timer, n->timeout);
+        PROCESS_CONTEXT_END(&dtls_retransmit_process);
 #else /* WITH_CONTIKI */
-	dtls_debug("copied to sendqueue\n");
+        dtls_debug("copied to sendqueue\n");
 #endif /* WITH_CONTIKI */
       }
-    } else
+    } else {
       dtls_warn("retransmit buffer full\n");
+    }
   }
 
   /* FIXME: copy to peer's sendqueue (after fragmentation if
@@ -1810,6 +1816,46 @@ dtls_send_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level
   uint8_t msg[] = { level, description };
 
   dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg));
+
+  /* copy close alert in retransmit buffer to emulate timeout */
+  /* not resent, therefore don't copy the complete record */
+  netq_t *n = netq_node_new(2);
+  if (n) {
+    dtls_tick_t now;
+    dtls_ticks(&now);
+    n->t = now + 2 * CLOCK_SECOND;
+    n->retransmit_cnt = 0;
+    n->timeout = 2 * CLOCK_SECOND;
+    n->peer = peer;
+    n->epoch = peer->security_params[0]->epoch;
+    n->type = DTLS_CT_ALERT;
+    n->length = 2;
+    n->data[0] = level;
+    n->data[1] = description;
+    n->job = TIMEOUT;
+
+    if (!netq_insert_node(&ctx->sendqueue, n)) {
+      dtls_warn("cannot add alert to retransmit buffer\n");
+      netq_node_free(n);
+      n = NULL;
+#ifdef WITH_CONTIKI
+    } else {
+      /* must set timer within the context of the retransmit process */
+      PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
+      etimer_set(&ctx->retransmit_timer, n->timeout);
+      PROCESS_CONTEXT_END(&dtls_retransmit_process);
+#else /* WITH_CONTIKI */
+      dtls_debug("alert copied to retransmit buffer\n");
+#endif /* WITH_CONTIKI */
+    }
+  } else {
+    dtls_warn("cannot add alert, retransmit buffer full\n");
+  }
+  if (!n) {
+    /* timeout not registered */
+    handle_alert(ctx, peer, NULL, msg, sizeof(msg));
+  }
+
   return 0;
 }
 
@@ -1821,18 +1867,20 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   peer = dtls_get_peer(ctx, remote);
 
   if (peer) {
-    res = dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
-                          DTLS_ALERT_CLOSE_NOTIFY);
     /* indicate tear down */
     peer->state = DTLS_STATE_CLOSING;
+    res = dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_WARNING,
+                          DTLS_ALERT_CLOSE_NOTIFY);
   }
   return res;
 }
 
 static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
 {
-  if (peer->state != DTLS_STATE_CLOSED && peer->state != DTLS_STATE_CLOSING)
+  if (peer->state != DTLS_STATE_CLOSED && peer->state != DTLS_STATE_CLOSING) {
     dtls_close(ctx, &peer->session);
+  }
+  dtls_stop_retransmission(ctx, peer);
   if (unlink) {
     DEL_PEER(ctx->peers, peer);
     dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "removed peer", &peer->session);
@@ -4532,6 +4580,15 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       dtls_tick_t now;
       dtls_security_parameters_t *security = dtls_security_params_epoch(node->peer, node->epoch);
 
+      if (node->job == TIMEOUT) {
+        if (node->type == DTLS_CT_ALERT) {
+          dtls_debug("** alert times out\n");
+          handle_alert(context, node->peer, NULL, data, length);
+        }
+        netq_node_free(node);
+        return;
+      }
+
 #ifdef DTLS_CONSTRAINED_STACK
       dtls_mutex_lock(&static_mutex);
 #endif /* DTLS_CONSTRAINED_STACK */
@@ -4542,23 +4599,21 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
       netq_insert_node(&context->sendqueue, node);
 
       if (node->type == DTLS_CT_HANDSHAKE) {
-	dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
-
-	dtls_debug("** retransmit handshake packet of type: %s (%i)\n",
+        dtls_handshake_header_t *hs_header = DTLS_HANDSHAKE_HEADER(data);
+        dtls_debug("** retransmit handshake packet of type: %s (%i)\n",
                    dtls_handshake_type_to_name(hs_header->msg_type),
                    hs_header->msg_type);
       } else {
-	dtls_debug("** retransmit packet\n");
+        dtls_debug("** retransmit packet\n");
       }
 
       err = dtls_prepare_record(node->peer, security, node->type, &data, &length,
-				1, sendbuf, &len);
+                1, sendbuf, &len);
       if (err < 0) {
-	dtls_warn("can not retransmit packet, err: %i\n", err);
-	goto return_unlock;
+        dtls_warn("can not retransmit packet, err: %i\n", err);
+        goto return_unlock;
       }
-      dtls_debug_hexdump("retransmit header", sendbuf,
-			 sizeof(dtls_record_header_t));
+      dtls_debug_hexdump("retransmit header", sendbuf, sizeof(dtls_record_header_t));
       dtls_debug_hexdump("retransmit unencrypted", node->data, node->length);
 
       (void)CALL(context, write, &node->peer->session, sendbuf, len);
