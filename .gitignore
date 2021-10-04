@@ -5,6 +5,8 @@ core
 *.cap
 *.pcap
 Makefile
+aclocal.m4
+ar-lib
 autom4te.cache/
 config.h
 config.log
@@ -13,6 +15,7 @@ configure
 doc/Doxyfile
 doc/doxygen.out
 doc/html/
+install-sh
 libtinydtls.a
 libtinydtls.so
 tests/ccm-test
