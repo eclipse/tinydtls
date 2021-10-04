@@ -1118,6 +1118,11 @@ dtls_update_parameters(dtls_context_t *ctx,
     return 0;
   }
 
+  if ((i % sizeof(uint16)) != 0) {
+    dtls_debug("odd length for cipher suites\n");
+    goto error;
+  }
+
   data += sizeof(uint16);
   data_length -= sizeof(uint16) + i;
 
