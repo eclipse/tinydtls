@@ -994,7 +994,7 @@ void dtls_sha512_final(uint8_t digest[DTLS_SHA512_DIGEST_LENGTH], dtls_sha512_ct
 	}
 
 	/* Zero out state data */
-	MEMSET_BZERO(context, sizeof(context));
+	MEMSET_BZERO(context, sizeof(*context));
 }
 
 char *dtls_sha512_end(dtls_sha512_ctx* context, char buffer[DTLS_SHA512_DIGEST_STRING_LENGTH]) {
@@ -1014,7 +1014,7 @@ char *dtls_sha512_end(dtls_sha512_ctx* context, char buffer[DTLS_SHA512_DIGEST_S
 		}
 		*buffer = (char)0;
 	} else {
-		MEMSET_BZERO(context, sizeof(context));
+		MEMSET_BZERO(context, sizeof(*context));
 	}
 	MEMSET_BZERO(digest, DTLS_SHA512_DIGEST_LENGTH);
 	return buffer;
@@ -1070,7 +1070,7 @@ void dtls_sha384_final(uint8_t digest[DTLS_SHA384_DIGEST_LENGTH], dtls_sha384_ct
 	}
 
 	/* Zero out state data */
-	MEMSET_BZERO(context, sizeof(context));
+	MEMSET_BZERO(context, sizeof(*context));
 }
 
 char *dtls_sha384_end(dtls_sha384_ctx* context, char buffer[DTLS_SHA384_DIGEST_STRING_LENGTH]) {
@@ -1090,7 +1090,7 @@ char *dtls_sha384_end(dtls_sha384_ctx* context, char buffer[DTLS_SHA384_DIGEST_S
 		}
 		*buffer = (char)0;
 	} else {
-		MEMSET_BZERO(context, sizeof(context));
+		MEMSET_BZERO(context, sizeof(*context));
 	}
 	MEMSET_BZERO(digest, DTLS_SHA384_DIGEST_LENGTH);
 	return buffer;
