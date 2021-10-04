@@ -331,7 +331,7 @@ static const sha2_word32 sha256_initial_hash_value[8] = {
 
 #if defined(WITH_SHA384) || defined(WITH_SHA512)
 /* Hash constant words K for SHA-384 and SHA-512: */
-const static sha2_word64 K512[80] = {
+static const sha2_word64 K512[80] = {
 	0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL,
 	0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL,
 	0x3956c25bf348b538ULL, 0x59f111f1b605d019ULL,
@@ -377,7 +377,7 @@ const static sha2_word64 K512[80] = {
 
 #ifdef WITH_SHA384
 /* Initial hash value H for SHA-384 */
-const static sha2_word64 sha384_initial_hash_value[8] = {
+static const sha2_word64 sha384_initial_hash_value[8] = {
 	0xcbbb9d5dc1059ed8ULL,
 	0x629a292a367cd507ULL,
 	0x9159015a3070dd17ULL,
@@ -391,7 +391,7 @@ const static sha2_word64 sha384_initial_hash_value[8] = {
 
 #ifdef WITH_SHA512
 /* Initial hash value H for SHA-512 */
-const static sha2_word64 sha512_initial_hash_value[8] = {
+static const sha2_word64 sha512_initial_hash_value[8] = {
 	0x6a09e667f3bcc908ULL,
 	0xbb67ae8584caa73bULL,
 	0x3c6ef372fe94f82bULL,
@@ -627,7 +627,7 @@ void dtls_sha256_update(dtls_sha256_ctx* context, const sha2_byte *data, size_t 
 	usedspace = freespace = 0;
 }
 
-void dtls_sha256_final(sha2_byte digest[], dtls_sha256_ctx* context) {
+void dtls_sha256_final(uint8_t digest[DTLS_SHA256_DIGEST_LENGTH], dtls_sha256_ctx* context) {
 	sha2_byte	*d = digest;
 	unsigned int	usedspace;
 
@@ -687,7 +687,7 @@ void dtls_sha256_final(sha2_byte digest[], dtls_sha256_ctx* context) {
 	usedspace = 0;
 }
 
-char *dtls_sha256_end(dtls_sha256_ctx* context, char buffer[]) {
+char *dtls_sha256_end(dtls_sha256_ctx* context, char buffer[DTLS_SHA256_DIGEST_STRING_LENGTH]) {
 	sha2_byte	digest[DTLS_SHA256_DIGEST_LENGTH], *d = digest;
 	int		i;
 
@@ -972,7 +972,7 @@ void dtls_sha512_last(dtls_sha512_ctx* context) {
 	dtls_sha512_transform(context, context->buffer);
 }
 
-void dtls_sha512_final(sha2_byte digest[], dtls_sha512_ctx* context) {
+void dtls_sha512_final(uint8_t digest[DTLS_SHA512_DIGEST_LENGTH], dtls_sha512_ctx* context) {
 	sha2_byte	*d = digest;
 
 	/* Sanity check: */
@@ -997,7 +997,7 @@ void dtls_sha512_final(sha2_byte digest[], dtls_sha512_ctx* context) {
 	MEMSET_BZERO(context, sizeof(context));
 }
 
-char *dtls_sha512_end(dtls_sha512_ctx* context, char buffer[]) {
+char *dtls_sha512_end(dtls_sha512_ctx* context, char buffer[DTLS_SHA512_DIGEST_STRING_LENGTH]) {
 	sha2_byte	digest[DTLS_SHA512_DIGEST_LENGTH], *d = digest;
 	int		i;
 
@@ -1044,7 +1044,7 @@ void dtls_sha384_update(dtls_sha384_ctx* context, const sha2_byte* data, size_t 
 	dtls_sha512_update((dtls_sha512_ctx*)context, data, len);
 }
 
-void dtls_sha384_final(sha2_byte digest[], dtls_sha384_ctx* context) {
+void dtls_sha384_final(uint8_t digest[DTLS_SHA384_DIGEST_LENGTH], dtls_sha384_ctx* context) {
 	sha2_byte	*d = digest;
 
 	/* Sanity check: */
@@ -1073,7 +1073,7 @@ void dtls_sha384_final(sha2_byte digest[], dtls_sha384_ctx* context) {
 	MEMSET_BZERO(context, sizeof(context));
 }
 
-char *dtls_sha384_end(dtls_sha384_ctx* context, char buffer[]) {
+char *dtls_sha384_end(dtls_sha384_ctx* context, char buffer[DTLS_SHA384_DIGEST_STRING_LENGTH]) {
 	sha2_byte	digest[DTLS_SHA384_DIGEST_LENGTH], *d = digest;
 	int		i;
 
