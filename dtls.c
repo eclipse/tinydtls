@@ -2868,6 +2868,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint16);
   handshake->extended_master_secret = 1;
 
+  handshake->hs_state.read_epoch = dtls_security_params(peer)->epoch;
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));
 
   clear_hs_hash(peer);
@@ -3326,7 +3327,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
 	       uint8 **cleartext)
 {
   dtls_record_header_t *header = DTLS_RECORD_HEADER(packet);
-  dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
+  dtls_security_parameters_t *security = dtls_security_params_read_epoch(peer, dtls_get_epoch(header));
   int clen;
 
   *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
@@ -3726,6 +3727,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 
       peer->handshake_params->hs_state.mseq_r = dtls_uint16_to_int(hs_header->message_seq);
       peer->handshake_params->hs_state.mseq_s = 1;
+      peer->handshake_params->hs_state.read_epoch = dtls_security_params(peer)->epoch;
     }
     err = handle_verified_client_hello(ctx, peer, data, data_length);
 
@@ -3866,6 +3868,7 @@ handle_0_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
+  peer->handshake_params->hs_state.read_epoch = dtls_security_params(peer)->epoch;
   peer->handshake_params->hs_state.mseq_r = ephemeral_peer->mseq;
   peer->handshake_params->hs_state.mseq_s = ephemeral_peer->mseq;
 
@@ -4030,6 +4033,8 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
     }
   }
 
+  peer->handshake_params->hs_state.read_epoch++;
+  assert(peer->handshake_params->hs_state.read_epoch > 0);
   peer->state = DTLS_STATE_WAIT_FINISHED;
 
   return 0;
