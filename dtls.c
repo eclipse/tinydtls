@@ -790,7 +790,7 @@ calculate_key_block(dtls_context_t *ctx,
 #endif /* !DTLS_ECC */
 
   default:
-    dtls_crit("calculate_key_block: unknown cipher %x04 \n", handshake->cipher);
+    dtls_crit("calculate_key_block: unknown cipher %04x\n", handshake->cipher);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
@@ -1413,6 +1413,9 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 #define A_DATA_LEN 13
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
+    /* For backwards-compatibility, dtls_encrypt_params is called with
+     * M=<macLen> and L=3. */
+    const dtls_ccm_params_t params = { nonce, 8, 3 };
 
     if (is_tls_psk_with_aes_128_ccm_8(security->cipher)) {
       dtls_debug("dtls_prepare_record(): encrypt using TLS_PSK_WITH_AES_128_CCM_8\n");
@@ -1496,10 +1499,10 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
     dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
 
-    res = dtls_encrypt(start + 8, res - 8, start + 8, nonce,
-		       dtls_kb_local_write_key(security, peer->role),
-		       dtls_kb_key_size(security, peer->role),
-		       A_DATA, A_DATA_LEN);
+    res = dtls_encrypt_params(&params, start + 8, res - 8, start + 8,
+               dtls_kb_local_write_key(security, peer->role),
+               dtls_kb_key_size(security, peer->role),
+               A_DATA, A_DATA_LEN);
 
     if (res < 0)
       return res;
@@ -2614,7 +2617,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 #endif /* !DTLS_ECC */
 
   default:
-    dtls_crit("cipher %x04 not supported\n", handshake->cipher);
+    dtls_crit("cipher %04x not supported\n", handshake->cipher);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
@@ -3352,6 +3355,9 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
 #define A_DATA_LEN 13
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
+    /* For backwards-compatibility, dtls_encrypt_params is called with
+     * M=<macLen> and L=3. */
+    const dtls_ccm_params_t params = { nonce, 8, 3 };
 
     if (clen < 16)		/* need at least IV and MAC */
       return -1;
@@ -3363,7 +3369,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     /* read epoch and seq_num from message */
     memcpy(nonce + dtls_kb_iv_size(security, peer->role), *cleartext, 8);
     *cleartext += 8;
-    clen -= 8;
+    clen -= 8; /* length without nonce_explicit */
 
     dtls_debug_dump("nonce", nonce, DTLS_CCM_BLOCKSIZE);
     dtls_debug_dump("key", dtls_kb_remote_write_key(security, peer->role),
@@ -3377,12 +3383,13 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
      */
     memcpy(A_DATA, &DTLS_RECORD_HEADER(packet)->epoch, 8); /* epoch and seq_num */
     memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(packet)->content_type, 3); /* type and version */
-    dtls_int_to_uint16(A_DATA + 11, clen - 8); /* length without nonce_explicit */
 
-    clen = dtls_decrypt(*cleartext, clen, *cleartext, nonce,
-		       dtls_kb_remote_write_key(security, peer->role),
-		       dtls_kb_key_size(security, peer->role),
-		       A_DATA, A_DATA_LEN);
+    dtls_int_to_uint16(A_DATA + 11, clen - 8); /* length without MAC */
+
+    clen = dtls_decrypt_params(&params, *cleartext, clen, *cleartext,
+               dtls_kb_remote_write_key(security, peer->role),
+               dtls_kb_key_size(security, peer->role),
+               A_DATA, A_DATA_LEN);
     if (clen < 0)
       dtls_warn("decryption failed\n");
     else {
