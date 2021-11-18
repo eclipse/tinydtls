@@ -102,6 +102,11 @@ typedef struct {
     uint64_t bitfield;
 } seqnum_t;
 
+/* Maximum CID length. */
+#ifndef DTLS_MAX_CID_LENGTH
+#define DTLS_MAX_CID_LENGTH 16
+#endif
+
 typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
@@ -116,7 +121,12 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
-  
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   seqnum_t cseq;        /**<sequence number of last record received*/
 } dtls_security_parameters_t;
 
@@ -136,6 +146,14 @@ typedef struct {
 
   dtls_compression_t compression;		/**< compression method */
   dtls_cipher_t cipher;		/**< cipher type */
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+
+  unsigned int use_connection_id:1;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   union {

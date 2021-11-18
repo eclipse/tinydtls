@@ -112,7 +112,7 @@ memarray_t dtlscontext_storage;
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_COOKIE_LENGTH_MAX 32
-#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + DTLS_COOKIE_LENGTH_MAX + 12 + 26 + 12
+#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + DTLS_COOKIE_LENGTH_MAX + 12 + 43
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 1 + 1 + 2 + 70)
@@ -422,6 +422,7 @@ static char const content_types[] = {
   DTLS_CT_ALERT,
   DTLS_CT_HANDSHAKE,
   DTLS_CT_APPLICATION_DATA,
+  DTLS_CT_TLS12_CID,
   0 				/* end marker */
 };
 
@@ -696,6 +697,8 @@ dtls_message_type_to_name(int type)
     return "handshake";
   case DTLS_CT_APPLICATION_DATA:
     return "application_data";
+  case DTLS_CT_TLS12_CID:
+    return "connection_id";
   default:
     return NULL;
   }
@@ -840,6 +843,10 @@ calculate_key_block(dtls_context_t *ctx,
   security->cipher = handshake->cipher;
   security->compression = handshake->compression;
   security->rseq = 0;
+#if (DTLS_MAX_CID_LENGTH > 0)
+  security->write_cid_length = handshake->write_cid_length;
+  memcpy(security->write_cid, handshake->write_cid, handshake->write_cid_length);
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
 
   return 0;
 }
@@ -944,6 +951,37 @@ static int verify_ext_sig_hash_algo(uint8 *data, size_t data_length) {
   return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
+#if (DTLS_MAX_CID_LENGTH > 0)
+
+static int get_ext_connection_id(dtls_handshake_parameters_t *handshake, uint8 *data, size_t data_length) {
+  uint8_t i;
+
+  if (sizeof(uint8) > data_length) {
+    dtls_warn("invalid length (%zu) for extension connection id\n", data_length);
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  /* length of the connection id */
+  i = dtls_uint8_to_int(data);
+  data += sizeof(uint8);
+  if (i + sizeof(uint8) != data_length) {
+    dtls_warn("invalid connection id length (%d)\n", i);
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  if (DTLS_MAX_CID_LENGTH < i) {
+    dtls_warn("connection id length (%d) exceeds maximum (%d)!\n", i, DTLS_MAX_CID_LENGTH);
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  handshake->write_cid_length = i;
+  memcpy(handshake->write_cid, data, i);
+
+  return 0;
+}
+
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
+
 /*
  * Check for some TLS Extensions used by the ECDHE_ECDSA cipher.
  */
@@ -1036,6 +1074,16 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_sig_hash_algo(data, j))
           goto error;
         break;
+#if (DTLS_MAX_CID_LENGTH > 0)
+      case TLS_EXT_CONNECTION_ID:
+        if (!client_hello && !handshake->use_connection_id) {
+          dtls_warn("connection id was not sent by client!\n");
+          goto error;
+        }
+        if (get_ext_connection_id(handshake, data, j))
+          goto error;
+        break;
+#endif /* DTLS_MAX_CID_LENGTH */
       default:
         dtls_warn("unsupported tls extension: %i\n", i);
         break;
@@ -1382,9 +1430,10 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 		    uint8 *data_array[], size_t data_len_array[],
 		    size_t data_array_len,
 		    uint8 *sendbuf, size_t *rlen) {
-  uint8 *p, *start;
+  uint8 *p;
   int res;
   unsigned int i;
+  uint8_t cid_length = 0;
 
   if (*rlen < DTLS_RH_LENGTH) {
     dtls_alert("The sendbuf (%zu bytes) is too small\n", *rlen);
@@ -1397,7 +1446,6 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
   }
 
   p = dtls_set_record_header(type, security->epoch, &(security->rseq), sendbuf);
-  start = p;
 
   if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
     /* no cipher suite */
@@ -1416,12 +1464,28 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     }
   } else { /* TLS_PSK_WITH_AES_128_CCM_8 or TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
     /**
+     * RFC6347
      * length of additional_data for the AEAD cipher which consists of
      * seq_num(2+6) + type(1) + version(2) + length(2)
      */
 #define A_DATA_LEN 13
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+    /**
+     * RFC9146
+     * length of extra additional_data for the AEAD cipher which consists of
+     * seq_num_placeholder(8) + type(1) + cid_length(1)
+     */
+#define A_DATA_CID_EXTRA_LEN 10
+#define A_DATA_MAX_LEN (A_DATA_LEN + A_DATA_CID_EXTRA_LEN + DTLS_MAX_CID_LENGTH)
+#else
+#define A_DATA_MAX_LEN A_DATA_LEN
+#endif
+
+    uint8 *start = p;
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
-    unsigned char A_DATA[A_DATA_LEN];
+    unsigned char A_DATA[A_DATA_MAX_LEN];
+    uint8_t a_data_len = A_DATA_LEN;
     /* For backwards-compatibility, dtls_encrypt_params is called with
      * M=<macLen> and L=3. */
     const dtls_ccm_params_t params = { nonce, 8, 3 };
@@ -1433,6 +1497,16 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     } else {
       dtls_debug("dtls_prepare_record(): encrypt using unknown cipher\n");
     }
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+    cid_length = security->write_cid_length;
+    if (cid_length > 0) {
+      /* add cid to record header */
+      memcpy(p - sizeof(uint16_t), security->write_cid, cid_length);
+      p += cid_length;
+      start = p;
+    }
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
 
     /* set nonce
        from RFC 6655:
@@ -1499,31 +1573,62 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     dtls_debug_dump("key:", dtls_kb_local_write_key(security, peer->role),
 		    dtls_kb_key_size(security, peer->role));
 
-    /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
-     *
-     * additional_data = seq_num + TLSCompressed.type +
-     *                   TLSCompressed.version + TLSCompressed.length;
-     */
-    memcpy(A_DATA, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8); /* epoch and seq_num */
-    memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
-    dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
+#if (DTLS_MAX_CID_LENGTH > 0)
+    if (cid_length > 0) {
+      /* RFC 9146 */
+
+      /* inner content type */
+      *p = *sendbuf;
+      *sendbuf = DTLS_CT_TLS12_CID;
+      p += sizeof(uint8_t);
+      res += sizeof(uint8_t);
+
+      /* seq_num_placeholder: 8x 0xff */
+      memset(A_DATA, 0xff, 8);
+      /* tls_cid: 25 */
+      A_DATA[8] = DTLS_CT_TLS12_CID;
+      /* cid length */
+      A_DATA[9] = cid_length;
+      /* copy record header */
+      memcpy(A_DATA + A_DATA_CID_EXTRA_LEN, sendbuf, A_DATA_LEN + cid_length);
+      dtls_int_to_uint16(A_DATA + A_DATA_CID_EXTRA_LEN + 11 + cid_length, res - 8); /* length */
+      a_data_len = A_DATA_LEN + A_DATA_CID_EXTRA_LEN + cid_length;
+
+    } else {
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+      /* RFC 6347 */
+      /* re-use N to create additional data according to RFC 5246, Section 6.2.3.3:
+       *
+       * additional_data = seq_num + TLSCompressed.type +
+       *                   TLSCompressed.version + TLSCompressed.length;
+       */
+      memcpy(A_DATA, &DTLS_RECORD_HEADER(sendbuf)->epoch, 8); /* epoch and seq_num */
+      memcpy(A_DATA + 8,  &DTLS_RECORD_HEADER(sendbuf)->content_type, 3); /* type and version */
+      dtls_int_to_uint16(A_DATA + 11, res - 8); /* length */
+      a_data_len = A_DATA_LEN;
+#if (DTLS_MAX_CID_LENGTH > 0)
+    }
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
+    dtls_debug_dump("adata:", A_DATA, a_data_len);
+    dtls_debug_dump("message:", start, res);
 
     res = dtls_encrypt_params(&params, start + 8, res - 8, start + 8,
                dtls_kb_local_write_key(security, peer->role),
                dtls_kb_key_size(security, peer->role),
-               A_DATA, A_DATA_LEN);
+               A_DATA, a_data_len);
 
     if (res < 0)
       return res;
 
     res += 8;			/* increment res by size of nonce_explicit */
-    dtls_debug_dump("message:", start, res);
+    dtls_debug_dump("encrypted-message:", start, res);
   }
 
   /* fix length of fragment in sendbuf */
-  dtls_int_to_uint16(sendbuf + 11, res);
+  dtls_int_to_uint16(sendbuf + 11 + cid_length, res);
 
-  *rlen = DTLS_RH_LENGTH + res;
+  *rlen = DTLS_RH_LENGTH + res + cid_length;
   return 0;
 }
 
@@ -2783,7 +2888,35 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   ecdsa = is_ecdsa_supported(ctx, 1);
 
   cipher_size = 2 + ((ecdsa) ? 2 : 0) + ((psk) ? 2 : 0);
-  extension_size = 4 + ((ecdsa) ? 6 + 6 + 8 + 6 + 8: 0);
+  /*
+   * session_length         := 1 byte
+   * session                := 0 bytes
+   * cookie_length          := 1 byte
+   * cookie                 := n bytes
+   * cipher suites (max)    := 6 bytes
+   * compression            := 2 bytes
+   * extensions_length      := 2 bytes   => 12
+   *
+   * client_cert_type       := 6 bytes
+   * server_cert_type       := 6 bytes
+   * ec curves              := 8 bytes
+   * ec point format        := 6 bytes   => 26
+   * sign. and hash algos   := 8 bytes
+   * extended master secret := 4 bytes   => 12
+   * connection id, empty   := 5 bytes
+   *                                     => 26 + 12 + 5 := 43
+   */
+  extension_size = ((ecdsa) ? 6 + 6 + 8 + 6 + 8 : 0) + 4;
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  handshake->use_connection_id = DTLS_USE_CID_DEFAULT;
+  if (ctx && ctx->h && ctx->h->use_cid) {
+    handshake->use_connection_id = ctx->h->use_cid(ctx, &peer->session);
+  }
+  if (handshake->use_connection_id) {
+    extension_size += 5;
+  }
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
 
   if (cipher_size == 0) {
     dtls_crit("no cipher callbacks implemented\n");
@@ -2930,7 +3063,24 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   /* length of this extension type */
   dtls_int_to_uint16(p, 0);
   p += sizeof(uint16);
+
   handshake->extended_master_secret = 1;
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  if (handshake->use_connection_id) {
+    /* connection id, empty to indicate support */
+    dtls_int_to_uint16(p, TLS_EXT_CONNECTION_ID);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, sizeof(uint8));
+    p += sizeof(uint16);
+
+  /* empty cid, indicating support for cid extension */
+    dtls_int_to_uint8(p, 0);
+    p += sizeof(uint8);
+  }
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
 
   handshake->hs_state.read_epoch = dtls_security_params(peer)->epoch;
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));

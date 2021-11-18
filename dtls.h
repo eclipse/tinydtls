@@ -46,6 +46,12 @@
 #define DTLS_VERSION 0xfefd	/* DTLS v1.2 */
 #endif
 
+#if (DTLS_MAX_CID_LENGTH > 0)
+#ifndef DTLS_USE_CID_DEFAULT
+#define DTLS_USE_CID_DEFAULT 1
+#endif /* DTLS_USE_CID_DEFAULT */
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
 typedef enum dtls_credentials_type_t {
   DTLS_PSK_HINT, DTLS_PSK_IDENTITY, DTLS_PSK_KEY
 } dtls_credentials_type_t;
@@ -118,6 +124,18 @@ typedef struct {
    */
   int (*event)(struct dtls_context_t *ctx, session_t *session, 
 		dtls_alert_level_t level, unsigned short code);
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  /**
+   * Called during handshake to check, if cid is to be used.
+   * If callback is NULL, DTLS_USE_CID_DEFAULT is used instead
+   *
+   * @param ctx     The current dtls context.
+   * @param session The session where cid will be used.
+   * @return 0, cid not used, 1 cid used.
+   */
+  int (*use_cid)(struct dtls_context_t *ctx, session_t *session);
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
 
 #ifdef DTLS_PSK
   /**
@@ -323,6 +341,7 @@ void dtls_check_retransmit(dtls_context_t *context, clock_time_t *next);
 #define DTLS_CT_ALERT              21
 #define DTLS_CT_HANDSHAKE          22
 #define DTLS_CT_APPLICATION_DATA   23
+#define DTLS_CT_TLS12_CID          25
 
 /** Generic header structure of the DTLS record layer. */
 typedef struct __attribute__((__packed__)) {
