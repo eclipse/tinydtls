@@ -113,6 +113,17 @@ typedef struct {
     uint64_t bitfield;
 } seqnum_t;
 
+/* Maximum CID length. */
+#ifndef DTLS_MAX_CID_LENGTH
+#define DTLS_MAX_CID_LENGTH 16
+#endif
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+#ifndef DTLS_USE_CID_DEFAULT
+#define DTLS_USE_CID_DEFAULT 1
+#endif /* DTLS_USE_CID_DEFAULT */
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
 typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
@@ -127,7 +138,12 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
-  
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   seqnum_t cseq;        /**<sequence number of last record received*/
 } dtls_security_parameters_t;
 
@@ -148,6 +164,9 @@ typedef struct dtls_user_parameters_t {
   dtls_cipher_t cipher_suites[DTLS_MAX_CIPHER_SUITES + 1];
   unsigned int force_extended_master_secret:1; /** force extended master secret extension (RFC7627) */
   unsigned int force_renegotiation_info:1;     /** force renegotiation info extension (RFC5746) */
+#if (DTLS_MAX_CID_LENGTH > 0)
+  unsigned int support_cid:1;                  /** indicate CID support (RFC9146) */
+#endif
 } dtls_user_parameters_t;
 
 typedef struct {
@@ -165,6 +184,12 @@ typedef struct {
   dtls_compression_t compression;		/**< compression method */
   dtls_user_parameters_t user_parameters;	/**< user parameters */
   dtls_cipher_index_t cipher_index;		/**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   unsigned int renegotiation_info:1;
