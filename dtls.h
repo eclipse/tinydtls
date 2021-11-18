@@ -341,6 +341,7 @@ void dtls_check_retransmit(dtls_context_t *context, clock_time_t *next);
 #define DTLS_CT_ALERT              21
 #define DTLS_CT_HANDSHAKE          22
 #define DTLS_CT_APPLICATION_DATA   23
+#define DTLS_CT_TLS12_CID          25
 
 #ifdef __GNUC__
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
