@@ -3162,6 +3162,8 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
 }
 #endif /* DTLS_PSK */
 
+#ifdef DTLS_ECC
+
 static int
 check_certificate_request(dtls_context_t *ctx,
 			  dtls_peer_t *peer,
@@ -3248,6 +3250,7 @@ check_certificate_request(dtls_context_t *ctx,
   peer->handshake_params->do_client_auth = 1;
   return 0;
 }
+#endif /* DTLS_ECC */
 
 static int
 check_server_hellodone(dtls_context_t *ctx,
@@ -3604,6 +3607,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 
     break;
 
+#ifdef DTLS_ECC
   case DTLS_HT_CERTIFICATE_REQUEST:
 
     if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
@@ -3617,6 +3621,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
     }
 
     break;
+#endif /* DTLS_ECC */
 
   case DTLS_HT_FINISHED:
     /* expect a Finished message from server */
