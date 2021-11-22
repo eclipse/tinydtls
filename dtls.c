@@ -3440,6 +3440,7 @@ dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
 
   peer->handshake_params->hs_state.mseq_r = 0;
   peer->handshake_params->hs_state.mseq_s = 0;
+  peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
 
   if (peer->role == DTLS_CLIENT) {
     /* send ClientHello with empty Cookie */
@@ -3553,8 +3554,10 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
     }
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher))
       peer->state = DTLS_STATE_WAIT_SERVERCERTIFICATE;
-    else
+    else {
+      peer->optional_handshake_message = DTLS_HT_SERVER_KEY_EXCHANGE;
       peer->state = DTLS_STATE_WAIT_SERVERHELLODONE;
+    }
     /* update_hs_hash(peer, data, data_length); */
 
     break;
@@ -3588,14 +3591,16 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
       if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
+      peer->optional_handshake_message = DTLS_HT_CERTIFICATE_REQUEST;
       err = check_server_key_exchange_ecdsa(ctx, peer, data, data_length);
     }
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
     if (is_tls_psk_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
-      if (state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+      if (state != DTLS_STATE_WAIT_SERVERHELLODONE || peer->optional_handshake_message != DTLS_HT_SERVER_KEY_EXCHANGE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
+      peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
       err = check_server_key_exchange_psk(ctx, peer, data, data_length);
     }
 #endif /* DTLS_PSK */
@@ -3629,10 +3634,11 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
   case DTLS_HT_CERTIFICATE_REQUEST:
 
     if (state != DTLS_STATE_WAIT_SERVERHELLODONE ||
+        peer->optional_handshake_message != DTLS_HT_CERTIFICATE_REQUEST ||
         !is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
-
+    peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
     err = check_certificate_request(ctx, peer, data, data_length);
     if (err < 0) {
       dtls_warn("error in check_certificate_request err: %i\n", err);
@@ -3785,6 +3791,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
       return err;
     }
     peer->state = DTLS_STATE_CLIENTHELLO;
+    peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
     break;
 
   default:
