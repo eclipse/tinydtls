@@ -1104,18 +1104,21 @@ dtls_update_parameters(dtls_context_t *ctx,
   SKIP_VAR_FIELD(data, data_length, uint8);	/* skip session id */
   SKIP_VAR_FIELD(data, data_length, uint8);	/* skip cookie */
 
+  if (data_length < sizeof(uint16)) {
+    dtls_debug("cipher suites length exceeds record\n");
+    goto error;
+  }
+
   i = dtls_uint16_to_int(data);
+
+  if (i == 0) {
+    dtls_debug("cipher suites missing\n");
+    goto error;
+  }
+
   if (data_length < i + sizeof(uint16)) {
-    /* Looks like we do not have a cipher nor compression. This is ok
-     * for renegotiation, but not for the initial handshake. */
-
-    if (!security || security->cipher == TLS_NULL_WITH_NULL_NULL)
-      goto error;
-
-    config->cipher = security->cipher;
-    config->compression = security->compression;
-
-    return 0;
+    dtls_debug("length for cipher suites exceeds record\n");
+    goto error;
   }
 
   if ((i % sizeof(uint16)) != 0) {
@@ -1145,31 +1148,39 @@ dtls_update_parameters(dtls_context_t *ctx,
   }
 
   if (data_length < sizeof(uint8)) {
-    /* no compression specified, take the current compression method */
-    if (security)
-      config->compression = security->compression;
-    else
-      config->compression = TLS_COMPRESSION_NULL;
-    return 0;
+    dtls_debug("compression methods length exceeds record\n");
+    goto error;
   }
 
   i = dtls_uint8_to_int(data);
-  if (data_length < i + sizeof(uint8))
+
+  if (i == 0) {
+    dtls_debug("compression methods missing\n");
     goto error;
+  }
+
+  if (data_length < i + sizeof(uint8)) {
+    dtls_debug("length of compression methods exceeds record\n");
+    goto error;
+  }
 
   data += sizeof(uint8);
   data_length -= sizeof(uint8) + i;
 
   ok = 0;
   while (i && !ok) {
-    for (j = 0; j < sizeof(compression_methods) / sizeof(uint8); ++j)
+    for (j = 0; j < sizeof(compression_methods) / sizeof(uint8); ++j) {
       if (dtls_uint8_to_int(data) == compression_methods[j]) {
-	config->compression = compression_methods[j];
-	ok = 1;
+        config->compression = compression_methods[j];
+        ok = 1;
       }
+    }
     i -= sizeof(uint8);
     data += sizeof(uint8);
   }
+
+  /* skip remaining compression methods */
+  data += i;
 
   if (!ok) {
     /* reset config cipher to a well-defined value */
