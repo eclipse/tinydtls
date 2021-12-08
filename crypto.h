@@ -141,6 +141,7 @@ typedef struct {
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
   dtls_compression_t compression;		/**< compression method */
+  const dtls_cipher_t* cipher_suites;	/**< list of cipher suites, TLS_NULL_WITH_NULL_NULL terminated */
   dtls_cipher_index_t cipher_index;		/**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;

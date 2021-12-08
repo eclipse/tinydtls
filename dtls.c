@@ -553,6 +553,25 @@ dtls_set_handshake_header(uint8 type,
   return buf;
 }
 
+static const dtls_cipher_t default_cipher_suites[] =
+#ifdef DTLS_DEFAULT_CIPHER_SUITES
+		DTLS_DEFAULT_CIPHER_SUITES ;
+#else
+{
+#ifdef DTLS_ECC
+    TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+    TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
+#endif /* DTLS_ECC */
+#ifdef DTLS_PSK
+    TLS_PSK_WITH_AES_128_CCM_8,
+    TLS_PSK_WITH_AES_128_CCM,
+#endif /* DTLS_PSK */
+    /* TLS_NULL_WITH_NULL_NULL must always be the last entry as it
+     * indicates the stop marker for the traversal of this table. */
+    TLS_NULL_WITH_NULL_NULL
+};
+#endif
+
 /** only one compression method is currently defined */
 static uint8 compression_methods[] = {
   TLS_COMPRESSION_NULL
@@ -586,11 +605,22 @@ static const struct cipher_suite_param_t cipher_suite_params[] = {
 
 static const dtls_cipher_index_t last_cipher_suite_param = sizeof(cipher_suite_params) / sizeof(cipher_suite_param_t);
 
-static inline dtls_cipher_index_t get_cipher_index(dtls_cipher_t cipher)
+static inline uint8_t contains_cipher_suite(const dtls_cipher_t* cipher_suites, const dtls_cipher_t cipher_suite)
+{
+  while ((*cipher_suites != cipher_suite) &&
+         (*cipher_suites != TLS_NULL_WITH_NULL_NULL)) {
+    cipher_suites++;
+  }
+  return *cipher_suites == cipher_suite;
+}
+
+static inline dtls_cipher_index_t get_cipher_index(const dtls_cipher_t* cipher_suites, dtls_cipher_t cipher)
 {
   for (int index = 0; index < last_cipher_suite_param ; ++index) {
     if (cipher_suite_params[index].cipher_suite == cipher) {
-      return index;
+      if (contains_cipher_suite(cipher_suites, cipher)) {
+        return index;
+      }
     }
   }
   return DTLS_CIPHER_INDEX_NULL;
@@ -694,7 +724,7 @@ static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
  * @param ctx   The current DTLS context
  * @param cipher_index The index to cipher suite params to check
  * @param is_client 1 for a dtls client, 0 for server
- * @return @c 1 iff @p code is recognized,
+ * @return @c 1 if @p code is recognized,
  */
 static int
 known_cipher(dtls_context_t *ctx, dtls_cipher_index_t cipher_index, int is_client) {
@@ -1205,9 +1235,16 @@ dtls_update_parameters(dtls_context_t *ctx,
   data += sizeof(uint16);
   data_length -= sizeof(uint16) + i;
 
+  if (ctx->h->get_cipher_suites != NULL) {
+    ctx->h->get_cipher_suites(ctx, &peer->session, &config->cipher_suites);
+  }
+  if (!config->cipher_suites) {
+    config->cipher_suites = default_cipher_suites;
+  }
+
   ok = 0;
   while ((i >= (int)sizeof(uint16)) && !ok) {
-    config->cipher_index = get_cipher_index(dtls_uint16_to_int(data));
+    config->cipher_index = get_cipher_index(config->cipher_suites, dtls_uint16_to_int(data));
     ok = known_cipher(ctx, config->cipher_index, 0);
     i -= sizeof(uint16);
     data += sizeof(uint16);
@@ -1219,7 +1256,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (!ok) {
     /* reset config cipher to a well-defined value */
     config->cipher_index = DTLS_CIPHER_INDEX_NULL;
-    dtls_warn("No matching cipher found\n");
+    dtls_warn("No matching cipher-suite found\n");
     goto error;
   }
 
@@ -2856,21 +2893,21 @@ static int
 dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
                        uint8 cookie[], size_t cookie_length) {
   uint8 buf[DTLS_CH_LENGTH_MAX];
-  uint8 *p = buf;
-  uint8_t cipher_size;
-  uint8_t extension_size;
-  int psk;
-  int ecdsa;
+  uint8_t *p = buf;
+  uint8_t *p_cipher_suites_size = NULL;
+  uint8_t index = 0;
+  uint8_t cipher_suites_size = 0;
+  uint8_t extension_size = 4; /* extended master secret extension */
+#ifdef DTLS_ECC
+  uint8_t ecdsa = 0;
+#endif
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
 
-  psk = is_psk_supported(ctx);
-  ecdsa = is_ecdsa_supported(ctx, 1);
-
-  cipher_size = 2 + ((ecdsa) ? 4 : 0) + ((psk) ? 4 : 0);
-  extension_size = 4 + ((ecdsa) ? 6 + 6 + 8 + 6 + 8: 0);
-
-  if (cipher_size == 0) {
-    dtls_crit("no cipher callbacks implemented\n");
+  if (ctx->h->get_cipher_suites != NULL) {
+    ctx->h->get_cipher_suites(ctx, &peer->session, &(handshake->cipher_suites));
+  }
+  if (!handshake->cipher_suites) {
+    handshake->cipher_suites = default_cipher_suites;
   }
 
   dtls_int_to_uint16(p, DTLS_VERSION);
@@ -2901,22 +2938,47 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     p += cookie_length;
   }
 
-  /* add known cipher(s) */
-  dtls_int_to_uint16(p, cipher_size - 2);
+  /* keep pointer to size of cipher suites */
+  p_cipher_suites_size = p;
+  /* skip size of cipher suites field */
   p += sizeof(uint16);
 
+  /* add known cipher(s) */
+  for (index = 0; handshake->cipher_suites[index] != TLS_NULL_WITH_NULL_NULL; ++index) {
+    dtls_cipher_t code = handshake->cipher_suites[index];
+    dtls_cipher_index_t cipher_index = get_cipher_index(handshake->cipher_suites, code);
+    if (known_cipher(ctx, cipher_index, 1)) {
+      dtls_int_to_uint16(p, code);
+      p += sizeof(uint16);
+#ifdef DTLS_ECC
+      ecdsa = ecdsa || is_key_exchange_ecdhe_ecdsa(cipher_index);
+#endif /* DTLS_ECC */
+    }
+    /* ignore not supported cipher-suite
+       credentials callback is missing */
+  }
+
+  cipher_suites_size = (p - p_cipher_suites_size) - sizeof(uint16);
+  if (cipher_suites_size == 0) {
+    dtls_crit("no supported cipher suite provided!\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  }
+
+  /* set size of known cipher suites */
+  dtls_int_to_uint16(p_cipher_suites_size, cipher_suites_size);
+
+#ifdef DTLS_ECC
   if (ecdsa) {
-    dtls_int_to_uint16(p, TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8);
-    p += sizeof(uint16);
-    dtls_int_to_uint16(p, TLS_ECDHE_ECDSA_WITH_AES_128_CCM);
-    p += sizeof(uint16);
+    /*
+     * client_cert_type       := 6 bytes
+     * server_cert_type       := 6 bytes
+     * ec curves              := 8 bytes
+     * ec point format        := 6 bytes
+     * sign. and hash algos   := 8 bytes
+     */
+    extension_size += 6 + 6 + 8 + 6 + 8;
   }
-  if (psk) {
-    dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM_8);
-    p += sizeof(uint16);
-    dtls_int_to_uint16(p, TLS_PSK_WITH_AES_128_CCM);
-    p += sizeof(uint16);
-  }
+#endif
 
   /* compression method */
   dtls_int_to_uint8(p, 1);
@@ -2929,6 +2991,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_int_to_uint16(p, extension_size);
   p += sizeof(uint16);
 
+#ifdef DTLS_ECC
   if (ecdsa) {
     /* client certificate type extension */
     dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERTIFICATE_TYPE);
@@ -3011,6 +3074,8 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     p += sizeof(uint8);
 
   }
+#endif /* DTLS_ECC */
+
   /* extended master secret */
   dtls_int_to_uint16(p, TLS_EXT_EXTENDED_MASTER_SECRET);
   p += sizeof(uint16);
@@ -3085,15 +3150,16 @@ check_server_hello(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
-  /* Check cipher suite. As we offer all we have, it is sufficient
-   * to check if the cipher suite selected by the server is in our
-   * list of known cipher suites. Subsets are not supported. */
-  handshake->cipher_index = get_cipher_index(dtls_uint16_to_int(data));
+  /* Check if the cipher suite selected by the server
+   *  is in our list of cipher suites. */
+  handshake->cipher_index = get_cipher_index(handshake->cipher_suites, dtls_uint16_to_int(data));
+
   if (!known_cipher(ctx, handshake->cipher_index, 1)) {
-    dtls_alert("unsupported cipher 0x%02x 0x%02x\n",
-	     data[0], data[1]);
+    dtls_alert("unsupported cipher 0x%02x 0x%02x\n", data[0], data[1]);
+    handshake->cipher_index = DTLS_CIPHER_INDEX_NULL;
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
   }
+
   data += sizeof(uint16);
   data_length -= sizeof(uint16);
 
