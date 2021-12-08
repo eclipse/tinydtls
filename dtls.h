@@ -348,6 +348,11 @@ typedef struct __attribute__((__packed__)) {
 #define DTLS_HT_CLIENT_KEY_EXCHANGE 16
 #define DTLS_HT_FINISHED            20
 
+/**
+ * Pseudo handshake message type, if no optional handshake message is expected.
+ */
+#define DTLS_HT_NO_OPTIONAL_MESSAGE        -1
+
 /** Header structure for the DTLS handshake protocol. */
 typedef struct __attribute__((__packed__)) {
   uint8 msg_type; /**< Type of handshake message  (one of DTLS_HT_) */
