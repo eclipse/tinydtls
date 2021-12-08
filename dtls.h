@@ -119,6 +119,18 @@ typedef struct {
   int (*event)(struct dtls_context_t *ctx, session_t *session, 
 		dtls_alert_level_t level, unsigned short code);
 
+  /**
+   * Called during handshake to get the user parameter.
+   *
+   * @param ctx     The current dtls context.
+   * @param session The session where the cipher suites will be used.
+   * @param parameters The pointer to user parameters.
+   *                   The user parameters are initialized with the default
+   *                   values.
+   */
+  void (*get_user_parameters)(struct dtls_context_t *ctx, session_t *session,
+        dtls_user_parameters_t *parameters);
+
 #ifdef DTLS_PSK
   /**
    * Called during handshake to get information related to the
