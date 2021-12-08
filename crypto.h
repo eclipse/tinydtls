@@ -135,7 +135,8 @@ typedef struct {
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
   dtls_compression_t compression;		/**< compression method */
-  dtls_cipher_t cipher;		/**< cipher type */
+  const dtls_cipher_t* cipher_suites;	/**< list of cipher suites, TLS_NULL_WITH_NULL_NULL terminated */
+  dtls_cipher_t cipher;		/**< selected cipher suite */
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   union {

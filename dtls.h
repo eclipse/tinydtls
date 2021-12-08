@@ -119,6 +119,19 @@ typedef struct {
   int (*event)(struct dtls_context_t *ctx, session_t *session, 
 		dtls_alert_level_t level, unsigned short code);
 
+  /**
+   * Called during handshake to get the list of cipher suites.
+   *
+   * @param ctx     The current dtls context.
+   * @param session The session where the cipher suites will be used.
+   * @param cipher_suites The pointer to return the list of cipher suites.
+   *                      The list must be terminated by TLS_NULL_WITH_NULL_NULL
+   *                      If NULL is assigned, the default cipher suites
+   *                      will be used.
+   * @return ignored
+   */
+  int (*get_cipher_suites)(struct dtls_context_t *ctx, session_t *session, const dtls_cipher_t **cipher_suites);
+
 #ifdef DTLS_PSK
   /**
    * Called during handshake to get information related to the
