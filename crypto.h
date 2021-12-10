@@ -260,17 +260,16 @@ typedef struct {
  * Encrypts the specified \p src of given \p length, writing the
  * result to \p buf. The cipher implementation may add more data to
  * the result buffer such as an initialization vector or padding
- * (e.g. for block cipers in CBC mode). The caller therefore must
+ * (e.g. for block ciphers in CBC mode). The caller therefore must
  * ensure that \p buf provides sufficient storage to hold the result.
  * Usually this means ( 2 + \p length / blocksize ) * blocksize.  The
  * function returns a value less than zero on error or otherwise the
- * number of bytes written.
+ * number of bytes written. The provided \p src and \p buf may overlap.
  *
  * \param params AEAD parameters: Nonce, M and L.
  * \param src    The data to encrypt.
  * \param length The actual size of of \p src.
- * \param buf    The result buffer. \p src and \p buf must not
- *               overlap.
+ * \param buf    The result buffer.
  * \param aad    additional data for AEAD ciphers
  * \param aad_length actual size of @p aad
  * \return The number of encrypted bytes on success, less than zero
@@ -286,16 +285,15 @@ int dtls_encrypt_params(const dtls_ccm_params_t *params,
  * Encrypts the specified \p src of given \p length, writing the
  * result to \p buf. The cipher implementation may add more data to
  * the result buffer such as an initialization vector or padding
- * (e.g. for block cipers in CBC mode). The caller therefore must
+ * (e.g. for block ciphers in CBC mode). The caller therefore must
  * ensure that \p buf provides sufficient storage to hold the result.
  * Usually this means ( 2 + \p length / blocksize ) * blocksize.  The
  * function returns a value less than zero on error or otherwise the
- * number of bytes written.
+ * number of bytes written. The provided \p src and \p buf may overlap.
  *
  * \param src    The data to encrypt.
  * \param length The actual size of of \p src.
- * \param buf    The result buffer. \p src and \p buf must not 
- *               overlap.
+ * \param buf    The result buffer.
  * \param nonce  The nonce used for encryption. Must be exactly 13
  *               bytes, because L is set to 2.
  * \param aad    additional data for AEAD ciphers
@@ -318,10 +316,10 @@ int dtls_encrypt(const unsigned char *src, size_t length,
  * or the number of bytes written. Note that for block ciphers, \p
  * length must be a multiple of the cipher's block size. A return
  * value between \c 0 and the actual length indicates that only \c n-1
- * block have been processed. Unlike dtls_encrypt(), the source
- * and destination of dtls_decrypt() may overlap.
+ * block have been processed. The provided \p src and \p buf may overlap.
  *
  * \param params AEAD parameters: Nonce, M and L.
+ * \param src     The buffer to decrypt.
  * \param length  The length of the input buffer.
  * \param buf     The result buffer.
  * \param aad     additional authentication data for AEAD ciphers
@@ -341,8 +339,7 @@ int dtls_decrypt_params(const dtls_ccm_params_t *params,
  * or the number of bytes written. Note that for block ciphers, \p
  * length must be a multiple of the cipher's block size. A return
  * value between \c 0 and the actual length indicates that only \c n-1
- * block have been processed. Unlike dtls_encrypt(), the source
- * and destination of dtls_decrypt() may overlap. 
+ * block have been processed. The provided \p src and \p buf may overlap.
  * 
  * \param src     The buffer to decrypt.
  * \param length  The length of the input buffer.
