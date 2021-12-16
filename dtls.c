@@ -1086,7 +1086,6 @@ dtls_update_parameters(dtls_context_t *ctx,
   unsigned int j;
   int ok;
   dtls_handshake_parameters_t *config = peer->handshake_params;
-  dtls_security_parameters_t *security = dtls_security_params(peer);
 
   assert(config);
   assert(data_length > DTLS_HS_LENGTH + DTLS_CH_LENGTH);
