@@ -187,7 +187,7 @@ dtls_security_parameters_t *dtls_security_new(void)
 
   memset(security, 0, sizeof(*security));
 
-  security->cipher = TLS_NULL_WITH_NULL_NULL;
+  security->cipher_index = DTLS_CIPHER_INDEX_NULL;
   security->compression = TLS_COMPRESSION_NULL;
 
   return security;
