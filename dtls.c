@@ -558,61 +558,104 @@ static uint8 compression_methods[] = {
   TLS_COMPRESSION_NULL
 };
 
+typedef enum {
+  DTLS_KEY_EXCHANGE_NONE,
+  DTLS_KEY_EXCHANGE_PSK,
+  DTLS_KEY_EXCHANGE_ECDHE_ECDSA
+} cipher_suite_key_exchange_algorithm_t;
+
+typedef struct cipher_suite_param_t {
+  dtls_cipher_t cipher_suite;
+  uint8_t mac_length;
+  cipher_suite_key_exchange_algorithm_t key_exchange_algorithm;
+} cipher_suite_param_t;
+
+static const struct cipher_suite_param_t cipher_suite_params[] = {
+  /* The TLS_NULL_WITH_NULL_NULL cipher-suite must be the first
+   * in this table (index DTLS_CIPHER_INDEX_NULL) */
+  { TLS_NULL_WITH_NULL_NULL,             0, DTLS_KEY_EXCHANGE_NONE },
+#ifdef DTLS_PSK
+  { TLS_PSK_WITH_AES_128_CCM_8,          8, DTLS_KEY_EXCHANGE_PSK },
+  { TLS_PSK_WITH_AES_128_CCM,           16, DTLS_KEY_EXCHANGE_PSK },
+#endif /* DTLS_PSK */
+#ifdef DTLS_ECC
+  { TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,  8, DTLS_KEY_EXCHANGE_ECDHE_ECDSA },
+  { TLS_ECDHE_ECDSA_WITH_AES_128_CCM,   16, DTLS_KEY_EXCHANGE_ECDHE_ECDSA },
+#endif /* DTLS_ECC */
+ };
+
+static const dtls_cipher_index_t last_cipher_suite_param =
+    sizeof(cipher_suite_params) / sizeof(cipher_suite_param_t);
+
+static inline dtls_cipher_index_t
+get_cipher_index(dtls_cipher_t cipher) {
+  for (int index = 0; index < last_cipher_suite_param ; ++index) {
+    if (cipher_suite_params[index].cipher_suite == cipher) {
+      return index;
+    }
+  }
+  return DTLS_CIPHER_INDEX_NULL;
+}
+
+/**
+ * Get cipher suite.
+ * \param cipher_index index to cipher suite params
+ * \return cipher suite.
+ */
+static inline dtls_cipher_t
+get_cipher_suite(dtls_cipher_index_t cipher_index) {
+  assert(cipher_index < last_cipher_suite_param);
+  return cipher_suite_params[cipher_index].cipher_suite;
+}
+
+/**
+ * Get key exchange algorithm of cipher suite.
+ * \param cipher_index index to cipher suite params
+ * \return key exchange algorithm.
+ *         \c DTLS_KEY_EXCHANGE_NONE, if cipher is not supported.
+ */
+static inline cipher_suite_key_exchange_algorithm_t
+get_key_exchange_algorithm(dtls_cipher_index_t cipher_index) {
+  assert(cipher_index < last_cipher_suite_param);
+  return cipher_suite_params[cipher_index].key_exchange_algorithm;
+}
+
 /**
  * Get MAC length of cipher suite.
- * \param cipher cipher suite
+ * \param cipher_index index to cipher suite params
  * \return MAC length of cipher. \c 0, if cipher is not supported.
  */
-static inline int get_cipher_suite_mac_len(dtls_cipher_t cipher)
-{
-#ifdef DTLS_ECC
-  if (cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8) {
-    return 8;
-  } else if (cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM) {
-    return 16;
-  }
-#endif /* DTLS_ECC */
-#ifdef DTLS_PSK
-  if (cipher == TLS_PSK_WITH_AES_128_CCM_8) {
-    return 8;
-  } else if (cipher == TLS_PSK_WITH_AES_128_CCM) {
-    return 16;
-  }
-#endif /* DTLS_PSK */
-  return 0;
+static inline uint8_t
+get_cipher_suite_mac_len(dtls_cipher_index_t cipher_index) {
+  assert(cipher_index < last_cipher_suite_param);
+  return cipher_suite_params[cipher_index].mac_length;
 }
 
-/**
- * Returns true if the cipher matches
- * TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 or TLS_ECDHE_ECDSA_WITH_AES_128_CCM */
-static inline int is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(dtls_cipher_t cipher)
-{
+/** returns true if the cipher-suite uses an ECDHE_ECDSA key exchange */
+static inline int
+is_key_exchange_ecdhe_ecdsa(dtls_cipher_index_t cipher_index) {
 #ifdef DTLS_ECC
-  return cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 ||
-         cipher == TLS_ECDHE_ECDSA_WITH_AES_128_CCM;
+  return DTLS_KEY_EXCHANGE_ECDHE_ECDSA == get_key_exchange_algorithm(cipher_index);
 #else
-  (void) cipher;
+  (void) cipher_index;
   return 0;
 #endif /* DTLS_ECC */
 }
 
-/**
- * Returns true if the cipher matches
- * TLS_PSK_WITH_AES_128_CCM_8 or TLS_PSK_WITH_AES_128_CCM */
-static inline int is_tls_psk_with_aes_128_ccm_x(dtls_cipher_t cipher)
-{
+/** returns true if the cipher-suite uses an PSK key exchange */
+static inline int
+is_key_exchange_psk(dtls_cipher_index_t cipher_index) {
 #ifdef DTLS_PSK
-  return cipher == TLS_PSK_WITH_AES_128_CCM_8 ||
-         cipher == TLS_PSK_WITH_AES_128_CCM;
+  return DTLS_KEY_EXCHANGE_PSK == get_key_exchange_algorithm(cipher_index);
 #else
-  (void) cipher;
+  (void) cipher_index;
   return 0;
 #endif /* DTLS_PSK */
 }
 
 /** returns true if the application is configured for psk */
-static inline int is_psk_supported(dtls_context_t *ctx)
-{
+static inline int
+is_psk_supported(dtls_context_t *ctx) {
 #ifdef DTLS_PSK
   return ctx && ctx->h && ctx->h->get_psk_info;
 #else
@@ -622,11 +665,11 @@ static inline int is_psk_supported(dtls_context_t *ctx)
 }
 
 /** returns true if the application is configured for ecdhe_ecdsa */
-static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
-{
+static inline int
+is_ecdsa_supported(dtls_context_t *ctx, int is_client) {
 #ifdef DTLS_ECC
   return ctx && ctx->h && ((!is_client && ctx->h->get_ecdsa_key) ||
-			   (is_client && ctx->h->verify_ecdsa_key));
+                           (is_client && ctx->h->verify_ecdsa_key));
 #else
   (void) ctx;
   (void) is_client;
@@ -636,8 +679,8 @@ static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
 
 /** Returns true if the application is configured for ecdhe_ecdsa with
   * client authentication */
-static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
-{
+static inline int
+is_ecdsa_client_auth_supported(dtls_context_t *ctx) {
 #ifdef DTLS_ECC
   return ctx && ctx->h && ctx->h->get_ecdsa_key && ctx->h->verify_ecdsa_key;
 #else
@@ -651,24 +694,24 @@ static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
  * TLS_NULL_WITH_NULL_NULL that we recognize.
  *
  * @param ctx   The current DTLS context
- * @param code The cipher suite identifier to check
+ * @param cipher_index The index to cipher suite params to check
  * @param is_client 1 for a dtls client, 0 for server
  * @return @c 1 iff @p code is recognized,
  */
 static int
-known_cipher(dtls_context_t *ctx, dtls_cipher_t code, int is_client) {
-  int psk;
-  int ecdsa;
+known_cipher(dtls_context_t *ctx, dtls_cipher_index_t cipher_index, int is_client) {
+  const int psk = is_psk_supported(ctx);
+  const int ecdsa = is_ecdsa_supported(ctx, is_client);
+  const cipher_suite_key_exchange_algorithm_t key_exchange_algorithm =
+                                      get_key_exchange_algorithm(cipher_index);
 
-  psk = is_psk_supported(ctx);
-  ecdsa = is_ecdsa_supported(ctx, is_client);
-  return (psk && is_tls_psk_with_aes_128_ccm_x(code)) ||
-	 (ecdsa && is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(code));
+  return (psk && key_exchange_algorithm == DTLS_KEY_EXCHANGE_PSK) ||
+	 (ecdsa && key_exchange_algorithm == DTLS_KEY_EXCHANGE_ECDHE_ECDSA);
 }
 
 /** Dump out the cipher keys and IVs used for the symmetric cipher. */
-static void dtls_debug_keyblock(dtls_security_parameters_t *config)
-{
+static void
+dtls_debug_keyblock(dtls_security_parameters_t *config) {
   dtls_debug("key_block (%d bytes):\n", dtls_kb_size(config, peer->role));
   dtls_debug_dump("  client_MAC_secret",
 		  dtls_kb_client_mac_secret(config, peer->role),
@@ -700,8 +743,7 @@ static void dtls_debug_keyblock(dtls_security_parameters_t *config)
   * https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-7
   */
 static const char *
-dtls_handshake_type_to_name(int type)
-{
+dtls_handshake_type_to_name(int type) {
   switch (type) {
   case DTLS_HT_HELLO_REQUEST:
     return "hello_request";
@@ -731,8 +773,7 @@ dtls_handshake_type_to_name(int type)
 }
 
 static const char *
-dtls_message_type_to_name(int type)
-{
+dtls_message_type_to_name(int type) {
   switch (type) {
   case DTLS_CT_CHANGE_CIPHER_SPEC:
     return "change_cipher_spec";
@@ -770,81 +811,71 @@ calculate_key_block(dtls_context_t *ctx,
   }
 
   pre_master_secret = security->key_block;
-
-  switch (handshake->cipher) {
+  switch (get_key_exchange_algorithm(handshake->cipher_index)) {
+  case DTLS_KEY_EXCHANGE_PSK:
 #ifdef DTLS_PSK
-  case TLS_PSK_WITH_AES_128_CCM:
-  case TLS_PSK_WITH_AES_128_CCM_8: {
-    unsigned char psk[DTLS_PSK_MAX_KEY_LEN];
-    int len;
+    {
+      unsigned char psk[DTLS_PSK_MAX_KEY_LEN];
+      int len;
 
-    len = CALL(ctx, get_psk_info, session, DTLS_PSK_KEY,
-	       handshake->keyx.psk.identity,
-	       handshake->keyx.psk.id_length,
-	       psk, DTLS_PSK_MAX_KEY_LEN);
-    if (len < 0) {
-      dtls_crit("no psk key for session available\n");
-      return len;
+      len = CALL(ctx, get_psk_info, session, DTLS_PSK_KEY,
+             handshake->keyx.psk.identity,
+             handshake->keyx.psk.id_length,
+             psk, DTLS_PSK_MAX_KEY_LEN);
+      if (len < 0) {
+        dtls_crit("no psk key for session available\n");
+        return len;
+      }
+    /* Temporarily use the key_block storage space for the pre master secret. */
+      pre_master_len = dtls_psk_pre_master_secret(psk, len,
+                        pre_master_secret,
+                        MAX_KEYBLOCK_LENGTH);
+
+      dtls_debug_hexdump("psk", psk, len);
+
+      memset(psk, 0, DTLS_PSK_MAX_KEY_LEN);
+      if (pre_master_len < 0) {
+        dtls_crit("the psk was too long, for the pre master secret\n");
+        return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+      }
+      break;
     }
-  /* Temporarily use the key_block storage space for the pre master secret. */
-    pre_master_len = dtls_psk_pre_master_secret(psk, len,
-						pre_master_secret,
-						MAX_KEYBLOCK_LENGTH);
-
-    dtls_debug_hexdump("psk", psk, len);
-
-    memset(psk, 0, DTLS_PSK_MAX_KEY_LEN);
-    if (pre_master_len < 0) {
-      dtls_crit("the psk was too long, for the pre master secret\n");
-      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
-    }
-
-    break;
-  }
-#endif /* DTLS_PSK */
-#ifdef DTLS_ECC
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
-    pre_master_len = dtls_ecdh_pre_master_secret(handshake->keyx.ecdsa.own_eph_priv,
-						 handshake->keyx.ecdsa.other_eph_pub_x,
-						 handshake->keyx.ecdsa.other_eph_pub_y,
-						 sizeof(handshake->keyx.ecdsa.own_eph_priv),
-						 pre_master_secret,
-						 MAX_KEYBLOCK_LENGTH);
-    if (pre_master_len < 0) {
-      dtls_crit("the curve was too long, for the pre master secret\n");
-      return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
-    }
-    break;
-  }
-#endif /* DTLS_ECC */
-  case TLS_NULL_WITH_NULL_NULL:
-    assert(!"calculate_key_block: tried to use NULL cipher\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
-
-    /* The following cases cover the enum symbols that are not
-     * included in this build. These must be kept just above the
-     * default case as they do nothing but fall through.
-     */
-#ifndef DTLS_PSK
-  case TLS_PSK_WITH_AES_128_CCM:
-  case TLS_PSK_WITH_AES_128_CCM_8:
-    /* fall through to default */
-#endif /* !DTLS_PSK */
-
-#ifndef DTLS_ECC
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
-    /* fall through to default */
-#endif /* !DTLS_ECC */
-
-  default:
-    dtls_crit("calculate_key_block: unknown cipher %04x\n", handshake->cipher);
+#else /* DTLS_PSK */
+    dtls_crit("calculate_key_block: PSK not supported!\n");
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+#endif /* DTLS_PSK */
+  case DTLS_KEY_EXCHANGE_ECDHE_ECDSA:
+#ifdef DTLS_ECC
+    {
+      pre_master_len = dtls_ecdh_pre_master_secret(
+                         handshake->keyx.ecdsa.own_eph_priv,
+                         handshake->keyx.ecdsa.other_eph_pub_x,
+                         handshake->keyx.ecdsa.other_eph_pub_y,
+                         sizeof(handshake->keyx.ecdsa.own_eph_priv),
+                         pre_master_secret,
+                         MAX_KEYBLOCK_LENGTH);
+      if (pre_master_len < 0) {
+        dtls_crit("the curve was too long, for the pre master secret\n");
+        return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+      }
+      break;
+    }
+#else /* DTLS_ECC */
+    dtls_crit("calculate_key_block: ECC not supported!\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
+#endif /* DTLS_ECC */
+  case DTLS_KEY_EXCHANGE_NONE:
+    assert(!"calculate_key_block: not supported key exchange algorithm\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
+  default: /* the key_exchange_algorithm is always from cipher_suite_params */
+    assert(!"cipher_suite_params broken, unknown key exchange algorithm\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
   }
 
-  dtls_debug_dump("client_random", handshake->tmp.random.client, DTLS_RANDOM_LENGTH);
-  dtls_debug_dump("server_random", handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
+  dtls_debug_dump("client_random", handshake->tmp.random.client,
+                  DTLS_RANDOM_LENGTH);
+  dtls_debug_dump("server_random", handshake->tmp.random.server,
+                  DTLS_RANDOM_LENGTH);
   dtls_debug_dump("pre_master_secret", pre_master_secret, pre_master_len);
 
   if (handshake->extended_master_secret) {
@@ -859,15 +890,16 @@ calculate_key_block(dtls_context_t *ctx,
 	     master_secret,
 	     DTLS_MASTER_SECRET_LENGTH);
 
-    dtls_debug_dump("extended_master_secret", master_secret, DTLS_MASTER_SECRET_LENGTH);
+    dtls_debug_dump("extended_master_secret", master_secret,
+                    DTLS_MASTER_SECRET_LENGTH);
   }
   else {
     dtls_prf(pre_master_secret, pre_master_len,
-  	     PRF_LABEL(master), PRF_LABEL_SIZE(master),
-	     handshake->tmp.random.client, DTLS_RANDOM_LENGTH,
-	     handshake->tmp.random.server, DTLS_RANDOM_LENGTH,
-	     master_secret,
-	     DTLS_MASTER_SECRET_LENGTH);
+         PRF_LABEL(master), PRF_LABEL_SIZE(master),
+         handshake->tmp.random.client, DTLS_RANDOM_LENGTH,
+         handshake->tmp.random.server, DTLS_RANDOM_LENGTH,
+         master_secret,
+         DTLS_MASTER_SECRET_LENGTH);
 
     dtls_debug_dump("master_secret", master_secret, DTLS_MASTER_SECRET_LENGTH);
   }
@@ -887,15 +919,17 @@ calculate_key_block(dtls_context_t *ctx,
   memcpy(handshake->tmp.master_secret, master_secret, DTLS_MASTER_SECRET_LENGTH);
   dtls_debug_keyblock(security);
 
-  security->cipher = handshake->cipher;
+  security->cipher_index = handshake->cipher_index;
   security->compression = handshake->compression;
   security->rseq = 0;
 
   return 0;
 }
 
-/* TODO: add a generic method which iterates over a list and searches for a specific key */
-static int verify_ext_eliptic_curves(uint8 *data, size_t data_length) {
+/* TODO: add a generic method which iterates over a list and
+ * searches for a specific key */
+static int
+verify_ext_eliptic_curves(uint8 *data, size_t data_length) {
   int i, curve_name;
 
   /* length of curve list */
@@ -1006,11 +1040,11 @@ dtls_check_tls_extension(dtls_peer_t *peer,
   int ext_client_cert_type = 0;
   int ext_server_cert_type = 0;
   int ext_ec_point_formats = 0;
-  dtls_handshake_parameters_t *handshake = peer->handshake_params;
+  const int ecdsa = is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index);
 
   if (data_length < sizeof(uint16)) {
     /* no tls extensions specified */
-    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(handshake->cipher)) {
+    if (ecdsa) {
       goto error;
     }
     return 0;
@@ -1051,21 +1085,21 @@ dtls_check_tls_extension(dtls_peer_t *peer,
       case TLS_EXT_CLIENT_CERTIFICATE_TYPE:
         ext_client_cert_type = 1;
         if (client_hello) {
-	  if (verify_ext_cert_type(data, j))
+          if (verify_ext_cert_type(data, j))
             goto error;
         } else {
-	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
-	    goto error;
+          if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
+            goto error;
         }
         break;
       case TLS_EXT_SERVER_CERTIFICATE_TYPE:
         ext_server_cert_type = 1;
         if (client_hello) {
-	  if (verify_ext_cert_type(data, j))
+          if (verify_ext_cert_type(data, j))
             goto error;
         } else {
-	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
-	    goto error;
+          if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
+            goto error;
         }
         break;
       case TLS_EXT_EC_POINT_FORMATS:
@@ -1074,13 +1108,13 @@ dtls_check_tls_extension(dtls_peer_t *peer,
           goto error;
         break;
       case TLS_EXT_ENCRYPT_THEN_MAC:
-	/* As only AEAD cipher suites are currently available, this
-	 * extension can be skipped.
-	 */
-	dtls_info("skipped encrypt-then-mac extension\n");
-	break;
+        /* As only AEAD cipher suites are currently available, this
+         * extension can be skipped.
+         */
+        dtls_info("skipped encrypt-then-mac extension\n");
+        break;
       case TLS_EXT_EXTENDED_MASTER_SECRET:
-        handshake->extended_master_secret = 1;
+        peer->handshake_params->extended_master_secret = 1;
         break;
       case TLS_EXT_SIG_HASH_ALGO:
         if (verify_ext_sig_hash_algo(data, j))
@@ -1093,7 +1127,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
     data += j;
     data_length -= j;
   }
-  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(handshake->cipher)) {
+  if (ecdsa) {
     if (client_hello) {
       if (!ext_elliptic_curve || !ext_client_cert_type ||
           !ext_server_cert_type || !ext_ec_point_formats) {
@@ -1181,8 +1215,8 @@ dtls_update_parameters(dtls_context_t *ctx,
 
   ok = 0;
   while ((i >= (int)sizeof(uint16)) && !ok) {
-    config->cipher = dtls_uint16_to_int(data);
-    ok = known_cipher(ctx, config->cipher, 0);
+    config->cipher_index = get_cipher_index(dtls_uint16_to_int(data));
+    ok = known_cipher(ctx, config->cipher_index, 0);
     i -= sizeof(uint16);
     data += sizeof(uint16);
   }
@@ -1192,7 +1226,7 @@ dtls_update_parameters(dtls_context_t *ctx,
 
   if (!ok) {
     /* reset config cipher to a well-defined value */
-    config->cipher = TLS_NULL_WITH_NULL_NULL;
+    config->cipher_index = DTLS_CIPHER_INDEX_NULL;
     dtls_warn("No matching cipher found\n");
     goto error;
   }
@@ -1255,9 +1289,12 @@ check_client_keyexchange(dtls_context_t *ctx,
 			 dtls_handshake_parameters_t *handshake,
 			 uint8 *data, size_t length) {
 
+  const cipher_suite_key_exchange_algorithm_t key_exchange_algorithm =
+		  get_key_exchange_algorithm(handshake->cipher_index);
+
   (void) ctx;
 #ifdef DTLS_ECC
-  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(handshake->cipher)) {
+  if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_ECDHE_ECDSA) {
 
     if (length < DTLS_HS_LENGTH + DTLS_CKXEC_LENGTH) {
       dtls_debug("The client key exchange is too short\n");
@@ -1287,7 +1324,7 @@ check_client_keyexchange(dtls_context_t *ctx,
   }
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
-  if (is_tls_psk_with_aes_128_ccm_x(handshake->cipher)) {
+  if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_PSK) {
     int id_length;
 
     if (length < DTLS_HS_LENGTH + DTLS_CKXPSK_LENGTH_MIN) {
@@ -1352,7 +1389,7 @@ clear_hs_hash(dtls_peer_t *peer) {
  */
 static int
 check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
-	       uint8 *data, size_t data_length) {
+           uint8 *data, size_t data_length) {
   (void) ctx;
   size_t digest_length, label_size;
   const unsigned char *label;
@@ -1389,11 +1426,11 @@ check_finished(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   dtls_prf(peer->handshake_params->tmp.master_secret,
-	   DTLS_MASTER_SECRET_LENGTH,
-	   label, label_size,
-	   PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
-	   buf, digest_length,
-	   b.verify_data, sizeof(b.verify_data));
+       DTLS_MASTER_SECRET_LENGTH,
+       label, label_size,
+       PRF_LABEL(finished), PRF_LABEL_SIZE(finished),
+       buf, digest_length,
+       b.verify_data, sizeof(b.verify_data));
 
   dtls_debug_dump("d:", data + DTLS_HS_LENGTH, sizeof(b.verify_data));
   dtls_debug_dump("v:", b.verify_data, sizeof(b.verify_data));
@@ -1451,7 +1488,7 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
   p = dtls_set_record_header(type, security->epoch, &(security->rseq), sendbuf);
   start = p;
 
-  if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (security->cipher_index == DTLS_CIPHER_INDEX_NULL) {
     /* no cipher suite */
 
     res = 0;
@@ -1476,7 +1513,9 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 #define A_DATA_LEN 13
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
-    uint8_t mac_len = get_cipher_suite_mac_len(security->cipher);
+    const uint8_t mac_len = get_cipher_suite_mac_len(security->cipher_index);
+    const cipher_suite_key_exchange_algorithm_t key_exchange_algorithm =
+            get_key_exchange_algorithm(security->cipher_index);
     /* For backwards-compatibility, dtls_encrypt_params is called with
      * M=<macLen> and L=3. */
     const dtls_ccm_params_t params = { nonce, mac_len, 3 };
@@ -1484,10 +1523,10 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
     if (mac_len == 0) {
         dtls_debug("dtls_prepare_record(): encrypt using unknown cipher\n");
     } else {
-      if (is_tls_psk_with_aes_128_ccm_x(security->cipher)) {
+      if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_PSK) {
         dtls_debug("dtls_prepare_record(): encrypt using "
                    "TLS_PSK_WITH_AES_128_CCM_%d\n", mac_len);
-      } else if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(security->cipher)) {
+      } else if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_ECDHE_ECDSA) {
         dtls_debug("dtls_prepare_record(): encrypt using "
                    "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_%d\n", mac_len);
       }
@@ -1634,7 +1673,8 @@ dtls_0_send_alert_from_err(dtls_context_t *ctx,
     dtls_alert_t desc = (-err) & 0xff;
     return dtls_0_send_alert(ctx, ephemeral_peer, level, desc);
   } else if (err == -1) {
-    return dtls_0_send_alert(ctx, ephemeral_peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
+    return dtls_0_send_alert(ctx, ephemeral_peer, DTLS_ALERT_LEVEL_FATAL,
+                             DTLS_ALERT_INTERNAL_ERROR);
   }
   return -1;
 }
@@ -1672,15 +1712,16 @@ dtls_0_send_hello_verify_request(dtls_context_t *ctx,
   /* fix length of fragment in sendbuf */
   dtls_int_to_uint16(buf + 11, DTLS_HS_LENGTH + data_length);
 
-  p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST, &(ephemeral_peer->mseq), data_length, 0,
-			    data_length, p);
+  p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST,
+                      &(ephemeral_peer->mseq), data_length, 0, data_length, p);
 
   memcpy(p, data, data_length);
 
   dtls_debug("send hello_verify_request packet\n");
 
   dtls_debug_hexdump("send header", buf, DTLS_RH_LENGTH);
-  dtls_debug_hexdump("send unencrypted handshake header", buf + DTLS_RH_LENGTH, DTLS_HS_LENGTH);
+  dtls_debug_hexdump("send unencrypted handshake header", buf + DTLS_RH_LENGTH,
+                     DTLS_HS_LENGTH);
   dtls_debug_hexdump("send unencrypted cookie", data, data_length);
 
   return CALL(ctx, write, ephemeral_peer->session, buf, sizeof(buf));
@@ -1700,8 +1741,9 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   int i = 0;
   dtls_security_parameters_t *security = dtls_security_params(peer);
 
-  dtls_set_handshake_header(header_type, &(peer->handshake_params->hs_state.mseq_s), data_length, 0,
-			    data_length, buf);
+  dtls_set_handshake_header(header_type,
+                            &(peer->handshake_params->hs_state.mseq_s),
+                            data_length, 0, data_length, buf);
 
   if (add_hash) {
     update_hs_hash(peer, buf, sizeof(buf));
@@ -1803,7 +1845,8 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
   dtls_mutex_lock(&static_mutex);
 #endif /* DTLS_CONSTRAINED_STACK */
 
-  res = dtls_prepare_record(peer, security, type, buf_array, buf_len_array, buf_array_len, sendbuf, &len);
+  res = dtls_prepare_record(peer, security, type, buf_array, buf_len_array,
+                            buf_array_len, sendbuf, &len);
 
   if (res < 0)
     goto return_unlock;
@@ -1991,7 +2034,8 @@ dtls_0_verify_peer(dtls_context_t *ctx,
 #define mycookie (buf + DTLS_HV_LENGTH)
 
   /* Store cookie where we can reuse it for the HelloVerifyRequest. */
-  err = dtls_create_cookie(ctx, ephemeral_peer->session, data, data_length, mycookie, &len);
+  err = dtls_create_cookie(ctx, ephemeral_peer->session, data, data_length,
+                           mycookie, &len);
   if (err < 0)
     return err;
 
@@ -2004,7 +2048,8 @@ dtls_0_verify_peer(dtls_context_t *ctx,
   if (len < 0) {
     dtls_warn("error while fetching the cookie, err: %i\n", len);
     if (dtls_alert_fatal_create(DTLS_ALERT_PROTOCOL_VERSION) == len) {
-      dtls_0_send_alert(ctx, ephemeral_peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_PROTOCOL_VERSION);
+      dtls_0_send_alert(ctx, ephemeral_peer, DTLS_ALERT_LEVEL_FATAL,
+                        DTLS_ALERT_PROTOCOL_VERSION);
     }
     return len;
   }
@@ -2190,7 +2235,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
   dtls_hash_ctx hs_hash;
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
 
-  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(config->cipher));
+  assert(is_key_exchange_ecdhe_ecdsa(config->cipher_index));
 
   data += DTLS_HS_LENGTH;
   data_length -= DTLS_HS_LENGTH;
@@ -2216,10 +2261,11 @@ check_client_certificate_verify(dtls_context_t *ctx,
 
   dtls_hash_finalize(sha256hash, &hs_hash);
 
-  ret = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x, config->keyx.ecdsa.other_pub_y,
-			    sizeof(config->keyx.ecdsa.other_pub_x),
-			    sha256hash, sizeof(sha256hash),
-			    result_r, result_s);
+  ret = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x,
+                                   config->keyx.ecdsa.other_pub_y,
+                                   sizeof(config->keyx.ecdsa.other_pub_x),
+                                   sha256hash, sizeof(sha256hash),
+                                   result_r, result_s);
 
   if (ret < 0) {
     dtls_alert("wrong signature err: %i\n", ret);
@@ -2237,11 +2283,10 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
    * encoding function, so we do not need to guess.) */
   uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 8 + 6 + 4];
   uint8 *p;
-  int ecdsa;
   uint8 extension_size;
-  dtls_handshake_parameters_t *handshake = peer->handshake_params;
-
-  ecdsa = is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(handshake->cipher);
+  dtls_handshake_parameters_t * const handshake = peer->handshake_params;
+  const dtls_cipher_t cipher_suite = get_cipher_suite(handshake->cipher_index);
+  const int ecdsa = is_key_exchange_ecdhe_ecdsa(handshake->cipher_index);
 
   extension_size = (handshake->extended_master_secret ? 4 : 0) +
                    (ecdsa ? 5 + 5 + 6 : 0);
@@ -2261,9 +2306,9 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   *p++ = 0;			/* no session id */
 
-  if (handshake->cipher != TLS_NULL_WITH_NULL_NULL) {
+  if (cipher_suite != TLS_NULL_WITH_NULL_NULL) {
     /* selected cipher suite */
-    dtls_int_to_uint16(p, handshake->cipher);
+    dtls_int_to_uint16(p, cipher_suite);
     p += sizeof(uint16);
 
     /* selected compression method */
@@ -2567,6 +2612,7 @@ static int
 dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   int res;
+  cipher_suite_key_exchange_algorithm_t key_exchange_algorithm;
 
   res = dtls_send_server_hello(ctx, peer);
 
@@ -2574,9 +2620,10 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_debug("dtls_server_hello: cannot prepare ServerHello record\n");
     return res;
   }
+  key_exchange_algorithm = get_key_exchange_algorithm(peer->handshake_params->cipher_index);
 
 #ifdef DTLS_ECC
-  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher)) {
+  if (DTLS_KEY_EXCHANGE_ECDHE_ECDSA == key_exchange_algorithm) {
     const dtls_ecdsa_key_t *ecdsa_key;
 
     res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
@@ -2599,8 +2646,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
       return res;
     }
 
-    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher) &&
-	is_ecdsa_client_auth_supported(ctx)) {
+    if (is_ecdsa_client_auth_supported(ctx)) {
       res = dtls_send_server_certificate_request(ctx, peer);
 
       if (res < 0) {
@@ -2612,7 +2658,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
 #endif /* DTLS_ECC */
 
 #ifdef DTLS_PSK
-  if (is_tls_psk_with_aes_128_ccm_x(peer->handshake_params->cipher)) {
+  if (DTLS_KEY_EXCHANGE_PSK == key_exchange_algorithm) {
     unsigned char psk_hint[DTLS_PSK_MAX_CLIENT_IDENTITY_LEN];
     int len;
 
@@ -2660,16 +2706,18 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
   uint8 buf[DTLS_CKXEC_LENGTH];
   uint8 *p;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
+  const cipher_suite_key_exchange_algorithm_t key_exchange_algorithm =
+          get_key_exchange_algorithm(handshake->cipher_index);
   int ret;
 
   p = buf;
 
   memset(buf, 0, sizeof(buf));
-  switch (handshake->cipher) {
+  switch (key_exchange_algorithm) {
+  case DTLS_KEY_EXCHANGE_PSK:
 #ifdef DTLS_PSK
-  case TLS_PSK_WITH_AES_128_CCM:
-  case TLS_PSK_WITH_AES_128_CCM_8: {
-    int len;
+  {
+      int len;
 
     len = CALL(ctx, get_psk_info, &peer->session, DTLS_PSK_IDENTITY,
 	       handshake->keyx.psk.identity, handshake->keyx.psk.id_length,
@@ -2697,55 +2745,45 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 
     break;
   }
+#else /* DTLS_PSK */
+    dtls_crit("PSK not supported\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 #endif /* DTLS_PSK */
+  case DTLS_KEY_EXCHANGE_ECDHE_ECDSA:
 #ifdef DTLS_ECC
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: {
-    uint8 *ephemeral_pub_x;
-    uint8 *ephemeral_pub_y;
+    {
+      uint8 *ephemeral_pub_x;
+      uint8 *ephemeral_pub_y;
 
-    dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
-    p += sizeof(uint8);
+      dtls_int_to_uint8(p, 1 + 2 * DTLS_EC_KEY_SIZE);
+      p += sizeof(uint8);
 
-    /* This should be an uncompressed point, but I do not have access to the spec. */
-    dtls_int_to_uint8(p, 4);
-    p += sizeof(uint8);
+      /* This should be an uncompressed point, but I do not have access to the spec. */
+      dtls_int_to_uint8(p, 4);
+      p += sizeof(uint8);
 
-    ephemeral_pub_x = p;
-    p += DTLS_EC_KEY_SIZE;
-    ephemeral_pub_y = p;
-    p += DTLS_EC_KEY_SIZE;
+      ephemeral_pub_x = p;
+      p += DTLS_EC_KEY_SIZE;
+      ephemeral_pub_y = p;
+      p += DTLS_EC_KEY_SIZE;
 
     dtls_ecdsa_generate_key(peer->handshake_params->keyx.ecdsa.own_eph_priv,
     			    ephemeral_pub_x, ephemeral_pub_y,
     			    DTLS_EC_KEY_SIZE);
 
-    break;
-  }
+      break;
+    }
+#else /* DTLS_ECC */
+    dtls_crit("ECC not supported\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
 #endif /* DTLS_ECC */
 
-  case TLS_NULL_WITH_NULL_NULL:
+  case DTLS_KEY_EXCHANGE_NONE:
     assert(!"NULL cipher requested");
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
 
-    /* The following cases cover the enum symbols that are not
-     * included in this build. These must be kept just above the
-     * default case as they do nothing but fall through.
-     */
-#ifndef DTLS_PSK
-  case TLS_PSK_WITH_AES_128_CCM:
-  case TLS_PSK_WITH_AES_128_CCM_8:
-    /* fall through to default */
-#endif /* !DTLS_PSK */
-
-#ifndef DTLS_ECC
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
-  case TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
-    /* fall through to default */
-#endif /* !DTLS_ECC */
-
   default:
-    dtls_crit("cipher %04x not supported\n", handshake->cipher);
+    dtls_crit("key exchange algorithm %d not supported\n", key_exchange_algorithm);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
@@ -3068,8 +3106,8 @@ check_server_hello(dtls_context_t *ctx,
   /* Check cipher suite. As we offer all we have, it is sufficient
    * to check if the cipher suite selected by the server is in our
    * list of known cipher suites. Subsets are not supported. */
-  handshake->cipher = dtls_uint16_to_int(data);
-  if (!known_cipher(ctx, handshake->cipher, 1)) {
+  handshake->cipher_index = get_cipher_index(dtls_uint16_to_int(data));
+  if (!known_cipher(ctx, handshake->cipher_index, 1)) {
     dtls_alert("unsupported cipher 0x%02x 0x%02x\n",
 	     data[0], data[1]);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
@@ -3127,7 +3165,7 @@ check_server_certificate(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(config->cipher));
+  assert(is_key_exchange_ecdhe_ecdsa(config->cipher_index));
 
   data += DTLS_HS_LENGTH;
 
@@ -3178,7 +3216,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(config->cipher));
+  assert(is_key_exchange_ecdhe_ecdsa(config->cipher_index));
 
   data += DTLS_HS_LENGTH;
   data_length -= DTLS_HS_LENGTH;
@@ -3265,7 +3303,7 @@ check_server_key_exchange_psk(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(is_tls_psk_with_aes_128_ccm_x(config->cipher));
+  assert(is_key_exchange_psk(config->cipher_index));
 
   data += DTLS_HS_LENGTH;
 
@@ -3309,7 +3347,7 @@ check_certificate_request(dtls_context_t *ctx,
 
   update_hs_hash(peer, data, data_length);
 
-  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher));
+  assert(is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index));
 
   data += DTLS_HS_LENGTH;
 
@@ -3473,7 +3511,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
     return -1;
   }
 
-  if (security->cipher == TLS_NULL_WITH_NULL_NULL) {
+  if (security->cipher_index == DTLS_CIPHER_INDEX_NULL) {
     /* no cipher suite selected */
     return clen;
   } else { /* TLS_PSK_WITH_AES_128_CCM_8, TLS_PSK_WITH_AES_128_CCM,
@@ -3486,7 +3524,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
 #define A_DATA_LEN 13
     unsigned char nonce[DTLS_CCM_BLOCKSIZE];
     unsigned char A_DATA[A_DATA_LEN];
-    uint8_t mac_len = get_cipher_suite_mac_len(security->cipher);
+    const uint8_t mac_len = get_cipher_suite_mac_len(security->cipher_index);
     /* For backwards-compatibility, dtls_encrypt_params is called with
      * M=<macLen> and L=3. */
     const dtls_ccm_params_t params = { nonce, mac_len, 3 };
@@ -3541,8 +3579,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
  *
  * \param ctx          The DTLS context to use.
  * \param peer         The remote peer to exchange the handshake messages.
- * \param data         The data of the ClientHello containing the proposed
- *                     crypto parameter.
+ * \param data         The data of the ClientHello containing the proposed crypto parameter.
  * \param data_length  The actual length of \p data.
  * \return Less than zero on error, the number of bytes written otherwise.
  */
@@ -3571,7 +3608,7 @@ handle_verified_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   if (err < 0) {
     return err;
   }
-  if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher) &&
+  if (is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index) &&
 		  is_ecdsa_client_auth_supported(ctx))
     peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
   else
@@ -3586,6 +3623,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
   int err = 0;
   const dtls_peer_type role = peer->role;
   const dtls_state_t state = peer->state;
+  const cipher_suite_key_exchange_algorithm_t key_exchange_algorithm =
+              get_key_exchange_algorithm(peer->handshake_params->cipher_index);
 
   /* This will clear the retransmission buffer if we get an expected
    * handshake message. We have to make sure that no handshake message
@@ -3629,7 +3668,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
       dtls_warn("error in check_server_hello err: %i\n", err);
       return err;
     }
-    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher))
+    /* check_server_hello sets the cipher_index */
+    if (is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index))
       peer->state = DTLS_STATE_WAIT_SERVERCERTIFICATE;
     else {
       peer->optional_handshake_message = DTLS_HT_SERVER_KEY_EXCHANGE;
@@ -3668,7 +3708,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
     }
 
 #ifdef DTLS_ECC
-    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher)) {
+    if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_ECDHE_ECDSA) {
       if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
       }
@@ -3677,7 +3717,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
     }
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
-    if (is_tls_psk_with_aes_128_ccm_x(peer->handshake_params->cipher)) {
+    if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_PSK) {
       if (state != DTLS_STATE_WAIT_SERVERHELLODONE ||
           peer->optional_handshake_message != DTLS_HT_SERVER_KEY_EXCHANGE) {
         return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
@@ -3717,7 +3757,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 
     if (state != DTLS_STATE_WAIT_SERVERHELLODONE ||
         peer->optional_handshake_message != DTLS_HT_CERTIFICATE_REQUEST ||
-        !is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher)) {
+        key_exchange_algorithm != DTLS_KEY_EXCHANGE_ECDHE_ECDSA) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
     peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
@@ -3793,8 +3833,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
            &peer->handshake_params->hs_state.hs_hash,
 	   sizeof(peer->handshake_params->hs_state.ext_hash));
 
-    if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_x(peer->handshake_params->cipher) &&
-	is_ecdsa_client_auth_supported(ctx))
+    if (key_exchange_algorithm == DTLS_KEY_EXCHANGE_ECDHE_ECDSA &&
+        is_ecdsa_client_auth_supported(ctx))
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
       peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
@@ -3876,7 +3916,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 /**
  * Process verified ClientHellos of epoch 0.
  *
- * This function returns the number of bytes that were sent, or less than zero if an error occurred.
+ * This function returns the number of bytes that were sent, or less than zero
+ * if an error occurred.
  *
  * \param ctx              The DTLS context to use.
  * \param ephemeral_peer   The ephemeral remote peer.
@@ -3885,9 +3926,9 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
  * \return Less than zero on error, the number of bytes written otherwise.
  */
 static int
-handle_0_verified_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer,
-         uint8 *data, size_t data_length)
-{
+handle_0_verified_client_hello(dtls_context_t *ctx,
+         dtls_ephemeral_peer_t *ephemeral_peer,
+         uint8 *data, size_t data_length) {
   int err;
 
   dtls_peer_t *peer = dtls_get_peer(ctx, ephemeral_peer->session);
