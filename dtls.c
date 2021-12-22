@@ -4174,7 +4174,7 @@ dtls_handle_message(dtls_context_t *ctx,
   /* check for ClientHellos of epoch 0, maybe a peer's start over */
   if ((rlen = is_record(msg,msglen))) {
     dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
-    uint16_t epoch = dtls_uint16_to_int(header->epoch);
+    uint16_t epoch = dtls_get_epoch(header);
     dtls_info("received message of type %u, epoch %u\n", header->content_type, epoch);
     if (DTLS_CT_HANDSHAKE == header->content_type && 0 == epoch) {
       dtls_info("handshake message epoch 0\n");
@@ -4227,21 +4227,22 @@ dtls_handle_message(dtls_context_t *ctx,
 
   while ((rlen = is_record(msg,msglen))) {
     dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
+    uint16_t epoch = dtls_get_epoch(header);
     uint64_t pkt_seq_nr = dtls_uint48_to_int(header->sequence_number);
     const char *name = dtls_message_type_to_name(msg[0]);
 
     if (name) {
       dtls_debug("got '%s' epoch %u sequence %" PRIu64 " (%d bytes)\n",
-                 name, dtls_get_epoch(header), pkt_seq_nr, rlen);
+                 name, epoch, pkt_seq_nr, rlen);
     }
     else {
       dtls_debug("got 'unknown %d' epoch %u sequence %" PRIu64 " (%d bytes)\n",
-                 msg[0], dtls_get_epoch(header), pkt_seq_nr, rlen);
+                 msg[0], epoch, pkt_seq_nr, rlen);
     }
 
-    dtls_security_parameters_t *security = dtls_security_params_epoch(peer, dtls_get_epoch(header));
+    dtls_security_parameters_t *security = dtls_security_params_epoch(peer, epoch);
     if (!security) {
-      dtls_warn("No security context for epoch: %i\n", dtls_get_epoch(header));
+      dtls_warn("No security context for epoch: %i\n", epoch);
       data_length = -1;
     } else {
       if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
@@ -4320,6 +4321,10 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_ALERT:
+      if (peer->state == DTLS_STATE_WAIT_FINISHED) {
+          dtls_info("** drop alert before Finish.\n");
+          return 0;
+      }
       dtls_stop_retransmission(ctx, peer);
       err = handle_alert(ctx, peer, msg, data, data_length);
       if (err < 0 || err == 1) {
@@ -4357,6 +4362,10 @@ dtls_handle_message(dtls_context_t *ctx,
       break;
 
     case DTLS_CT_APPLICATION_DATA:
+      if (epoch == 0 || peer->state == DTLS_STATE_WAIT_FINISHED) {
+          dtls_info("** drop application data before Finish.\n");
+          return 0;
+      }
       dtls_info("** application data:\n");
       dtls_stop_retransmission(ctx, peer);
       CALL(ctx, read, &peer->session, data, data_length);
