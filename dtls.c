@@ -4240,14 +4240,14 @@ dtls_handle_message(dtls_context_t *ctx,
                  msg[0], epoch, pkt_seq_nr, rlen);
     }
 
-    dtls_security_parameters_t *security = dtls_security_params_epoch(peer, epoch);
+    dtls_security_parameters_t *security = dtls_security_params_read_epoch(peer, epoch);
     if (!security) {
       dtls_warn("No security context for epoch: %i\n", epoch);
       data_length = -1;
     } else {
       if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
         data_length = decrypt_verify(peer, msg, rlen, &data);
-        if (data_length) {
+        if (data_length > 0) {
           security->cseq.cseq = 0;
           /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
           security->cseq.bitfield = 1;
