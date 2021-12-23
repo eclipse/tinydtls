@@ -4249,48 +4249,55 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_warn("No security context for epoch: %i\n", epoch);
       data_length = -1;
     } else {
-      if(pkt_seq_nr == 0 && security->cseq.cseq == 0) {
-        data_length = decrypt_verify(peer, msg, rlen, &data);
-        if (data_length > 0) {
-          security->cseq.cseq = 0;
-          /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
-          security->cseq.bitfield = 1;
-        }
-      } else if (pkt_seq_nr == security->cseq.cseq) {
-        dtls_info("Duplicate packet arrived (cseq=%" PRIu64 ")\n", security->cseq.cseq);
-        return 0;
-      } else if ((int64_t)(security->cseq.cseq-pkt_seq_nr) > 0) { /* pkt_seq_nr < security->cseq.cseq */
-        if (((security->cseq.cseq-1)-pkt_seq_nr) < 64) {
-          if(security->cseq.bitfield & ((uint64_t)1<<((security->cseq.cseq-1)-pkt_seq_nr))) {
-            dtls_info("Duplicate packet arrived (bitfield)\n");
-            /* seen it */
-            return 0;
-          } else {
-            dtls_info("Packet arrived out of order\n");
-            data_length = decrypt_verify(peer, msg, rlen, &data);
-            if(data_length > 0) {
-              security->cseq.bitfield |= ((uint64_t)1<<((security->cseq.cseq-1)-pkt_seq_nr));
-            }
-          }
-        } else {
-          dtls_info("Packet from before the bitfield arrived\n");
-            return 0;
-        }
-      } else { /* pkt_seq_nr > security->cseq.cseq */
+      dtls_debug("bitfield is %" PRIx64 " sequence base %" PRIx64 " rseqn %" PRIx64 "\n",
+                  security->cseq.bitfield, security->cseq.cseq, pkt_seq_nr);
+      if (security->cseq.bitfield == 0) { /* first message of epoch */
         data_length = decrypt_verify(peer, msg, rlen, &data);
         if(data_length > 0) {
-          if (pkt_seq_nr - security->cseq.cseq > 63) {
-            /* reset bitfield if new packet number is beyond its boundaries */
-            security->cseq.bitfield = 0;
-          } else {
-            /* shift bitfield */
-            security->cseq.bitfield <<= (pkt_seq_nr-security->cseq.cseq);
+            security->cseq.cseq = pkt_seq_nr;
+            security->cseq.bitfield = 1;
+            dtls_debug("init bitfield is %" PRIx64 " sequence base %" PRIx64 "\n",
+                        security->cseq.bitfield, security->cseq.cseq);
+        }
+      } else {
+        int64_t seqn_diff = (int64_t)(pkt_seq_nr - security->cseq.cseq);
+        if(seqn_diff == 0) {
+          /* already seen */
+          dtls_debug("Drop: duplicate packet arrived (cseq=%" PRIu64 " bitfield's start)\n", pkt_seq_nr);
+          return 0;
+        } else if (seqn_diff < 0) { /* older pkt_seq_nr < security->cseq.cseq */
+          if (seqn_diff < -63) { /* too old */
+            dtls_debug("Drop: packet from before the bitfield arrived\n");
+            return 0;
           }
-          security->cseq.bitfield |= 1;
-          /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
-          security->cseq.cseq = pkt_seq_nr;
-          dtls_debug("new bitfield is %" PRIx64 " sequence base %" PRIx64 "\n",
-                      security->cseq.bitfield, security->cseq.cseq);
+          uint64_t seqn_bit = ((uint64_t)1 << -seqn_diff);
+          if (security->cseq.bitfield & seqn_bit) { /* seen it */
+            dtls_debug("Drop: duplicate packet arrived (bitfield)\n");
+            return 0;
+          }
+          dtls_debug("Packet arrived out of order\n");
+          data_length = decrypt_verify(peer, msg, rlen, &data);
+          if(data_length > 0) {
+            security->cseq.bitfield |= seqn_bit;
+            dtls_debug("update bitfield is %" PRIx64 " keep sequence base %" PRIx64 "\n",
+                        security->cseq.bitfield, security->cseq.cseq);
+          }
+        } else { /* newer pkt_seq_nr > security->cseq.cseq */
+          data_length = decrypt_verify(peer, msg, rlen, &data);
+          if(data_length > 0) {
+            security->cseq.cseq = pkt_seq_nr;
+            /* bitfield. B0 last seq seen.  B1 seq-1 seen, B2 seq-2 seen etc. */
+            if (seqn_diff > 63) {
+              /* reset bitfield if new packet number is beyond its boundaries */
+              security->cseq.bitfield = 1;
+            } else {
+              /* shift bitfield */
+              security->cseq.bitfield <<= seqn_diff;
+              security->cseq.bitfield |= 1;
+            }
+            dtls_debug("update bitfield is %" PRIx64 " new sequence base %" PRIx64 "\n",
+                        security->cseq.bitfield, security->cseq.cseq);
+          }
         }
       }
     }
