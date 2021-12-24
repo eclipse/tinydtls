@@ -4306,10 +4306,10 @@ dtls_handle_message(dtls_context_t *ctx,
     switch (msg[0]) {
 
     case DTLS_CT_CHANGE_CIPHER_SPEC:
-      dtls_stop_retransmission(ctx, peer);
       err = handle_ccs(ctx, peer, msg, data, data_length);
       if (err < 0) {
         dtls_warn("error while handling ChangeCipherSpec message\n");
+        dtls_stop_retransmission(ctx, peer);
         dtls_alert_send_from_err(ctx, peer, err);
 
         /* invalidate peer */
