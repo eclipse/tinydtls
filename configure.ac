@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2021 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -13,9 +13,10 @@
 # Contributors:
 #    Olaf Bergmann  - initial API and implementation
 #    Hauke Mehrtens - memory optimization, ECC integration
+#    Hugo Damer     - support for pkg-config
 
 AC_PREREQ([2.65])
-AC_INIT([tinydtls], [0.8.6])
+AC_INIT([tinydtls], [0.8.6], [], [], [https://projects.eclipse.org/projects/iot.tinydtls])
 AC_CONFIG_SRCDIR([dtls.c])
 dnl AC_CONFIG_HEADERS([config.h])
 
@@ -144,6 +145,7 @@ AC_CONFIG_FILES([Makefile
                  tests/Makefile
                  tests/unit-tests/Makefile
                  platform-specific/Makefile
+                 tinydtls.pc
 		 sha2/Makefile
 		 aes/Makefile
 		 ecc/Makefile])
