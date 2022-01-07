@@ -107,34 +107,44 @@ dtls_strnlen(const char *s, size_t maxlen) {
   return n;
 }
 
+/**
+ * Write service-address as text to buffer.
+ *
+ * The text is \000 terminated.
+ *
+ * \param addr   The session including the sockaddr.
+ * \param buf    The buffer to write the service address into.
+ * \param len    The actual length of \p buf.
+ * \return Less than zero on error, the number of bytes written otherwise.
+ */
 static size_t
 dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #ifdef HAVE_ARPA_INET_H
   const void *addrptr = NULL;
   in_port_t port;
   char *p = buf;
+  size_t append;
+  int err;
+
+  /* max. '[' ipv6 ']:' port '\0' */
+  assert(len >= 1 + INET6_ADDRSTRLEN + 2 + 5 + 1);
 
   switch (addr->addr.sa.sa_family) {
   case AF_INET:
-    if (len < INET_ADDRSTRLEN)
-      return 0;
-
     addrptr = &addr->addr.sin.sin_addr;
     port = ntohs(addr->addr.sin.sin_port);
     break;
   case AF_INET6:
-    if (len < INET6_ADDRSTRLEN + 2)
-      return 0;
-
     *p++ = '[';
-
+    --len;
     addrptr = &addr->addr.sin6.sin6_addr;
     port = ntohs(addr->addr.sin6.sin6_port);
-
     break;
   default:
-    memcpy(buf, "(unknown address type)", min(22, len));
-    return min(22, len);
+    /* include terminating \000 */
+    append = strlen("(unknown address type)");
+    memcpy(p, "(unknown address type)", append + 1);
+    return append;
   }
 
   if (inet_ntop(addr->addr.sa.sa_family, addrptr, p, len) == 0) {
@@ -142,16 +152,23 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
     return 0;
   }
 
-  p += dtls_strnlen(p, len);
+  /* append inet_ntop to p */
+  append = dtls_strnlen(p, len);
+  p += append;
+  len -= append;
 
   if (addr->addr.sa.sa_family == AF_INET6) {
-    if (p < buf + len) {
-      *p++ = ']';
-    } else
-      return 0;
+    *p++ = ']';
+    --len;
   }
 
-  p += snprintf(p, buf + len - p + 1, ":%d", port);
+  /* append port and \000 termination */
+  err = snprintf(p, len, ":%d", port);
+  if (err < 0) {
+    return 0;
+  }
+  p += err;
+  len -= err;
 
   return p - buf;
 #else /* HAVE_ARPA_INET_H */
