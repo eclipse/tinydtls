@@ -24,6 +24,7 @@ tests/dtls-server
 tests/prf-test
 tinydtls-0.6.0
 ./tinydtls-0.6.0/
+tinydtls.pc
 TAGS
 *.patch
 .gitignore

@@ -1,7 +1,7 @@
 # Makefile for tinydtls
 #
 #
-# Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2021 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -12,6 +12,7 @@
 #
 # Contributors:
 #    Olaf Bergmann  - initial API and implementation
+#    Hugo Damer     - support for pkg-config
 #
 
 # the library's version
@@ -45,6 +46,7 @@ OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) $(SUB_OBJECTS)
 HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
  netq.h alert.h utlist.h dtls_prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h dtls_mutex.h
+PKG_CONFIG_FILES:=tinydtls.pc
 CFLAGS:=-Wall -pedantic -std=c99 -DSHA2_USE_INTTYPES_H @CFLAGS@ @WARNING_CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE -I$(top_srcdir)
 SUBDIRS:=tests tests/unit-tests doc platform-specific sha2 aes ecc
@@ -115,10 +117,11 @@ dist:	$(FILES) $(DISTSUBDIRS)
 	tar czf $(package).tar.gz $(DISTDIR)
 
 install:	$(LIBS) $(HEADERS) $(SUBDIRS)
-	test -d $(DESTDIR)$(libdir) || mkdir -p $(DESTDIR)$(libdir)
+	test -d $(DESTDIR)$(libdir)/pkgconfig/ || mkdir -p $(DESTDIR)$(libdir)/pkgconfig
 	test -d $(DESTDIR)$(includedir) || mkdir -p $(DESTDIR)$(includedir)
 	$(install) $(LIBS) $(DESTDIR)$(libdir)/
 	$(install) $(HEADERS) $(DESTDIR)$(includedir)/
+	$(install) $(PKG_CONFIG_FILES) $(DESTDIR)$(libdir)/pkgconfig/
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done
