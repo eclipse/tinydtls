@@ -21,8 +21,8 @@ C99. The following components are available:
 When using the code from the git
 [repository](https://github.com/eclipse/tinydtls) at GitHub, invoke
 
-  $ ./autogen.sh
-  $ ./configure
+    $ ./autogen.sh
+    $ ./configure
 
 to re-create the configure script.
 
@@ -33,7 +33,7 @@ configuration, invoke make to build the library and associated test
 programs. To add tinydtls as Contiki application, drop it into the
 apps directory and add the following line to your Makefile:
 
-  APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
+    APPS += tinydtls/aes tinydtls/sha2 tinydtls/ecc tinydtls
 
 ## RIOT
 
