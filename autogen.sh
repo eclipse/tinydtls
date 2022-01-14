@@ -6,7 +6,7 @@ GENERATED_FILES="aclocal.m4 ar-lib compile depcomp src/.dirstamp
                Makefile aes/Makefile doc/Makefile ecc/Makefile
                platform-specific/Makefile sha2/Makefile
                tests/Makefile tests/unit-tests/Makefile
-               config.status configure config.log"
+               config.status configure config.log tinydtls.pc"
 
 GENERATED_DIRS="autom4te.cache src/.deps"
 
