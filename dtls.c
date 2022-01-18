@@ -4015,6 +4015,10 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t dat
           netq_remove(&peer->handshake_params->reorder_queue, node);
           next = 1;
           res = handle_handshake_msg(ctx, peer, node->data, node->length);
+
+          /* free message data */
+          netq_node_free(node);
+
           if (res < 0) {
             return res;
           }
