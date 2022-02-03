@@ -23,7 +23,10 @@
 #define _DTLS_DTLS_TIME_H_
 
 #include <stdint.h>
+
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 
 #include "tinydtls.h"
 
@@ -50,7 +53,9 @@
 typedef uint64_t clock_time_t;
 #else /* WITH_CONTIKI || RIOT_VERSION */
 
+#ifdef HAVE_TIME_H
 #include <time.h>
+#endif /* HAVE_TIME_H */
 
 #ifndef CLOCK_SECOND
 # define CLOCK_SECOND 1000
