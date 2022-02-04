@@ -2122,7 +2122,6 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   int ecdsa;
   uint8 extension_size;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
-  dtls_tick_t now;
 
   ecdsa = is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(handshake->cipher);
 
@@ -2136,11 +2135,8 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   dtls_int_to_uint16(p, DTLS_VERSION);
   p += sizeof(uint16);
 
-  /* Set server random: First 4 bytes are the server's Unix timestamp,
-   * followed by 28 bytes of generate random data. */
-  dtls_ticks(&now);
-  dtls_int_to_uint32(handshake->tmp.random.server, now / CLOCK_SECOND);
-  dtls_prng(handshake->tmp.random.server + 4, 28);
+  /* Set 32 bytes of server random data. */
+  dtls_prng(handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
 
   memcpy(p, handshake->tmp.random.server, DTLS_RANDOM_LENGTH);
   p += DTLS_RANDOM_LENGTH;
@@ -2722,7 +2718,6 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   int psk;
   int ecdsa;
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
-  dtls_tick_t now;
 
   psk = is_psk_supported(ctx);
   ecdsa = is_ecdsa_supported(ctx, 1);
@@ -2743,12 +2738,8 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   if (cookie_length == 0) {
-    /* Set client random: First 4 bytes are the client's Unix timestamp,
-     * followed by 28 bytes of generate random data. */
-    dtls_ticks(&now);
-    dtls_int_to_uint32(handshake->tmp.random.client, now / CLOCK_SECOND);
-    dtls_prng(handshake->tmp.random.client + sizeof(uint32),
-         DTLS_RANDOM_LENGTH - sizeof(uint32));
+    /* Set 32 bytes of client random data */
+    dtls_prng(handshake->tmp.random.client, DTLS_RANDOM_LENGTH);
   }
   /* we must use the same Client Random as for the previous request */
   memcpy(p, handshake->tmp.random.client, DTLS_RANDOM_LENGTH);
