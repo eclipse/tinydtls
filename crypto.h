@@ -92,7 +92,13 @@ typedef struct {
 } dtls_handshake_parameters_psk_t;
 
 typedef struct {
-    uint64_t cseq;
+    uint64_t cseq;        /**< current read sequence number */
+    /**
+     * bitfield of already received sequence numbers.
+     * B0 := cseqn, B1 := cseqn -1, ..., B63 := cseqn - 63
+     * Initially 0, set to 1 (B0) with the first received message of the epoch,
+     * or -1 (B0..B63) with a verified ClientHello (server-side only)
+     */
     uint64_t bitfield;
 } seqnum_t;
 
