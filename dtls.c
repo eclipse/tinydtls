@@ -1551,7 +1551,7 @@ dtls_0_send_alert(dtls_context_t *ctx,
 			     dtls_alert_t description)
 {
   uint8 buf[DTLS_RH_LENGTH + DTLS_ALERT_LENGTH];
-  uint8 *p = dtls_set_record_header(DTLS_CT_HANDSHAKE, 0, &(ephemeral_peer->rseq), buf);
+  uint8 *p = dtls_set_record_header(DTLS_CT_ALERT, 0, &(ephemeral_peer->rseq), buf);
 
   /* fix length of fragment in sendbuf */
   dtls_int_to_uint16(buf + 11, DTLS_ALERT_LENGTH);
@@ -1566,6 +1566,23 @@ dtls_0_send_alert(dtls_context_t *ctx,
   dtls_debug_hexdump("send unencrypted alert", p, DTLS_ALERT_LENGTH);
 
   return CALL(ctx, write, ephemeral_peer->session, buf, sizeof(buf));
+}
+
+static int
+dtls_0_send_alert_from_err(dtls_context_t *ctx,
+                           dtls_ephemeral_peer_t *ephemeral_peer,
+                           int err) {
+
+  assert(ephemeral_peer);
+
+  if (dtls_is_alert(err)) {
+    dtls_alert_level_t level = ((-err) & 0xff00) >> 8;
+    dtls_alert_t desc = (-err) & 0xff;
+    return dtls_0_send_alert(ctx, ephemeral_peer, level, desc);
+  } else if (err == -1) {
+    return dtls_0_send_alert(ctx, ephemeral_peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_INTERNAL_ERROR);
+  }
+  return -1;
 }
 
 /**
@@ -3845,59 +3862,21 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 }
 
 /**
- * Process initial ClientHello of epoch 0.
+ * Process verified ClientHellos of epoch 0.
  *
- * In order to protect against "denial of service" attacks, RFC6347
- * contains in https://datatracker.ietf.org/doc/html/rfc6347#section-4.2.1
- * the advice to process initial a ClientHello in a stateless fashion.
- * If a ClientHello doesn't provide a matching cookie, a HelloVerifyRequest
- * is sent back based on the record and handshake message sequence numbers
- * contained in the \p ephemeral_peer. If a matching cookie is provided,
- * the server starts the handshake, also based on the record and handshake
- * message sequence numbers contained in the \p ephemeral_peer. This function
- * returns the number of bytes that were sent, or \c -1 if an error occurred.
+ * This function returns the number of bytes that were sent, or less than zero if an error occurred.
  *
  * \param ctx              The DTLS context to use.
  * \param ephemeral_peer   The ephemeral remote peer.
- * \param data             The data to send.
+ * \param data             The data received.
  * \param data_length      The actual length of \p buf.
  * \return Less than zero on error, the number of bytes written otherwise.
  */
 static int
-handle_0_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer,
+handle_0_verified_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer,
          uint8 *data, size_t data_length)
 {
-  dtls_handshake_header_t *hs_header;
-  size_t packet_length;
-  size_t fragment_length;
-  size_t fragment_offset;
-
-  hs_header = DTLS_HANDSHAKE_HEADER(data);
-
-  dtls_debug("received initial client hello\n");
-
-  packet_length = dtls_uint24_to_int(hs_header->length);
-  fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
-  fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
-  if (packet_length != fragment_length || fragment_offset != 0) {
-    dtls_warn("No fragment support (yet)\n");
-    return 0;
-  }
-  if (fragment_length + DTLS_HS_LENGTH != data_length) {
-    dtls_warn("Fragment size does not match packet size\n");
-    return 0;
-  }
-  ephemeral_peer->mseq = dtls_uint16_to_int(hs_header->message_seq);
-  int err = dtls_0_verify_peer(ctx, ephemeral_peer, data, data_length);
-  if (err < 0) {
-    dtls_warn("error in dtls_verify_peer err: %i\n", err);
-    return err;
-  }
-
-  if (err > 0) {
-    dtls_debug("server hello verify was sent\n");
-    return err;
-  }
+  int err;
 
   dtls_peer_t *peer = dtls_get_peer(ctx, ephemeral_peer->session);
   if (peer) {
@@ -3934,6 +3913,9 @@ handle_0_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer
 
   peer->handshake_params = dtls_handshake_new();
   if (!peer->handshake_params) {
+    dtls_alert("cannot create handshake parameter\n");
+    DEL_PEER(ctx->peers, peer);
+    dtls_free_peer(peer);
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
@@ -3942,8 +3924,76 @@ handle_0_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer
   peer->handshake_params->hs_state.mseq_s = ephemeral_peer->mseq;
 
   err = handle_verified_client_hello(ctx, peer, data, data_length);
-  if (err >= 0) {
-    peer->handshake_params->hs_state.mseq_r++;
+  if (err < 0) {
+    DEL_PEER(ctx->peers, peer);
+    dtls_free_peer(peer);
+    return err;
+  }
+
+  peer->handshake_params->hs_state.mseq_r++;
+
+  return err;
+}
+
+/**
+ * Process initial ClientHello of epoch 0.
+ *
+ * In order to protect against "denial of service" attacks, RFC6347
+ * contains in https://datatracker.ietf.org/doc/html/rfc6347#section-4.2.1
+ * the advice to process initial a ClientHello in a stateless fashion.
+ * If a ClientHello doesn't provide a matching cookie, a HelloVerifyRequest
+ * is sent back based on the record and handshake message sequence numbers
+ * contained in the \p ephemeral_peer. If a matching cookie is provided,
+ * the server starts the handshake, also based on the record and handshake
+ * message sequence numbers contained in the \p ephemeral_peer. This function
+ * returns the number of bytes that were sent, or \c -1 if an error occurred.
+ *
+ * \param ctx              The DTLS context to use.
+ * \param ephemeral_peer   The ephemeral remote peer.
+ * \param data             The data to send.
+ * \param data_length      The actual length of \p buf.
+ * \return Less than zero on error, the number of bytes written otherwise.
+ */
+static int
+handle_0_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephemeral_peer,
+         uint8 *data, size_t data_length)
+{
+  dtls_handshake_header_t *hs_header;
+  size_t packet_length;
+  size_t fragment_length;
+  size_t fragment_offset;
+  int err;
+
+  hs_header = DTLS_HANDSHAKE_HEADER(data);
+
+  dtls_debug("received initial client hello\n");
+
+  packet_length = dtls_uint24_to_int(hs_header->length);
+  fragment_length = dtls_uint24_to_int(hs_header->fragment_length);
+  fragment_offset = dtls_uint24_to_int(hs_header->fragment_offset);
+  if (packet_length != fragment_length || fragment_offset != 0) {
+    dtls_warn("No fragment support (yet)\n");
+    return 0;
+  }
+  if (fragment_length + DTLS_HS_LENGTH != data_length) {
+    dtls_warn("Fragment size does not match packet size\n");
+    return 0;
+  }
+  ephemeral_peer->mseq = dtls_uint16_to_int(hs_header->message_seq);
+  err = dtls_0_verify_peer(ctx, ephemeral_peer, data, data_length);
+  if (err < 0) {
+    dtls_warn("error in dtls_verify_peer err: %i\n", err);
+    return err;
+  }
+
+  if (err > 0) {
+    dtls_debug("server hello verify was sent\n");
+    return err;
+  }
+
+  err = handle_0_verified_client_hello(ctx, ephemeral_peer, data, data_length);
+  if (err < 0) {
+    dtls_0_send_alert_from_err(ctx, ephemeral_peer, err);
   }
   return err;
 }
@@ -4183,14 +4233,11 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 
 static int dtls_alert_send_from_err(dtls_context_t *ctx, dtls_peer_t *peer, int err)
 {
-  int level;
-  int desc;
-
   assert(peer);
 
-  if (err < -(1 << 8) && err > -(3 << 8)) {
-    level = ((-err) & 0xff00) >> 8;
-    desc = (-err) & 0xff;
+  if (dtls_is_alert(err)) {
+    dtls_alert_level_t level = ((-err) & 0xff00) >> 8;
+    dtls_alert_t desc = (-err) & 0xff;
     peer->state = DTLS_STATE_CLOSING;
     return dtls_send_alert(ctx, peer, level, desc);
   } else if (err == -1) {
