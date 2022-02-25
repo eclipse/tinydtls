@@ -39,6 +39,14 @@
 #endif
 #endif
 
+/**
+ * Job to be executed for the timer entry in the netq.
+ */
+typedef enum netq_job_type_t {
+  RESEND, 	/**< resend related message on timeout */
+  TIMEOUT 	/**< timeout of the related alert */
+} netq_job_type_t;
+
 /** 
  * Datagrams in the netq_t structure have a fixed maximum size of
  * DTLS_MAX_BUF to simplify memory management on constrained nodes. */ 
@@ -49,6 +57,8 @@ typedef struct netq_t {
 
   clock_time_t t;	        /**< when to send PDU for the next time */
   unsigned int timeout;		/**< randomized timeout value */
+
+  netq_job_type_t job;		/**< job to be executed on timeout */
 
   dtls_peer_t *peer;		/**< remote address */
   uint16_t epoch;
