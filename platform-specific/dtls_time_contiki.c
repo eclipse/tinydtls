@@ -14,23 +14,18 @@
  *
  *******************************************************************************/
 
-/**
- * @file dtls_time.c
- * @brief Clock Handling
- */
-
 #include "tinydtls.h"
+#include "dtls_time.h"
 
-#if defined (WITH_CONTIKI)
-#include "platform-specific/dtls_time_contiki.c"
+clock_time_t dtls_clock_offset;
 
-#elif defined (RIOT_VERSION)
-#include "platform-specific/dtls_time_riot.c"
+void
+dtls_clock_init(void) {
+  clock_init();
+  dtls_clock_offset = clock_time();
+}
 
-#elif defined (WITH_POSIX)
-#include "platform-specific/dtls_time_posix.c"
-
-#else
-#error platform specific time functions not defined
-
-#endif
+void
+dtls_ticks(dtls_tick_t *t) {
+  *t = clock_time();
+}

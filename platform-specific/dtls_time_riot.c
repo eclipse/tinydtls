@@ -14,23 +14,17 @@
  *
  *******************************************************************************/
 
-/**
- * @file dtls_time.c
- * @brief Clock Handling
- */
-
 #include "tinydtls.h"
+#include "dtls_time.h"
 
-#if defined (WITH_CONTIKI)
-#include "platform-specific/dtls_time_contiki.c"
+dtls_tick_t dtls_clock_offset;
 
-#elif defined (RIOT_VERSION)
-#include "platform-specific/dtls_time_riot.c"
+void
+dtls_clock_init(void) {
+  dtls_clock_offset = xtimer_now64().ticks64;
+}
 
-#elif defined (WITH_POSIX)
-#include "platform-specific/dtls_time_posix.c"
-
-#else
-#error platform specific time functions not defined
-
-#endif
+void
+dtls_ticks(dtls_tick_t *t) {
+  *t = xtimer_now64().ticks64 -dtls_clock_offset;
+}
