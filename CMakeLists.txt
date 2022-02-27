@@ -31,7 +31,7 @@ option(make_tests "Make test programs and examples" OFF)
 if(NOT PLATFORM)
    # PLATFORM seems to be not used
    set(PLATFORM "posix" CACHE STRING "Choose platform." FORCE)
-   set_property(CACHE PLATFORM PROPERTY STRINGS "contiki" "espidf" "posix" "riot" "zephyr")
+   set_property(CACHE PLATFORM PROPERTY STRINGS "contiki" "espidf" "posix" "riot" "zephyr" "windows")
 endif()
 
 set(PACKAGE_NAME "tinydtls")
@@ -64,8 +64,11 @@ target_sources(tinydtls PRIVATE
 target_include_directories(tinydtls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(tinydtls PUBLIC DTLSv12 WITH_SHA256 SHA2_USE_INTTYPES_H DTLS_CHECK_CONTENTTYPE)
 
-if(NOT ZEPHYR_BASE)
-   target_compile_options(tinydtls PRIVATE -fPIC -pedantic -std=c99 -Wall -Wextra -Wformat-security -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wstrict-prototypes -Wswitch-default -Wswitch-enum -Wunused)
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "Export all symbols when compiling to a .dll" ON)
+    target_compile_options(tinydtls PRIVATE -Wall)
+elseif(NOT ZEPHYR_BASE)
+    target_compile_options(tinydtls PRIVATE -fPIC -pedantic -std=c99 -Wall -Wextra -Wformat-security -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wstrict-prototypes -Wswitch-default -Wswitch-enum -Wunused)
 endif()
 
 set_target_properties(tinydtls PROPERTIES VERSION ${PACKAGE_VERSION} SOVERSION ${SOVERSION})

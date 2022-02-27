@@ -51,6 +51,7 @@ dtls_config.h
 *.cooja
 *.econotag
 *.eval-adf7xxxmb4z
+*.exe
 *.exp5438
 *.iris
 *.mbxxx
@@ -70,3 +71,23 @@ dtls_config.h
 CMakeCache.txt
 cmake_install.cmake
 CMakeFiles
+
+# Windows build files
+*.dll
+
+# Visual Studio Build Files
+*.VC.db*
+.vs
+*.obj
+*.tlog
+*.log
+*.recipe
+*.vcxproj
+*.sln
+*.pdb
+*.vcxproj.user
+*.vcxproj.filters
+*.vcxproj.FileListAbsolute.txt
+tinydtls.dir
+Debug
+Release
