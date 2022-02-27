@@ -39,6 +39,7 @@
 //big number functions
 #include "ecc.h"
 #include <string.h>
+#include <assert.h>
 
 static uint32_t add( const uint32_t *x, const uint32_t *y, uint32_t *result, uint8_t length){
 	uint64_t d = 0; //carry
@@ -157,7 +158,8 @@ static int fieldSub(const uint32_t *x, const uint32_t *y, const uint32_t *modulu
 //finite Field multiplication
 //32bit * 32bit = 64bit
 static int fieldMult(const uint32_t *x, const uint32_t *y, uint32_t *result, uint8_t length){
-	uint32_t temp[length * 2];
+	uint32_t temp[(arrayLength + 1) * 2];
+	assert(length <= arrayLength + 1);
 	setZero(temp, length * 2);
 	setZero(result, length * 2);
 	uint8_t k, n;

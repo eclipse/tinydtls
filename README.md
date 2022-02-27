@@ -18,6 +18,12 @@ C99. The following components are available:
 
 # BUILDING
 
+tinydtls supports multiple platforms, including both Real-time
+and general-purpose Operating Systems. Below you find build instructions for
+all supported environments.
+
+## POSIX-oriented Operating Systems
+
 When using the code from the git
 [repository](https://github.com/eclipse/tinydtls) at GitHub, invoke
 
@@ -67,6 +73,39 @@ Available options:
 | make_tests | build tests including the examples | OFF |
 | DTLS_ECC | enable/disable ECDHE_ECDSA cipher suites | ON |
 | DTLS_PSK | enable/disable PSK cipher suites | ON |
+
+## Windows
+
+Using CMake, you can also build on and for Windows using either GCC or Visual
+Studio.
+Note, however, that the `make_tests` option is currently not supported when
+compiling with Visual Studio, as parts of the tests rely on POSIX APIs.
+
+For Visual Studio, you can apply the CMake instructions outlined above from the
+command line or use the CMake GUI application.
+
+In order to be able to use GCC, you need to specify a different generator than
+the default.
+For instance, you can use the `Unix Makefiles` generator, which creates a
+Makefile for controlling the build process using GCC.
+The example below leads to the output of a shared library file
+`libtinydtls.dll`.
+
+```
+cmake -G "Unix Makefiles" -DBUILD_SHARED_LIBS=ON .
+make
+```
+
+Using MinGW64, you can also cross compile from a POSIX-oriented
+platform for Windows using Autotools by providing a corresponding `--host`
+argument:
+
+```
+./autogen.sh
+./configure --host x86_64-w64-mingw32
+make
+mv libtinydtls.so libtinydtls.dll # Apply Windows file extension
+```
 
 # License
 

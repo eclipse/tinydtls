@@ -22,6 +22,11 @@
 #include "tinydtls.h"
 #include "dtls_time.h"
 
+#ifdef _MSC_VER
+#include <time.h>
+#include <windows.h>
+#endif
+
 #ifdef WITH_CONTIKI
 clock_time_t dtls_clock_offset;
 
@@ -64,7 +69,7 @@ dtls_ticks(dtls_tick_t *t) {
   *t = k_uptime_get();
 }
 
-#elif defined(WITH_POSIX)
+#elif defined(WITH_POSIX) || defined(IS_WINDOWS)
 
 time_t dtls_clock_offset;
 
@@ -88,6 +93,11 @@ void dtls_ticks(dtls_tick_t *t) {
   gettimeofday(&tv, NULL);
   *t = (tv.tv_sec - dtls_clock_offset) * DTLS_TICKS_PER_SECOND 
     + (tv.tv_usec * DTLS_TICKS_PER_SECOND / 1000000);
+#elif defined(_MSC_VER)
+  SYSTEMTIME current_time;
+  GetSystemTime(&current_time);
+  *t = (current_time.wSecond - dtls_clock_offset) * DTLS_TICKS_PER_SECOND 
+    + (current_time.wMilliseconds * DTLS_TICKS_PER_SECOND / 1000);
 #else
 #error "clock not implemented"
 #endif

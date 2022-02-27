@@ -222,12 +222,13 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
 #endif /* WITH_CONTIKI */
 
-#ifdef RIOT_VERSION
+#if defined(RIOT_VERSION) || defined(IS_WINDOWS)
   /* FIXME: Switch to RIOT own DEBUG lines */
+  /* TODO: Check if inet_ntop can be used on Windows */
   (void) addr;
   (void) buf;
   (void) len;
-#endif /* RIOT_VERSION */
+#endif /* RIOT_VERSION || IS_WINDOWS */
 
 #ifdef WITH_POSIX
   /* TODO: output addresses manually */
@@ -240,7 +241,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
 #endif /* NDEBUG */
 
-#ifndef WITH_CONTIKI
+#if !defined(WITH_CONTIKI) && !defined(_MSC_VER)
 void
 dsrv_log(log_t level, const char *format, ...) {
   static char timebuf[32];

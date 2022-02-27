@@ -213,7 +213,7 @@ static inline void free_context(dtls_context_t *context) {
 }
 #endif /* RIOT_VERSION */
 
-#ifdef WITH_POSIX
+#if defined(WITH_POSIX) || defined(IS_WINDOWS)
 
 static inline dtls_context_t *
 malloc_context(void) {
@@ -1610,8 +1610,10 @@ dtls_0_send_hello_verify_request(dtls_context_t *ctx,
 			     dtls_ephemeral_peer_t *ephemeral_peer,
 			     uint8 *data, size_t data_length)
 {
-  uint8 buf[DTLS_RH_LENGTH + DTLS_HS_LENGTH + data_length];
+  uint8 buf[DTLS_RH_LENGTH + DTLS_HS_LENGTH + DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH];
   uint8 *p = dtls_set_record_header(DTLS_CT_HANDSHAKE, 0, &(ephemeral_peer->rseq), buf);
+
+  assert(data_length == DTLS_HV_LENGTH + DTLS_COOKIE_LENGTH);
 
   /* Signal DTLS version 1.0 in the record layer of ClientHello and
    * HelloVerifyRequest handshake messages according to Section 4.2.1

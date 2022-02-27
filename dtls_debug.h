@@ -78,11 +78,11 @@ void dtls_set_log_level(log_t level);
  * level is below or equal to the log level that set by
  * set_log_level(). */
 #ifdef HAVE_VPRINTF
-#if (defined(__GNUC__))
+#if (defined(__GNUC__) && !defined(__MINGW32__))
 void dsrv_log(log_t level, const char *format, ...) __attribute__ ((format(printf, 2, 3)));
-#else /* !__GNUC__ */
+#else /* !__GNUC__ && !__MINGW32__ */
 void dsrv_log(log_t level, const char *format, ...);
-#endif /* !__GNUC__ */
+#endif /* !__GNUC__ && !__MINGW32__ */
 #else
 #define dsrv_log(level, format, ...) PRINTF(format, ##__VA_ARGS__)
 #endif

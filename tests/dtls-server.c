@@ -7,18 +7,26 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <netinet/in.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
-#include <netdb.h>
 #include <signal.h>
 
 #include "tinydtls.h" 
 #include "dtls.h" 
 #include "dtls_debug.h"
+
+#ifdef IS_WINDOWS
+#include <winsock2.h>
+#pragma comment(lib, "Ws2_32.lib")
+#define MSG_DONTWAIT 0
+#define MSG_TRUNC 0
+#else /* ! IS_WINDOWS */
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#endif /* ! IS_WINDOWS */
 
 #define DEFAULT_PORT 20220
 
@@ -277,7 +285,9 @@ main(int argc, char **argv) {
   int on = 1;
   int off = 0;
   struct sockaddr_in6 listen_addr;
+#ifndef IS_WINDOWS
   struct sigaction sa;
+#endif /* ! IS_WINDOWS */
   uint16_t port = htons(DEFAULT_PORT);
 
   memset(&listen_addr, 0, sizeof(struct sockaddr_in6));
@@ -357,6 +367,7 @@ main(int argc, char **argv) {
 
   dtls_init();
 
+#ifndef IS_WINDOWS
   memset (&sa, 0, sizeof(sa));
   sigemptyset(&sa.sa_mask);
   sa.sa_handler = dtls_handle_signal;
@@ -366,6 +377,7 @@ main(int argc, char **argv) {
   /* So we do not exit on a SIGPIPE */
   sa.sa_handler = SIG_IGN;
   sigaction (SIGPIPE, &sa, NULL);
+#endif /* ! IS_WINDOWS */
 
   the_context = dtls_new_context(&fd);
 
