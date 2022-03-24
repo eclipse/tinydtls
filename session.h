@@ -34,10 +34,12 @@ typedef struct {
 #elif defined(WITH_RIOT_GNRC)
 #include "net/ipv6/addr.h"
 typedef struct {
-  unsigned char size;
-  ipv6_addr_t addr;
-  unsigned short port;
-  int ifindex;
+  unsigned char size;     /**< size of session_t::addr */
+  struct {
+    unsigned short port;  /**< transport layer port */
+    ipv6_addr_t addr6;    /**< IPv6 address */
+  } addr;                 /**< session IP address and port */
+  int ifindex;            /**< network interface index */
 } session_t;
 #else /* ! WITH_CONTIKI && ! WITH_RIOT_GNRC */
 

@@ -34,8 +34,8 @@
 #elif defined(WITH_RIOT_GNRC)
 #define _dtls_address_equals_impl(A,B)                          \
   ((A)->size == (B)->size                                       \
-   && (A)->port == (B)->port                                    \
-   && ipv6_addr_equal(&((A)->addr),&((B)->addr))                \
+   && (A)->addr.port == (B)->addr.port                                    \
+   && ipv6_addr_equal(&((A)->addr.addr6),&((B)->addr.addr6))                \
    && (A)->ifindex == (B)->ifindex)
 #else /* WITH_CONTIKI */
 
