@@ -32,11 +32,23 @@
    && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
    && (A)->ifindex == (B)->ifindex)
 #elif defined(WITH_RIOT_SOCK)
-#define _dtls_address_equals_impl(A,B)                          \
-  ((A)->size == (B)->size                                       \
-   && (A)->addr.port == (B)->addr.port                                    \
-   && ipv6_addr_equal(&((A)->addr.addr6),&((B)->addr.addr6))                \
-   && (A)->ifindex == (B)->ifindex)
+#include "net/af.h"
+#ifdef SOCK_HAS_IPV4
+#define _dtls_ipv4_address_equals_impl(A,B)                   \
+    ((A)->size == (B)->size                                   \
+     && (A)->addr.port == (B)->addr.port                      \
+     && (A)->ifindex == (B)->ifindex)                         \
+     && (A)->addr.family == (B)->addr.family                  \
+     && ipv4_addr_equal(&((A)->addr.ipv4),&((B)->addr.ipv4))
+#endif
+#ifdef SOCK_HAS_IPV6
+#define _dtls_ipv6_address_equals_impl(A,B)                   \
+    ((A)->size == (B)->size                                   \
+     && (A)->addr.port == (B)->addr.port                      \
+     && (A)->ifindex == (B)->ifindex)                         \
+     && (A)->addr.family == (B)->addr.family                  \
+     && ipv6_addr_equal(&((A)->addr.ipv6),&((B)->addr.ipv6))
+#endif
 #else /* WITH_CONTIKI */
 
 static inline int 
@@ -120,5 +132,21 @@ dtls_session_addr(session_t *sess, socklen_t *addrlen) {
 int
 dtls_session_equals(const session_t *a, const session_t *b) {
   assert(a); assert(b);
+#ifdef RIOT_VERSION
+  switch (a->addr.family) {
+#ifdef SOCK_HAS_IPV4
+  case AF_INET:
+    return _dtls_ipv4_address_equals_impl(a, b);
+#endif
+#ifdef SOCK_HAS_IPV6
+  case AF_INET6:
+    return _dtls_ipv6_address_equals_impl(a, b);
+#endif
+  default:
+    assert(0);
+    return false;
+  }
+#else
   return _dtls_address_equals_impl(a, b);
+#endif /* RIOT_VERSION */
 }
