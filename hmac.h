@@ -80,8 +80,6 @@ dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
 }
 #endif /* WITH_SHA256 */
 
-void dtls_hmac_storage_init(void);
-
 /**
  * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
  * NIST Standard FIPS 198 describes the Keyed-Hash Message Authentication 
@@ -124,26 +122,6 @@ typedef struct {
  * @param klen   The length of @p key.
  */
 void dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen);
-
-/**
- * Allocates a new HMAC context \p ctx with the given secret key.
- * This function returns \c 1 if \c ctx has been set correctly, or \c
- * 0 or \c -1 otherwise. Note that this function allocates new storage
- * that must be released by dtls_hmac_free().
- *
- * \param key    The secret key.
- * \param klen   The length of \p key.
- * \return A new dtls_hmac_context_t object or @c NULL on error
- */
-dtls_hmac_context_t *dtls_hmac_new(const unsigned char *key, size_t klen);
-
-/**
- * Releases the storage for @p ctx that has been allocated by
- * dtls_hmac_new().
- *
- * @param ctx The dtls_hmac_context_t to free. 
- */
-void dtls_hmac_free(dtls_hmac_context_t *ctx);
 
 /**
  * Updates the HMAC context with data from \p input. 

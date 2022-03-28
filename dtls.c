@@ -220,7 +220,6 @@ void
 dtls_init(void) {
   dtls_clock_init();
   crypto_init();
-  dtls_hmac_storage_init();
   netq_init();
   peer_init();
 
@@ -362,11 +361,7 @@ dtls_create_cookie(dtls_context_t *ctx,
    * - compression method
    */
 
-  /* We use our own buffer as hmac_context instead of a dynamic buffer
-   * created by dtls_hmac_new() to separate storage space for cookie
-   * creation from storage that is used in real sessions. Note that
-   * the buffer size must fit with the default hash algorithm (see
-   * implementation of dtls_hmac_context_new()). */
+  /* Note that the buffer size must fit with the default hash algorithm. */
 
   dtls_hmac_context_t hmac_context;
   dtls_hmac_init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
