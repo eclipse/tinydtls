@@ -51,6 +51,7 @@
 #endif
 
 typedef uint64_t clock_time_t;
+
 #else /* WITH_CONTIKI || RIOT_VERSION */
 
 #ifdef HAVE_TIME_H
@@ -62,6 +63,7 @@ typedef uint64_t clock_time_t;
 #endif
 
 typedef uint32_t clock_time_t;
+
 #endif /* WITH_CONTIKI || RIOT_VERSION */
 
 typedef clock_time_t dtls_tick_t;
@@ -72,6 +74,11 @@ typedef clock_time_t dtls_tick_t;
 
 void dtls_clock_init(void);
 void dtls_ticks(dtls_tick_t *t);
+
+/* see https://godbolt.org/z/YchexKaeT */
+#define DTLS_OFFSET_TIME (((clock_time_t)~0) >> 1)
+/** Checks if A is before (or equal) B. Considers 32 bit time overflow */
+#define DTLS_IS_BEFORE_TIME(A, B) ((clock_time_t)(DTLS_OFFSET_TIME + (B)-(A)) >= DTLS_OFFSET_TIME)
 
 /** @} */
 

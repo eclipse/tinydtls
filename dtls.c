@@ -4702,7 +4702,8 @@ dtls_check_retransmit(dtls_context_t *context, clock_time_t *next) {
   netq_t *node = netq_head(&context->sendqueue);
 
   dtls_ticks(&now);
-  while (node && node->t <= now) {
+  /* comparison considering 32bit overflow */
+  while (node && DTLS_IS_BEFORE_TIME(node->t, now)) {
     netq_pop_first(&context->sendqueue);
     dtls_retransmit(context, node);
     node = netq_head(&context->sendqueue);
