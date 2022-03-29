@@ -25,10 +25,10 @@
 #ifdef WITH_CONTIKI
 #include "ip/uip.h"
 typedef struct {
-  unsigned char size;
-  uip_ipaddr_t addr;
-  unsigned short port;
-  int ifindex;
+  unsigned char size;     /**< size of session_t::addr */
+  uip_ipaddr_t addr;      /**< session IP address */
+  unsigned short port;    /**< transport layer port */
+  int ifindex;            /**< network interface index */
 } session_t;
  /* TODO: Add support for RIOT over sockets  */
 #elif defined(WITH_RIOT_GNRC)
