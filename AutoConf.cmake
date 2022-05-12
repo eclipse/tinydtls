@@ -1,5 +1,28 @@
+###############################################################################
+#
+#  Copyright (c) 2022 Contributors to the Eclipse Foundation
+#
+#  See the LICENSE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Eclipse Public License 2.0 
+#  which is available at http://www.eclipse.org/legal/epl-2.0
+#  and the Eclipse Distribution License v. 1.0
+#  available at http://www.eclipse.org/org/documents/edl-v10.php
+#
+#  SPDX-License-Identifier: EPL-2.0
+#
+#  Contributors:
+#     Jimmy Björklund  - initial version
+#     Achim Kraus      - add getrandom and libcunit
+#                        additional minor fixes
+#
+###############################################################################
+
 include(CheckIncludeFile)
 include(CheckFunctionExists)
+include(CheckLibraryExists)
 include(TestBigEndian)
 include(CheckCSourceCompiles)
 include(CheckStructHasMember)
@@ -34,15 +57,27 @@ check_function_exists (strerror       HAVE_STRERROR)
 check_function_exists (strnlen        HAVE_STRNLEN)
 check_function_exists (fls            HAVE_FLS)
 check_function_exists (vprintf        HAVE_VPRINTF)
+check_function_exists (getrandom      HAVE_GETRANDOM)
 
-if( ${HAVE_STRING_H} AND ${HAVE_STRINGS_H} AND
-    ${HAVE_FLOAT_H} AND ${HAVE_STDLIB_H} AND
-    ${HAVE_STDDEF_H} AND ${HAVE_STDINT_H} AND
-     ${HAVE_INTTYPES_H} AND ${HAVE_DLFCN_H} )
+if( ${make_tests} )
+   if(BUILD_SHARED_LIBS)
+     check_library_exists (libcunit.so CU_initialize_registry "" HAVE_LIBCUNIT)
+   else()
+     # this link options only intended to be used for the cunit tests
+     set(CMAKE_REQUIRED_LINK_OPTIONS -no-pie)
+     check_library_exists (libcunit.a CU_initialize_registry "" HAVE_LIBCUNIT)
+   endif()
+endif()
+
+if( "${HAVE_STRING_H}" AND "${HAVE_STRINGS_H}" AND
+    "${HAVE_FLOAT_H}" AND "${HAVE_STDLIB_H}" AND
+    "${HAVE_STDDEF_H}" AND "${HAVE_STDINT_H}" AND
+    "${HAVE_INTTYPES_H}" AND "${HAVE_DLFCN_H}" )
     set( STDC_HEADERS 1)
 endif()
 
-check_struct_has_member (struct sockaddr_in6.sin6_len netinet/in.h HAVE_SOCKADDR_IN6_SIN6_LEN)
+check_struct_has_member ("struct sockaddr_in6" sin6_len "netinet/in.h" HAVE_SOCKADDR_IN6_SIN6_LEN)
+
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
 if(IS_BIG_ENDIAN)
   set(WORDS_BIGENDIAN 1)

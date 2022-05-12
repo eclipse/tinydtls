@@ -1,4 +1,27 @@
+###############################################################################
+#
+#  Copyright (c) 2022 Contributors to the Eclipse Foundation
+#
+#  See the LICENSE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Eclipse Public License 2.0 
+#  which is available at http://www.eclipse.org/legal/epl-2.0
+#  and the Eclipse Distribution License v. 1.0
+#  available at http://www.eclipse.org/org/documents/edl-v10.php
+#
+#  SPDX-License-Identifier: EPL-2.0
+#
+#  Contributors:
+#     Jimmy Björklund  - initial version
+#     Achim Kraus      - minor fixes
+#
+###############################################################################
+
 cmake_minimum_required(VERSION 3.5)
+
+project(tinydtls-tests)
 
 add_executable(dtls-server dtls-server.c)
 target_link_libraries(dtls-server LINK_PUBLIC tinydtls)

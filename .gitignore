@@ -67,3 +67,7 @@ dtls_config.h
 *.z1
 *.z1sp
 .project
+# cmake
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles
