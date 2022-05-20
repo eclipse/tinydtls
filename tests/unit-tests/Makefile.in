@@ -26,7 +26,7 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 # files and flags
-UNITS= test_ccm.c test_ecc.c
+UNITS= test_ccm.c test_ecc.c test_prf.c
 SOURCES:= $(UNITS)
 PROGRAM:=testdriver
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))

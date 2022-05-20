@@ -5,6 +5,7 @@
 
 #include "test_ccm.h"
 #include "test_ecc.h"
+#include "test_prf.h"
 #include "tinydtls.h"
 
 int main(void) {
@@ -18,6 +19,7 @@ int main(void) {
 
   t_init_ccm_tests();
   t_init_ecc_tests();
+  t_init_prf_tests();
 
   CU_basic_set_mode(run_mode);
   result = CU_basic_run_tests();
