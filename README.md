@@ -44,6 +44,28 @@ to your application.
 Also, if you need a specific commit of tinyDTLS you can modify
 `RIOT/pkg/tinydtls/Makefile`.
 
+## CMake
+
+The current cmake support is experimental. Don't hesitate to report issues and/or provided fixes for it. For general and more details on using CMake, please consider [CMake - help](https://cmake.org/cmake/help/latest/index.html).
+
+Usage:
+
+```
+mkdir tinydtls_build
+cd tinydtls_build
+cmake -Dmake_tests=ON <path-to-tinydtls>
+cmake --build .
+```
+
+Available options:
+
+| Option | Description | Default |
+| ------ | ----------- | ------- |
+| BUILD_SHARED_LIBS | build shared libraries instead of static link library | OFF |
+| make_tests | build tests including the examples | OFF |
+| DTLS_ECC | enable/disable ECDHE_ECDSA cipher suites | ON |
+| DTLS_PSK | enable/disable PSK cipher suites | ON |
+
 # License
 
 Copyright (c) 2011–2022 Olaf Bergmann (TZI) and others.
