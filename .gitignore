@@ -21,7 +21,6 @@ libtinydtls.so
 tests/ccm-test
 tests/dtls-client
 tests/dtls-server
-tests/prf-test
 tinydtls-0.6.0
 ./tinydtls-0.6.0/
 tinydtls.pc

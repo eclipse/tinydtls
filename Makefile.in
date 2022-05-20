@@ -147,7 +147,7 @@ TAGS:
 GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
  autom4te.cache/ config.h config.log config.status configure \
  doc/Doxyfile doc/doxygen.out doc/html/ $(LIBS) tests/ccm-test \
- tests/dtls-client tests/dtls-server tests/prf-test $(package) \
+ tests/dtls-client tests/dtls-server $(package) \
  $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
  \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
  $(addprefix \*., $(notdir $(wildcard ../../platform/*))) \
