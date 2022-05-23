@@ -93,7 +93,8 @@ netq_insert_node(netq_t **queue, netq_t *node) {
   assert(node);
 
   p = *queue;
-  while(p && p->t <= node->t) {
+  /* comparison considering 32bit overflow */
+  while(p && DTLS_IS_BEFORE_TIME(p->t, node->t)) {
     assert(p != node);
     if (p == node)
       return 0;
