@@ -31,7 +31,7 @@
    && (A)->port == (B)->port					\
    && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
    && (A)->ifindex == (B)->ifindex)
-#elif defined(WITH_RIOT_GNRC)
+#elif defined(WITH_RIOT_SOCK)
 #define _dtls_address_equals_impl(A,B)                          \
   ((A)->size == (B)->size                                       \
    && (A)->port == (B)->port                                    \

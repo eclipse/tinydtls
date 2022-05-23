@@ -31,7 +31,7 @@ typedef struct {
   int ifindex;
 } session_t;
  /* TODO: Add support for RIOT over sockets  */
-#elif defined(WITH_RIOT_GNRC)
+#elif defined(WITH_RIOT_SOCK)
 #include "net/ipv6/addr.h"
 typedef struct {
   unsigned char size;
@@ -39,7 +39,7 @@ typedef struct {
   unsigned short port;
   int ifindex;
 } session_t;
-#else /* ! WITH_CONTIKI && ! WITH_RIOT_GNRC */
+#else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -55,7 +55,7 @@ typedef struct {
   } addr;
   int ifindex;
 } session_t;
-#endif /* ! WITH_CONTIKI && ! WITH_RIOT_GNRC */
+#endif /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
 /** 
  * Resets the given session_t object @p sess to its default
