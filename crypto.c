@@ -207,7 +207,7 @@ dtls_p_hash(dtls_hashfunc_t h,
 	    const unsigned char *random1, size_t random1len,
 	    const unsigned char *random2, size_t random2len,
 	    unsigned char *buf, size_t buflen) {
-  dtls_hmac_context_t *hmac_a, *hmac_p;
+  dtls_hmac_context_t hmac;
 
   unsigned char A[DTLS_HMAC_DIGEST_SIZE];
   unsigned char tmp[DTLS_HMAC_DIGEST_SIZE];
@@ -215,54 +215,44 @@ dtls_p_hash(dtls_hashfunc_t h,
   size_t len = 0;			/* result length */
   (void)h;
 
-  hmac_a = dtls_hmac_new(key, keylen);
-  if (!hmac_a)
-    return 0;
+  dtls_hmac_init(&hmac, key, keylen);
 
   /* calculate A(1) from A(0) == seed */
-  HMAC_UPDATE_SEED(hmac_a, label, labellen);
-  HMAC_UPDATE_SEED(hmac_a, random1, random1len);
-  HMAC_UPDATE_SEED(hmac_a, random2, random2len);
+  HMAC_UPDATE_SEED(&hmac, label, labellen);
+  HMAC_UPDATE_SEED(&hmac, random1, random1len);
+  HMAC_UPDATE_SEED(&hmac, random2, random2len);
 
-  dlen = dtls_hmac_finalize(hmac_a, A);
+  dlen = dtls_hmac_finalize(&hmac, A);
 
-  hmac_p = dtls_hmac_new(key, keylen);
-  if (!hmac_p)
-    goto error;
+  while (len < buflen) {
+    dtls_hmac_init(&hmac, key, keylen);
+    dtls_hmac_update(&hmac, A, dlen);
 
-  while (len + dlen < buflen) {
+    HMAC_UPDATE_SEED(&hmac, label, labellen);
+    HMAC_UPDATE_SEED(&hmac, random1, random1len);
+    HMAC_UPDATE_SEED(&hmac, random2, random2len);
 
-    /* FIXME: rewrite loop to avoid superflous call to dtls_hmac_init() */
-    dtls_hmac_init(hmac_p, key, keylen);
-    dtls_hmac_update(hmac_p, A, dlen);
+    dlen = dtls_hmac_finalize(&hmac, tmp);
 
-    HMAC_UPDATE_SEED(hmac_p, label, labellen);
-    HMAC_UPDATE_SEED(hmac_p, random1, random1len);
-    HMAC_UPDATE_SEED(hmac_p, random2, random2len);
-
-    len += dtls_hmac_finalize(hmac_p, tmp);
-    memcpy(buf, tmp, dlen);
-    buf += dlen;
+    if ((len + dlen) < buflen) {
+        memcpy(&buf[len], tmp, dlen);
+        len += dlen;
+    }
+    else {
+        memcpy(&buf[len], tmp, buflen - len);
+        break;
+    }
 
     /* calculate A(i+1) */
-    dtls_hmac_init(hmac_a, key, keylen);
-    dtls_hmac_update(hmac_a, A, dlen);
-    dtls_hmac_finalize(hmac_a, A);
+    dtls_hmac_init(&hmac, key, keylen);
+    dtls_hmac_update(&hmac, A, dlen);
+    dtls_hmac_finalize(&hmac, A);
   }
 
-  dtls_hmac_init(hmac_p, key, keylen);
-  dtls_hmac_update(hmac_p, A, dlen);
-  
-  HMAC_UPDATE_SEED(hmac_p, label, labellen);
-  HMAC_UPDATE_SEED(hmac_p, random1, random1len);
-  HMAC_UPDATE_SEED(hmac_p, random2, random2len);
-  
-  dtls_hmac_finalize(hmac_p, tmp);
-  memcpy(buf, tmp, buflen - len);
-
- error:
-  dtls_hmac_free(hmac_a);
-  dtls_hmac_free(hmac_p);
+  /* prevent exposure of sensible data */
+  memset(&hmac, 0, sizeof(hmac));
+  memset(tmp, 0, sizeof(tmp));
+  memset(A, 0, sizeof(A));
 
   return buflen;
 }
