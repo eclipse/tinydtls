@@ -60,6 +60,10 @@
 #  include "hmac.h"
 #endif /* WITH_SHA256 */
 
+#ifdef WITH_ZEPHYR
+LOG_MODULE_DECLARE(TINYDTLS, CONFIG_TINYDTLS_LOG_LEVEL);
+#endif /* WITH_ZEPHYR */
+
 #define DTLS10_VERSION 0xfeff
 
 /* Flags for dtls_destroy_peer()

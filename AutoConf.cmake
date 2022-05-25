@@ -41,13 +41,25 @@ check_include_file(string.h     HAVE_STRING_H)
 check_include_file(strings.h    HAVE_STRINGS_H)
 check_include_file(time.h       HAVE_TIME_H)
 check_include_file(sys/param.h  HAVE_SYS_PARAM_H)
+check_include_file(sys/random.h HAVE_SYS_RANDOM_H)
 check_include_file(sys/socket.h HAVE_SYS_SOCKET_H)
 check_include_file(sys/stat.h   HAVE_SYS_STAT_H)
 check_include_file(sys/types.h  HAVE_SYS_TYPES_H)
-check_include_file(sys/time.h   HAVE_SYS_TIME_H)
 check_include_file(unistd.h     HAVE_UNISTD_H)
 check_include_file(float.h      HAVE_FLOAT_H)
 check_include_file(dlfcn.h      HAVE_DLFCN_H)
+
+if(NOT ZEPHYR_BASE)
+   # zephyr/ncs 1.9.1 has issues including this header
+   check_include_file(sys/time.h   HAVE_SYS_TIME_H)
+endif()
+
+if(ZEPHYR_BASE)
+   # zephyr/ncs 1.9.1 has issues with check_include_file
+   # https://github.com/zephyrproject-rtos/zephyr/issues/31193
+   # zephyr/ncs 1.9.1 has net/socket.h instead of sys/socket.h
+   set(HAVE_NET_SOCKET_H 1)
+endif()
 
 check_function_exists (memset         HAVE_MEMSET)
 check_function_exists (select         HAVE_SELECT)
@@ -57,7 +69,12 @@ check_function_exists (strerror       HAVE_STRERROR)
 check_function_exists (strnlen        HAVE_STRNLEN)
 check_function_exists (fls            HAVE_FLS)
 check_function_exists (vprintf        HAVE_VPRINTF)
-check_function_exists (getrandom      HAVE_GETRANDOM)
+check_function_exists (inet_ntop      HAVE_INET_NTOP)
+
+if(HAVE_SYS_RANDOM_H)
+   # zephyr/ncs 1.9.1 seems to link getrandom but doesn't offer a header
+   check_function_exists (getrandom      HAVE_GETRANDOM)
+endif()
 
 if( ${make_tests} )
    if(BUILD_SHARED_LIBS)

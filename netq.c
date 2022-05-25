@@ -28,6 +28,10 @@
 #endif
 #endif
 
+#ifdef WITH_ZEPHYR
+LOG_MODULE_DECLARE(TINYDTLS, CONFIG_TINYDTLS_LOG_LEVEL);
+#endif /* WITH_ZEPHYR */
+
 #if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
 #include <stdlib.h>
 
