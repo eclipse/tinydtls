@@ -408,18 +408,6 @@ dtls_create_cookie(dtls_context_t *ctx,
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
 
-  /* skip cipher suites */
-  if (e + DTLS_HS_LENGTH + sizeof(uint16_t) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  e += dtls_uint16_to_int(msg + DTLS_HS_LENGTH + e);
-  e += sizeof(uint16_t);
-
-  /* skip compression methods */
-  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
-  e += sizeof(uint8_t);
-
   /* read fragment length and check for consistency */
   fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
   if ((fragment_length < e) || (e + DTLS_HS_LENGTH) > msglen)
