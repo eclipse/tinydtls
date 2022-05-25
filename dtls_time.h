@@ -52,6 +52,16 @@
 
 typedef uint64_t clock_time_t;
 
+#elif defined(WITH_ZEPHYR)
+
+#include <zephyr.h>
+
+#ifndef CLOCK_SECOND
+# define CLOCK_SECOND 1000
+#endif
+
+typedef int64_t clock_time_t;
+
 #else /* WITH_CONTIKI || RIOT_VERSION */
 
 #ifdef HAVE_TIME_H

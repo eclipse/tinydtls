@@ -120,6 +120,12 @@
 /* Define to 1 if you have the `vprintf' function. */
 #cmakedefine HAVE_VPRINTF 1
 
+/* Define to 1 if you have the `inet_ntop' function. */
+#cmakedefine HAVE_INET_NTOP 1
+
+/* Define to 1 if you have the <net/socket.h> header file. */
+#cmakedefine HAVE_NET_SOCKET_H 1
+
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
 

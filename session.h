@@ -43,9 +43,16 @@ typedef struct {
 } session_t;
 #else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
+#ifdef WITH_ZEPHYR
+#include <zephyr.h>
+#ifdef HAVE_NET_SOCKET_H
+#include <net/socket.h>
+#endif /* HAVE_NET_SOCKET_H */
+#else /* WITH_ZEPHYR */
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif /* WITH_ZEPHYR */
 
 typedef struct {
   socklen_t size;		/**< size of addr */

@@ -53,7 +53,19 @@ dtls_ticks(dtls_tick_t *t) {
 
 #endif /* RIOT_VERSION */
 
-#ifdef WITH_POSIX
+#ifdef WITH_ZEPHYR
+
+void
+dtls_clock_init(void) {
+}
+
+void
+dtls_ticks(dtls_tick_t *t) {
+  *t = k_uptime_get();
+}
+
+#elif defined(WITH_POSIX)
+
 time_t dtls_clock_offset;
 
 void
