@@ -42,7 +42,18 @@ typedef int dtls_mutex_t;
 #define dtls_mutex_trylock(a) *(a) = 1
 #define dtls_mutex_unlock(a) *(a) = 0
 
-#else /* ! RIOT_VERSION && ! WITH_CONTIKI */
+#elif defined(WITH_ZEPHYR)
+
+/* zephyr supports mutex, but this port doesn't use it */
+
+typedef int dtls_mutex_t;
+#define DTLS_MUTEX_INITIALIZER 0
+#define dtls_mutex_lock(a) *(a) = 1
+#define dtls_mutex_trylock(a) *(a) = 1
+#define dtls_mutex_unlock(a) *(a) = 0
+
+
+#else /* ! RIOT_VERSION && ! WITH_CONTIKI && ! WITH_ZEPHYR */
 
 #include <pthread.h>
 

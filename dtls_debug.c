@@ -32,12 +32,23 @@
 #include <time.h>
 #endif
 
+#ifdef WITH_ZEPHYR
+#ifdef HAVE_NET_SOCKET_H
+#include <net/socket.h>
+#endif /* HAVE_NET_SOCKET_H */
+typedef int in_port_t;
+#endif /* WITH_ZEPHYR */
+
 #include "global.h"
 #include "dtls_debug.h"
 
 #ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
+
+#ifdef WITH_ZEPHYR
+LOG_MODULE_REGISTER(TINYDTLS, CONFIG_TINYDTLS_LOG_LEVEL);
+#endif /* WITH_ZEPHYR */
 
 static int maxlog = DTLS_LOG_WARN;      /* default maximum log level */
 
@@ -119,7 +130,7 @@ dtls_strnlen(const char *s, size_t maxlen) {
  */
 static size_t
 dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
-#ifdef HAVE_ARPA_INET_H
+#ifdef HAVE_INET_NTOP
   const void *addrptr = NULL;
   in_port_t port;
   char *p = buf;
@@ -171,7 +182,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   len -= err;
 
   return p - buf;
-#else /* HAVE_ARPA_INET_H */
+#else /* HAVE_INET_NTOP */
 
 #ifdef WITH_CONTIKI
   char *p = buf;
@@ -308,7 +319,27 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
   len = dsrv_print_addr(addr, addrbuf, sizeof(addrbuf));
   if (!len)
     return;
+#ifdef WITH_ZEPHYR
+  switch(level) {
+    case DTLS_LOG_EMERG:
+    case DTLS_LOG_ALERT:
+    case DTLS_LOG_CRIT:
+      Z_LOG(LOG_LEVEL_ERR, "%s: %s\n", name, addrbuf);
+      break;
+    case DTLS_LOG_WARN:
+      Z_LOG(LOG_LEVEL_WRN, "%s: %s\n", name, addrbuf);
+      break;
+    case DTLS_LOG_NOTICE:
+    case DTLS_LOG_INFO:
+      Z_LOG(LOG_LEVEL_INF, "%s: %s\n", name, addrbuf);
+      break;
+    case DTLS_LOG_DEBUG:
+      Z_LOG(LOG_LEVEL_DBG, "%s: %s\n", name, addrbuf);
+      break;
+  }
+#else /* WITH_ZEPHYR */
   dsrv_log(level, "%s: %s\n", name, addrbuf);
+#endif /* WITH_ZEPHYR */
 }
 
 #ifndef WITH_CONTIKI
