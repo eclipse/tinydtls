@@ -4260,8 +4260,14 @@ dtls_handle_message(dtls_context_t *ctx,
   if ((rlen = is_record(msg,msglen))) {
     dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
     uint16_t epoch = dtls_get_epoch(header);
-    dtls_info("received message of type %u, epoch %u\n", header->content_type, epoch);
-    if (DTLS_CT_HANDSHAKE == header->content_type && 0 == epoch) {
+    uint8_t content_type = dtls_get_content_type(header);
+    const char* content_type_name = dtls_message_type_to_name(content_type);
+    if (content_type_name) {
+      dtls_info("received message (%d bytes), starting with '%s', epoch %u\n", msglen, content_type_name, epoch);
+    } else {
+      dtls_info("received message (%d bytes), starting with unknown ct '%u', epoch %u\n", msglen, content_type, epoch);
+    }
+    if (DTLS_CT_HANDSHAKE == content_type && 0 == epoch) {
       dtls_info("handshake message epoch 0\n");
       data = msg + DTLS_RH_LENGTH;
       data_length = rlen - DTLS_RH_LENGTH;
@@ -4313,21 +4319,26 @@ dtls_handle_message(dtls_context_t *ctx,
   while ((rlen = is_record(msg,msglen))) {
     dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
     uint16_t epoch = dtls_get_epoch(header);
+    uint8_t content_type = dtls_get_content_type(header);
+    const char* content_type_name = dtls_message_type_to_name(content_type);
     uint64_t pkt_seq_nr = dtls_uint48_to_int(header->sequence_number);
-    const char *name = dtls_message_type_to_name(msg[0]);
 
-    if (name) {
-      dtls_debug("got '%s' epoch %u sequence %" PRIu64 " (%d bytes)\n",
-                 name, epoch, pkt_seq_nr, rlen);
+    if (content_type_name) {
+      dtls_info("got '%s' epoch %u sequence %" PRIu64 " (%d bytes)\n",
+                 content_type_name, epoch, pkt_seq_nr, rlen);
     }
     else {
-      dtls_debug("got 'unknown %d' epoch %u sequence %" PRIu64 " (%d bytes)\n",
-                 msg[0], epoch, pkt_seq_nr, rlen);
+      dtls_info("got 'unknown %u' epoch %u sequence %" PRIu64 " (%d bytes)\n",
+                 content_type, epoch, pkt_seq_nr, rlen);
     }
 
     dtls_security_parameters_t *security = dtls_security_params_read_epoch(peer, epoch);
     if (!security) {
-      dtls_warn("No security context for epoch: %i\n", epoch);
+      if (content_type_name) {
+        dtls_warn("No security context for epoch: %i (%s)\n", epoch, content_type_name);
+      } else {
+        dtls_warn("No security context for epoch: %i (%u)\n", epoch, content_type);
+      }
       data_length = -1;
     } else {
       dtls_debug("bitfield is %" PRIx64 " sequence base %" PRIx64 " rseqn %" PRIx64 "\n",
@@ -4395,7 +4406,7 @@ dtls_handle_message(dtls_context_t *ctx,
      * combining multiple fragments of one type into a single
      * record. */
 
-    switch (msg[0]) {
+    switch (content_type) {
 
     case DTLS_CT_CHANGE_CIPHER_SPEC:
       err = handle_ccs(ctx, peer, msg, data, data_length);
