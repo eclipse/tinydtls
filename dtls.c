@@ -388,6 +388,7 @@ dtls_create_cookie(dtls_context_t *ctx,
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
 
+#if 0
   /* skip cipher suites */
   if (e + DTLS_HS_LENGTH + sizeof(uint16_t) > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
@@ -399,6 +400,7 @@ dtls_create_cookie(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
+#endif
 
   /* read fragment length and check for consistency */
   fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
