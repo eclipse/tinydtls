@@ -392,6 +392,9 @@ dtls_create_cookie(dtls_context_t *ctx,
   /* feed in the beginning of the Client Hello up to and including the
      session id */
   e = DTLS_CH_LENGTH;
+  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e) + sizeof(uint8_t);
 
   if (e + DTLS_HS_LENGTH > msglen)
@@ -399,18 +402,20 @@ dtls_create_cookie(dtls_context_t *ctx,
 
   dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
 
+  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
+    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   /* skip cookie bytes and length byte */
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
 
   /* skip cipher suites */
-  if (e + DTLS_HS_LENGTH + 1 > msglen)
+  if (e + DTLS_HS_LENGTH + sizeof(uint16_t) > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   e += dtls_uint16_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint16_t);
 
   /* skip compression methods */
-  if (e + DTLS_HS_LENGTH > msglen)
+  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
