@@ -47,10 +47,14 @@ typedef struct {
   uint16_t mseq_s;	     /**< send handshake message sequence number counter */
   uint16_t mseq_r;	     /**< received handshake message sequence number counter */
 
+  uint16_t read_epoch;   /**< handshake's current read epoch */
+
   /** pending config that is updated during handshake */
   /* FIXME: dtls_security_parameters_t pending_config; */
 
   /* temporary storage for the final handshake hash */
   dtls_hash_ctx hs_hash;
+  /* temporary storage for the extended master secret handshake hash */
+  dtls_hash_ctx ext_hash;
 } dtls_hs_state_t;
 #endif /* _DTLS_STATE_H_ */

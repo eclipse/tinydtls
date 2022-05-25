@@ -5,6 +5,8 @@ core
 *.cap
 *.pcap
 Makefile
+aclocal.m4
+ar-lib
 autom4te.cache/
 config.h
 config.log
@@ -13,13 +15,15 @@ configure
 doc/Doxyfile
 doc/doxygen.out
 doc/html/
+install-sh
 libtinydtls.a
+libtinydtls.so
 tests/ccm-test
 tests/dtls-client
 tests/dtls-server
-tests/prf-test
 tinydtls-0.6.0
 ./tinydtls-0.6.0/
+tinydtls.pc
 TAGS
 *.patch
 .gitignore
@@ -62,3 +66,7 @@ dtls_config.h
 *.z1
 *.z1sp
 .project
+# cmake
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles

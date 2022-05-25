@@ -226,8 +226,6 @@ typedef struct dtls_context_t {
   void *app;			/**< application-specific data */
 
   dtls_handler_t *h;		/**< callback handlers */
-
-  unsigned char readbuf[DTLS_MAX_BUF];
 } dtls_context_t;
 
 /** 
@@ -266,9 +264,9 @@ int dtls_connect(dtls_context_t *ctx, const session_t *dst);
 
 /**
  * Establishes a DTLS channel with the specified remote peer.
- * This function returns @c 0 if that channel already exists, a value
- * greater than zero when a new ClientHello message was sent, and
- * a value less than zero on error.
+ * This function returns @c 0 if that channel already exists and a renegotiate
+ * was initiated, a value greater than zero when a new ClientHello message was
+ * sent, and a value less than zero on error.
  *
  * @param ctx    The DTLS context to use.
  * @param peer   The peer object that describes the session.
@@ -282,6 +280,15 @@ int dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
  */
 int dtls_close(dtls_context_t *ctx, const session_t *remote);
 
+/**
+ * Renegotiates a DTLS channel based on the specified session.
+ * This function returns a value greater than zero when a new ClientHello
+ * message was sent, and a value less than zero on error.
+ *
+ * @param ctx    The DTLS context to use.
+ * @param dst    The session object that describes the existing session.
+ * @return A value less than zero on error, greater otherwise.
+ */
 int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
 
 /** 
@@ -293,7 +300,8 @@ int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
  * @param buf      The data to write.
  * @param len      The actual length of @p data.
  * 
- * @return The number of bytes written or @c -1 on error.
+ * @return The number of bytes written, @c -1 on error or @c 0
+ *         if the peer already exists but is not connected yet.
  */
 int dtls_write(struct dtls_context_t *ctx, session_t *session, 
 	       uint8 *buf, size_t len);
@@ -339,6 +347,11 @@ typedef struct __attribute__((__packed__)) {
 #define DTLS_HT_CERTIFICATE_VERIFY  15
 #define DTLS_HT_CLIENT_KEY_EXCHANGE 16
 #define DTLS_HT_FINISHED            20
+
+/**
+ * Pseudo handshake message type, if no optional handshake message is expected.
+ */
+#define DTLS_HT_NO_OPTIONAL_MESSAGE        -1
 
 /** Header structure for the DTLS handshake protocol. */
 typedef struct __attribute__((__packed__)) {

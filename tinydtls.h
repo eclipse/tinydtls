@@ -24,10 +24,28 @@
 #ifndef _DTLS_TINYDTLS_H_
 #define _DTLS_TINYDTLS_H_
 
-#ifndef CONTIKI
-#include "dtls_config.h"
-#else /* !CONTIKI */
+#ifdef RIOT_VERSION
+#include "platform-specific/riot_boards.h"
+#endif /* RIOT_VERSION */
+
+#ifdef CONTIKI
 #include "platform-specific/platform.h"
-#endif /* !CONTIKI */
+#endif /* CONTIKI */
+
+#ifndef CONTIKI
+#ifndef RIOT_VERSION
+#ifndef WITH_POSIX
+/* TODO: To remove in a future */
+#define WITH_POSIX 1
+#endif /* WITH_POSIX */
+#include "dtls_config.h"
+#endif /* RIOT_VERSION */
+#endif /* CONTIKI */
+
+#ifndef DTLS_ECC
+#ifndef DTLS_PSK
+#error "TinyDTLS requires at least one Cipher suite!"
+#endif /* DTLS_PSK */
+#endif /* DTLS_ECC */
 
 #endif /* _DTLS_TINYDTLS_H_ */

@@ -32,37 +32,44 @@
 #include "crypto.h"
 #include "ccm.h"
 #include "ecc/ecc.h"
-#include "prng.h"
+#include "dtls_prng.h"
 #include "netq.h"
 
-#ifndef WITH_CONTIKI
-#include <pthread.h>
-#endif
+#include "dtls_mutex.h"
+
+#if defined(RIOT_VERSION)
+# include <memarray.h>
+
+dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
+dtls_security_parameters_t security_storage_data[DTLS_SECURITY_MAX];
+dtls_handshake_parameters_t handshake_storage_data[DTLS_HANDSHAKE_MAX];
+dtls_security_parameters_t security_storage_data[DTLS_SECURITY_MAX];
+
+memarray_t handshake_storage;
+memarray_t security_storage;
+memarray_t handshake_storage;
+memarray_t security_storage;
+
+#endif /* RIOT_VERSION */
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 
 static struct dtls_cipher_context_t cipher_context;
-#ifndef WITH_CONTIKI
-static pthread_mutex_t cipher_context_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
+static dtls_mutex_t cipher_context_mutex = DTLS_MUTEX_INITIALIZER;
 
 static struct dtls_cipher_context_t *dtls_cipher_context_get(void)
 {
-#ifndef WITH_CONTIKI
-  pthread_mutex_lock(&cipher_context_mutex);
-#endif
+  dtls_mutex_lock(&cipher_context_mutex);
   return &cipher_context;
 }
 
 static void dtls_cipher_context_release(void)
 {
-#ifndef WITH_CONTIKI
-  pthread_mutex_unlock(&cipher_context_mutex);
-#endif
+  dtls_mutex_unlock(&cipher_context_mutex);
 }
 
-#ifndef WITH_CONTIKI
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
 void crypto_init(void)
 {
 }
@@ -82,7 +89,7 @@ static dtls_security_parameters_t *dtls_security_malloc(void) {
 static void dtls_security_dealloc(dtls_security_parameters_t *security) {
   free(security);
 }
-#else /* WITH_CONTIKI */
+#elif defined (WITH_CONTIKI) /* WITH_CONTIKI */
 
 #include "memb.h"
 MEMB(handshake_storage, dtls_handshake_parameters_t, DTLS_HANDSHAKE_MAX);
@@ -108,6 +115,30 @@ static dtls_security_parameters_t *dtls_security_malloc(void) {
 static void dtls_security_dealloc(dtls_security_parameters_t *security) {
   memb_free(&security_storage, security);
 }
+
+#elif defined (RIOT_VERSION)
+
+void crypto_init(void) {
+  memarray_init(&handshake_storage, handshake_storage_data, sizeof(dtls_handshake_parameters_t), DTLS_HANDSHAKE_MAX);
+  memarray_init(&security_storage, security_storage_data, sizeof(dtls_security_parameters_t), DTLS_SECURITY_MAX);
+}
+
+static dtls_handshake_parameters_t *dtls_handshake_malloc(void) {
+  return memarray_alloc(&handshake_storage);
+}
+
+static void dtls_security_dealloc(dtls_security_parameters_t *security) {
+  memarray_free(&security_storage, security);
+}
+
+static dtls_security_parameters_t *dtls_security_malloc(void) {
+  return memarray_alloc(&security_storage);
+}
+
+static void dtls_handshake_dealloc(dtls_handshake_parameters_t *handshake) {
+  memarray_free(&handshake_storage, handshake);
+}
+
 #endif /* WITH_CONTIKI */
 
 dtls_handshake_parameters_t *dtls_handshake_new(void)
@@ -176,7 +207,7 @@ dtls_p_hash(dtls_hashfunc_t h,
 	    const unsigned char *random1, size_t random1len,
 	    const unsigned char *random2, size_t random2len,
 	    unsigned char *buf, size_t buflen) {
-  dtls_hmac_context_t *hmac_a, *hmac_p;
+  dtls_hmac_context_t hmac;
 
   unsigned char A[DTLS_HMAC_DIGEST_SIZE];
   unsigned char tmp[DTLS_HMAC_DIGEST_SIZE];
@@ -184,54 +215,44 @@ dtls_p_hash(dtls_hashfunc_t h,
   size_t len = 0;			/* result length */
   (void)h;
 
-  hmac_a = dtls_hmac_new(key, keylen);
-  if (!hmac_a)
-    return 0;
+  dtls_hmac_init(&hmac, key, keylen);
 
   /* calculate A(1) from A(0) == seed */
-  HMAC_UPDATE_SEED(hmac_a, label, labellen);
-  HMAC_UPDATE_SEED(hmac_a, random1, random1len);
-  HMAC_UPDATE_SEED(hmac_a, random2, random2len);
+  HMAC_UPDATE_SEED(&hmac, label, labellen);
+  HMAC_UPDATE_SEED(&hmac, random1, random1len);
+  HMAC_UPDATE_SEED(&hmac, random2, random2len);
 
-  dlen = dtls_hmac_finalize(hmac_a, A);
+  dlen = dtls_hmac_finalize(&hmac, A);
 
-  hmac_p = dtls_hmac_new(key, keylen);
-  if (!hmac_p)
-    goto error;
+  while (len < buflen) {
+    dtls_hmac_init(&hmac, key, keylen);
+    dtls_hmac_update(&hmac, A, dlen);
 
-  while (len + dlen < buflen) {
+    HMAC_UPDATE_SEED(&hmac, label, labellen);
+    HMAC_UPDATE_SEED(&hmac, random1, random1len);
+    HMAC_UPDATE_SEED(&hmac, random2, random2len);
 
-    /* FIXME: rewrite loop to avoid superflous call to dtls_hmac_init() */
-    dtls_hmac_init(hmac_p, key, keylen);
-    dtls_hmac_update(hmac_p, A, dlen);
+    dlen = dtls_hmac_finalize(&hmac, tmp);
 
-    HMAC_UPDATE_SEED(hmac_p, label, labellen);
-    HMAC_UPDATE_SEED(hmac_p, random1, random1len);
-    HMAC_UPDATE_SEED(hmac_p, random2, random2len);
-
-    len += dtls_hmac_finalize(hmac_p, tmp);
-    memcpy(buf, tmp, dlen);
-    buf += dlen;
+    if ((len + dlen) < buflen) {
+        memcpy(&buf[len], tmp, dlen);
+        len += dlen;
+    }
+    else {
+        memcpy(&buf[len], tmp, buflen - len);
+        break;
+    }
 
     /* calculate A(i+1) */
-    dtls_hmac_init(hmac_a, key, keylen);
-    dtls_hmac_update(hmac_a, A, dlen);
-    dtls_hmac_finalize(hmac_a, A);
+    dtls_hmac_init(&hmac, key, keylen);
+    dtls_hmac_update(&hmac, A, dlen);
+    dtls_hmac_finalize(&hmac, A);
   }
 
-  dtls_hmac_init(hmac_p, key, keylen);
-  dtls_hmac_update(hmac_p, A, dlen);
-  
-  HMAC_UPDATE_SEED(hmac_p, label, labellen);
-  HMAC_UPDATE_SEED(hmac_p, random1, random1len);
-  HMAC_UPDATE_SEED(hmac_p, random2, random2len);
-  
-  dtls_hmac_finalize(hmac_p, tmp);
-  memcpy(buf, tmp, buflen - len);
-
- error:
-  dtls_hmac_free(hmac_a);
-  dtls_hmac_free(hmac_p);
+  /* prevent exposure of sensible data */
+  memset(&hmac, 0, sizeof(hmac));
+  memset(tmp, 0, sizeof(tmp));
+  memset(A, 0, sizeof(A));
 
   return buflen;
 }
@@ -273,17 +294,18 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
 static size_t
 dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 		 unsigned char *buf, 
-		 unsigned char *nounce,
+		 const unsigned char *nonce,
 		 const unsigned char *aad, size_t la) {
   long int len;
   (void)src;
 
   assert(ccm_ctx);
 
-  len = dtls_ccm_encrypt_message(&ccm_ctx->ctx, 8 /* M */, 
-				 max(2, 15 - DTLS_CCM_NONCE_SIZE),
-				 nounce,
-				 buf, srclen, 
+  len = dtls_ccm_encrypt_message(&ccm_ctx->ctx,
+                                 ccm_ctx->tag_length /* M */,
+				 ccm_ctx->l /* L */,
+				 nonce,
+				 buf, srclen,
 				 aad, la);
   return len;
 }
@@ -291,17 +313,18 @@ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
 static size_t
 dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 		 size_t srclen, unsigned char *buf,
-		 unsigned char *nounce,
+		 const unsigned char *nonce,
 		 const unsigned char *aad, size_t la) {
   long int len;
   (void)src;
 
   assert(ccm_ctx);
 
-  len = dtls_ccm_decrypt_message(&ccm_ctx->ctx, 8 /* M */, 
-				 max(2, 15 - DTLS_CCM_NONCE_SIZE),
-				 nounce,
-				 buf, srclen, 
+  len = dtls_ccm_decrypt_message(&ccm_ctx->ctx,
+                                 ccm_ctx->tag_length /* M */,
+				 ccm_ctx->l /* L */,
+				 nonce,
+				 buf, srclen,
 				 aad, la);
   return len;
 }
@@ -352,40 +375,60 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
   }
 }
 
-int dtls_ec_key_from_uint32_asn1(const uint32_t *key, size_t key_size,
-				 unsigned char *buf) {
-  int i;
-  unsigned char *buf_orig = buf;
-  int first = 1; 
+/* Build the EC KEY as a ASN.1 positive integer */
+/*
+ * The public EC key consists of two positive numbers. Converting them into
+ * ASN.1 INTEGER requires removing leading zeros, but special care must be
+ * taken of the resulting sign. If the first non-zero byte of the 32 byte
+ * ec-key has bit 7 set (highest bit), the resultant ASN.1 INTEGER would be
+ * interpreted as a negative number. In order to prevent this, a zero in the
+ * ASN.1 presentation is prepended if that bit 7 is set.
+*/
+int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
+				 uint8_t *buf) {
+  int i = 0;
+  uint8_t *lptr;
+   
+  /* ASN.1 Integer r */
+  dtls_int_to_uint8(buf, 0x02);
+  buf += sizeof(uint8);
 
-  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
-    if (key[i] == 0)
-      continue;
-    /* the first bit has to be set to zero, to indicate a poritive integer */
-    if (first && key[i] & 0x80000000) {
-      *buf = 0;
-      buf++;
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;      
-    } else if (first && !(key[i] & 0xFF800000)) {
-      buf[0] = (key[i] >> 16) & 0xff;
-      buf[1] = (key[i] >> 8) & 0xff;
-      buf[2] = key[i] & 0xff;
-      buf += 3;
-    } else if (first && !(key[i] & 0xFFFF8000)) {
-      buf[0] = (key[i] >> 8) & 0xff;
-      buf[1] = key[i] & 0xff;
-      buf += 2;
-    } else if (first && !(key[i] & 0xFFFFFF80)) {
-      buf[0] = key[i] & 0xff;
-      buf += 1;
-    } else {
-      dtls_int_to_uint32(buf, key[i]);
-      buf += 4;
-    }
-    first = 0;
+  lptr = buf;
+  /* Length will be filled in later */
+  buf += sizeof(uint8);
+
+  dtls_ec_key_from_uint32(key, key_size, buf);
+  
+  /* skip leading 0's */
+  while (i < (int)key_size && buf[i] == 0) {
+     ++i;
   }
-  return buf - buf_orig;
+  assert(i != (int)key_size);
+  if (i == (int)key_size) {
+      dtls_alert("ec key is all zero\n");
+      return 0;
+  }
+  if (buf[i] >= 0x80) {
+    /* 
+     * Preserve unsigned by adding leading 0 (i may go negative which is
+     * explicitely handled below with the assumption that buf is at least 33
+     * bytes in size).
+     */
+     --i;
+  }
+  if (i > 0) {
+      /* remove leading 0's */
+      key_size -= i;
+      memmove(buf, buf + i, key_size);
+  } else if (i == -1) {
+      /* add leading 0 */
+      memmove(buf +1, buf, key_size);
+      buf[0] = 0;
+      key_size++;
+  }
+  /* Update the length of positive ASN.1 integer */
+  dtls_int_to_uint8(lptr, key_size);
+  return key_size + 2; 
 }
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
@@ -442,13 +485,13 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
   int ret;
   uint32_t priv[8];
   uint32_t hash[8];
-  uint32_t rand[8];
+  uint32_t randv[8];
   
   dtls_ec_key_to_uint32(priv_key, key_size, priv);
   dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
   do {
-    dtls_prng((unsigned char *)rand, key_size);
-    ret = ecc_ecdsa_sign(priv, hash, rand, point_r, point_s);
+    dtls_prng((unsigned char *)randv, key_size);
+    ret = ecc_ecdsa_sign(priv, hash, randv, point_r, point_s);
   } while (ret);
 }
 
@@ -513,15 +556,58 @@ dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 }
 #endif /* DTLS_ECC */
 
+int
+dtls_encrypt_params(const dtls_ccm_params_t *params,
+                    const unsigned char *src, size_t length,
+                    unsigned char *buf,
+                    const unsigned char *key, size_t keylen,
+                    const unsigned char *aad, size_t la) {
+  int ret;
+  struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
+  ctx->data.tag_length = params->tag_length;
+  ctx->data.l = params->l;
+
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
+  if (ret < 0) {
+    /* cleanup everything in case the key has the wrong size */
+    dtls_warn("cannot set rijndael key\n");
+    goto error;
+  }
+
+  if (src != buf)
+    memmove(buf, src, length);
+  ret = dtls_ccm_encrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
+
+error:
+  dtls_cipher_context_release();
+  return ret;
+}
+
 int 
 dtls_encrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
-	     unsigned char *nounce,
-	     unsigned char *key, size_t keylen,
+	     const unsigned char *nonce,
+	     const unsigned char *key, size_t keylen,
 	     const unsigned char *aad, size_t la)
+{
+  /* For backwards-compatibility, dtls_encrypt_params is called with
+   * M=8 and L=3. */
+  const dtls_ccm_params_t params = { nonce, 8, 3 };
+
+  return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
+}
+
+int
+dtls_decrypt_params(const dtls_ccm_params_t *params,
+                    const unsigned char *src, size_t length,
+                    unsigned char *buf,
+                    const unsigned char *key, size_t keylen,
+                    const unsigned char *aad, size_t la)
 {
   int ret;
   struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
+  ctx->data.tag_length = params->tag_length;
+  ctx->data.l = params->l;
 
   ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
   if (ret < 0) {
@@ -532,36 +618,23 @@ dtls_encrypt(const unsigned char *src, size_t length,
 
   if (src != buf)
     memmove(buf, src, length);
-  ret = dtls_ccm_encrypt(&ctx->data, src, length, buf, nounce, aad, la);
+  ret = dtls_ccm_decrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
 
 error:
   dtls_cipher_context_release();
   return ret;
 }
 
-int 
+int
 dtls_decrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
-	     unsigned char *nounce,
-	     unsigned char *key, size_t keylen,
+	     const unsigned char *nonce,
+	     const unsigned char *key, size_t keylen,
 	     const unsigned char *aad, size_t la)
 {
-  int ret;
-  struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
+  /* For backwards-compatibility, dtls_encrypt_params is called with
+   * M=8 and L=3. */
+  const dtls_ccm_params_t params = { nonce, 8, 3 };
 
-  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
-  if (ret < 0) {
-    /* cleanup everything in case the key has the wrong size */
-    dtls_warn("cannot set rijndael key\n");
-    goto error;
-  }
-
-  if (src != buf)
-    memmove(buf, src, length);
-  ret = dtls_ccm_decrypt(&ctx->data, src, length, buf, nounce, aad, la);
-
-error:
-  dtls_cipher_context_release();
-  return ret;
+  return dtls_decrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
-

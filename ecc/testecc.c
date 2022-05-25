@@ -115,7 +115,8 @@ static const uint32_t ecdsaTestRand2[] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0
 static const uint32_t ecdsaTestresultR2[] = { 0x14146C91, 0xE878724D, 0xCD4FF928, 0xCC24BC04, 0xAC403390, 0x650C0060, 0x4A30B3F1, 0x9C69B726};
 static const uint32_t ecdsaTestresultS2[] = { 0x433AAB6F, 0x808250B1, 0xE46F90F4, 0xB342E972, 0x18B2F7E4, 0x2DB981A2, 0x6A288FA4, 0x41CF59DB};
 
-void addTest(){
+static void
+addTest(void){
 	uint32_t tempx[8];
 	uint32_t tempy[8];
 
@@ -124,7 +125,8 @@ void addTest(){
 	assert(ecc_isSame(tempy, resultAddy, arrayLength));
 }
 
-void doubleTest(){
+static void
+doubleTest(void){
 	uint32_t tempx[8];
 	uint32_t tempy[8];
 
@@ -133,7 +135,8 @@ void doubleTest(){
 	assert(ecc_isSame(tempy, resultDoubley, arrayLength));
 }
 
-void multTest(){
+static void
+multTest(void){
 	uint32_t tempx[8];
 	uint32_t tempy[8];
 
@@ -142,7 +145,8 @@ void multTest(){
 	assert(ecc_isSame(tempy, resultMulty, arrayLength));
 }
 
-void eccdhTest(){
+static void
+eccdhTest(void){
 	uint32_t tempx[8];
 	uint32_t tempy[8];
 	uint32_t tempAx2[8];
@@ -167,7 +171,8 @@ void eccdhTest(){
 
 }
 
-void ecdsaTest() {
+static void
+ecdsaTest(void) {
 	int ret __attribute__((unused));
 	uint32_t tempx[9];
 	uint32_t tempy[9];
@@ -214,6 +219,9 @@ PROCESS_THREAD(ecc_test, ev, d)
 #else /* CONTIKI */
 int main(int argc, char const *argv[])
 {
+	(void)argc;
+	(void)argv;
+
 	srand(time(NULL));
 	addTest();
 	doubleTest();

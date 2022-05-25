@@ -24,13 +24,44 @@
 #include "global.h"
 
 #ifdef WITH_SHA256
+#ifdef RIOT_VERSION
+#include "hashes/sha256.h"
+
+typedef sha256_context_t dtls_hash_ctx;
+typedef sha256_context_t dtls_sha256_ctx;
+#define DTLS_HASH_CTX_SIZE sizeof(sha256_context_t)
+#define DTLS_SHA256_DIGEST_LENGTH (SHA256_DIGEST_LENGTH)
+
+#define dtls_sha256_init(Ctx)             sha256_init((Ctx))
+#define dtls_sha256_update(Ctx,Input,Len) sha256_update((Ctx), (Input), (Len))
+#define dtls_sha256_final(Buf,Ctx)        sha256_final((Ctx), (Buf))
+
+#elif defined ESP_PLATFORM && defined CONFIG_LIBSODIUM_USE_MBEDTLS_SHA
+#include "sodium/crypto_hash_sha256.h"
+
+typedef crypto_hash_sha256_state dtls_hash_ctx;
+typedef crypto_hash_sha256_state dtls_sha256_ctx;
+#define DTLS_HASH_CTX_SIZE sizeof(crypto_hash_sha256_state)
+#define DTLS_SHA256_DIGEST_LENGTH (crypto_hash_sha256_BYTES)
+
+#define dtls_sha256_init(Ctx)             crypto_hash_sha256_init((Ctx))
+#define dtls_sha256_update(Ctx,Input,Len) crypto_hash_sha256_update((Ctx), (Input), (Len))
+#define dtls_sha256_final(Buf,Ctx)        crypto_hash_sha256_final((Ctx), (Buf))
+
+#else /* ! RIOT_VERSION && ! ESP_PLATFORM */
+
 /** Aaron D. Gifford's implementation of SHA256
  *  see http://www.aarongifford.com/ */
 #include "sha2/sha2.h"
 
 typedef dtls_sha256_ctx dtls_hash_ctx;
-typedef dtls_hash_ctx *dtls_hash_t;
 #define DTLS_HASH_CTX_SIZE sizeof(dtls_sha256_ctx)
+
+#endif /* ! RIOT_VERSION && ! ESP_PLATFORM */
+
+
+typedef dtls_hash_ctx *dtls_hash_t;
+
 
 static inline void
 dtls_hash_init(dtls_hash_t ctx) {
@@ -48,8 +79,6 @@ dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
   return DTLS_SHA256_DIGEST_LENGTH;
 }
 #endif /* WITH_SHA256 */
-
-void dtls_hmac_storage_init(void);
 
 /**
  * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
@@ -93,26 +122,6 @@ typedef struct {
  * @param klen   The length of @p key.
  */
 void dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen);
-
-/**
- * Allocates a new HMAC context \p ctx with the given secret key.
- * This function returns \c 1 if \c ctx has been set correctly, or \c
- * 0 or \c -1 otherwise. Note that this function allocates new storage
- * that must be released by dtls_hmac_free().
- *
- * \param key    The secret key.
- * \param klen   The length of \p key.
- * \return A new dtls_hmac_context_t object or @c NULL on error
- */
-dtls_hmac_context_t *dtls_hmac_new(const unsigned char *key, size_t klen);
-
-/**
- * Releases the storage for @p ctx that has been allocated by
- * dtls_hmac_new().
- *
- * @param ctx The dtls_hmac_context_t to free. 
- */
-void dtls_hmac_free(dtls_hmac_context_t *ctx);
 
 /**
  * Updates the HMAC context with data from \p input. 

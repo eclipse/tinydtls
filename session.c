@@ -25,13 +25,18 @@
 #endif
 #endif
 
-#ifdef WITH_CONTIKI
+#if defined(WITH_CONTIKI)
 #define _dtls_address_equals_impl(A,B)				\
   ((A)->size == (B)->size					\
    && (A)->port == (B)->port					\
    && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
    && (A)->ifindex == (B)->ifindex)
-
+#elif defined(WITH_RIOT_SOCK)
+#define _dtls_address_equals_impl(A,B)                          \
+  ((A)->size == (B)->size                                       \
+   && (A)->addr.port == (B)->addr.port                                    \
+   && ipv6_addr_equal(&((A)->addr.addr6),&((B)->addr.addr6))                \
+   && (A)->ifindex == (B)->ifindex)
 #else /* WITH_CONTIKI */
 
 static inline int 
@@ -65,6 +70,52 @@ dtls_session_init(session_t *sess) {
   memset(sess, 0, sizeof(session_t));
   sess->size = sizeof(sess->addr);
 }
+
+/* These functions are primarly needed for the tinydtls ruby gem.
+ *
+ * They are not implemented on Contiki and RIOT because these operating
+ * system don't supply malloc(3). This could be fixed by fixed by using
+ * memory pools on these operating system as in `peer.c`. However, the
+ * downside of this approach is that the memory pools reserve memory
+ * even if the `dtls_new_session` isn't used and usually memory for the
+ * `session_t` type is already resevered in the `peer_t` struct.
+ * Therefore it would introduces quite some overhead on these
+ * constrained platforms.
+ *
+ * In the long run we probably want to create two seperate memory pools
+ * for sessions and peers and store a pointer to a session in the peer
+ * struct.
+ */
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+session_t*
+dtls_new_session(struct sockaddr *addr, socklen_t addrlen) {
+  session_t *sess;
+
+  sess = malloc(sizeof(session_t));
+  if (!sess)
+    return NULL;
+  dtls_session_init(sess);
+
+  sess->size = addrlen;
+  memcpy(&sess->addr.sa, addr, sess->size);
+
+  return sess;
+}
+
+void
+dtls_free_session(session_t *sess) {
+  free(sess);
+}
+
+struct sockaddr*
+dtls_session_addr(session_t *sess, socklen_t *addrlen) {
+  if (!sess)
+    return NULL;
+
+  *addrlen = sess->size;
+  return &sess->addr.sa;
+}
+#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
 
 int
 dtls_session_equals(const session_t *a, const session_t *b) {

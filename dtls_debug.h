@@ -74,12 +74,15 @@ void dtls_set_log_level(log_t level);
  * level is below or equal to the log level that set by
  * set_log_level(). */
 #ifdef HAVE_VPRINTF
-void dsrv_log(log_t level, char *format, ...);
+#if (defined(__GNUC__))
+void dsrv_log(log_t level, const char *format, ...) __attribute__ ((format(printf, 2, 3)));
+#else /* !__GNUC__ */
+void dsrv_log(log_t level, const char *format, ...);
+#endif /* !__GNUC__ */
 #else
 #define dsrv_log(level, format, ...) PRINTF(format, ##__VA_ARGS__)
 #endif
 
-#ifndef NDEBUG
 /** dumps packets in usual hexdump format */
 void hexdump(const unsigned char *packet, int length);
 
@@ -89,24 +92,6 @@ void dump(unsigned char *buf, size_t len);
 void dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend);
 
 void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
-
-#else /* NDEBUG */
-
-static inline void hexdump(const unsigned char *packet, int length)
-{}
-
-static inline void dump(unsigned char *buf, size_t len)
-{}
-
-static inline void
-dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend)
-{}
-
-static inline void
-dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
-{}
-
-#endif /* NDEBUG */
 
 /* A set of convenience macros for common log levels. */
 #define dtls_emerg(...) dsrv_log(DTLS_LOG_EMERG, __VA_ARGS__)

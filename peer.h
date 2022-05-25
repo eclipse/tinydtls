@@ -52,10 +52,19 @@ typedef struct dtls_peer_t {
 
   dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
   dtls_state_t state;        /**< DTLS engine state */
+  int16_t optional_handshake_message; /**< optional next handshake message, DTLS_HT_NO_OPTIONAL_MESSAGE, if no optional message is expected. */
 
   dtls_security_parameters_t *security_params[2];
   dtls_handshake_parameters_t *handshake_params;
 } dtls_peer_t;
+
+/**
+ * Holds ClientHello's sequence numbers for the stateless address verification. */
+typedef struct dtls_ephemeral_peer_t {
+  session_t *session;         /**< peer address and local interface */
+  uint64_t rseq;             /**< ClientHello record sequence number */
+  uint16_t mseq;             /**< ClientHello handshake message sequence number */
+} dtls_ephemeral_peer_t;
 
 static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)
 {
@@ -66,6 +75,25 @@ static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t
   } else {
     return NULL;
   }
+}
+
+/**
+ * Get security parameter for read epoch.
+ *
+ * @param peer    The remote party where the packet is received from.
+ * @param epoch   The read epoch the packet is received in.
+ * @return The security parameter for the remote party and read epoch. @c NULL if not available.
+ */
+static inline dtls_security_parameters_t *dtls_security_params_read_epoch(dtls_peer_t *peer, uint16_t epoch)
+{
+  if (peer->handshake_params) {
+    if (peer->handshake_params->hs_state.read_epoch == epoch) {
+    	return dtls_security_params_epoch(peer, epoch);
+    }
+  } else if (peer->security_params[0] && peer->security_params[0]->epoch == epoch) {
+    return peer->security_params[0];
+  }
+  return NULL;
 }
 
 static inline dtls_security_parameters_t *dtls_security_params(dtls_peer_t *peer)

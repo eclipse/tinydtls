@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+ * Copyright (c) 2011-2019 Olaf Bergmann (TZI) and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -25,13 +25,23 @@
 #ifdef WITH_CONTIKI
 #include "ip/uip.h"
 typedef struct {
-  unsigned char size;
-  uip_ipaddr_t addr;
-  unsigned short port;
-  int ifindex;
+  unsigned char size;     /**< size of session_t::addr */
+  uip_ipaddr_t addr;      /**< session IP address */
+  unsigned short port;    /**< transport layer port */
+  int ifindex;            /**< network interface index */
 } session_t;
-
-#else /* WITH_CONTIKI */
+ /* TODO: Add support for RIOT over sockets  */
+#elif defined(WITH_RIOT_SOCK)
+#include "net/ipv6/addr.h"
+typedef struct {
+  unsigned char size;     /**< size of session_t::addr */
+  struct {
+    unsigned short port;  /**< transport layer port */
+    ipv6_addr_t addr6;    /**< IPv6 address */
+  } addr;                 /**< session IP address and port */
+  int ifindex;            /**< network interface index */
+} session_t;
+#else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -45,9 +55,9 @@ typedef struct {
     struct sockaddr_in  sin;
     struct sockaddr_in6 sin6;
   } addr;
-  uint8_t ifindex;
+  int ifindex;
 } session_t;
-#endif /* WITH_CONTIKI */
+#endif /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
 /** 
  * Resets the given session_t object @p sess to its default
@@ -57,6 +67,35 @@ typedef struct {
  * @param sess The session_t object to initialize.
  */
 void dtls_session_init(session_t *sess);
+
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+/**
+ * Creates a new ::session_t for the given address.
+ *
+ * @param addr Address which should be stored in the ::session_t.
+ * @param addrlen Length of the @p addr.
+ * @return The new session or @c NULL on error.
+ */
+session_t* dtls_new_session(struct sockaddr *addr, socklen_t addrlen);
+
+/**
+ * Frees memory allocated for a session using ::dtls_new_session.
+ *
+ * @param sess Pointer to a session for which allocated memory should be
+ *     freed.
+ */
+void dtls_free_session(session_t *sess);
+
+/**
+ * Extracts the address of the given ::session_t.
+ *
+ * @param sess Session to extract address for.
+ * @param addrlen Pointer to memory location where the address
+ *     length should be stored.
+ * @return The address or @c NULL if @p sess was @c NULL.
+ */
+struct sockaddr* dtls_session_addr(session_t *sess, socklen_t *addrlen);
+#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
 
 /**
  * Compares the given session objects. This function returns @c 0

@@ -10,7 +10,9 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 #include <netdb.h>
 #include <signal.h>
 
@@ -19,6 +21,8 @@
 #include "dtls_debug.h"
 
 #define DEFAULT_PORT 20220
+
+static dtls_context_t *the_context = NULL;
 
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
@@ -63,13 +67,15 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
     { (unsigned char *)"\0", 2,
       (unsigned char *)"", 1 }
   };
+  (void)ctx;
+  (void)session;
 
   if (type != DTLS_PSK_KEY) {
     return 0;
   }
 
   if (id) {
-    int i;
+    size_t i;
     for (i = 0; i < sizeof(psk)/sizeof(struct keymap_t); i++) {
       if (id_len == psk[i].id_length && memcmp(id, psk[i].id, id_len) == 0) {
 	if (result_length < psk[i].key_length) {
@@ -99,6 +105,8 @@ get_ecdsa_key(struct dtls_context_t *ctx,
     .pub_key_x = ecdsa_pub_key_x,
     .pub_key_y = ecdsa_pub_key_y
   };
+  (void)ctx;
+  (void)session;
 
   *result = &ecdsa_key;
   return 0;
@@ -110,6 +118,11 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const unsigned char *other_pub_x,
 		 const unsigned char *other_pub_y,
 		 size_t key_size) {
+  (void)ctx;
+  (void)session;
+  (void)other_pub_x;
+  (void)other_pub_y;
+  (void)key_size;
   return 0;
 }
 #endif /* DTLS_ECC */
@@ -120,9 +133,8 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
-  size_t i;
-  for (i = 0; i < len; i++)
-    printf("%c", data[i]);
+  if (write(STDOUT_FILENO, data, len) == -1)
+    dtls_debug("write failed: %s\n", strerror(errno));
   if (len >= strlen(DTLS_SERVER_CMD_CLOSE) &&
       !memcmp(data, DTLS_SERVER_CMD_CLOSE, strlen(DTLS_SERVER_CMD_CLOSE))) {
     printf("server: closing connection\n");
@@ -169,13 +181,20 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   } else {
     dtls_debug("got %d bytes from port %d\n", len, 
 	     ntohs(session.addr.sin6.sin6_port));
-    if (sizeof(buf) < len) {
-      dtls_warn("packet was truncated (%d bytes lost)\n", len - sizeof(buf));
+    if (sizeof(buf) < (size_t)len) {
+      dtls_warn("packet was truncated (%ld bytes lost)\n", len - sizeof(buf));
     }
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
 }    
+
+static void dtls_handle_signal(int sig)
+{
+  dtls_free_context(the_context);
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
 
 static int
 resolve_address(const char *server, struct sockaddr *dst) {
@@ -183,7 +202,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
   struct addrinfo *res, *ainfo;
   struct addrinfo hints;
   static char addrstr[256];
-  int error;
+  int error, len=-1;
 
   memset(addrstr, 0, sizeof(addrstr));
   if (server && strlen(server) > 0)
@@ -195,7 +214,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
   hints.ai_socktype = SOCK_DGRAM;
   hints.ai_family = AF_UNSPEC;
 
-  error = getaddrinfo(addrstr, "", &hints, &res);
+  error = getaddrinfo(addrstr, NULL, &hints, &res);
 
   if (error != 0) {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(error));
@@ -203,19 +222,20 @@ resolve_address(const char *server, struct sockaddr *dst) {
   }
 
   for (ainfo = res; ainfo != NULL; ainfo = ainfo->ai_next) {
-
     switch (ainfo->ai_family) {
     case AF_INET6:
-
-      memcpy(dst, ainfo->ai_addr, ainfo->ai_addrlen);
-      return ainfo->ai_addrlen;
+    case AF_INET:
+      len = (int)ainfo->ai_addrlen;
+      memcpy(dst, ainfo->ai_addr, len);
+      goto finish;
     default:
       ;
     }
   }
 
+finish:
   freeaddrinfo(res);
-  return -1;
+  return len;
 }
 
 static void
@@ -250,13 +270,15 @@ static dtls_handler_t cb = {
 
 int 
 main(int argc, char **argv) {
-  dtls_context_t *the_context = NULL;
   log_t log_level = DTLS_LOG_WARN;
   fd_set rfds, wfds;
   struct timeval timeout;
   int fd, opt, result;
   int on = 1;
+  int off = 0;
   struct sockaddr_in6 listen_addr;
+  struct sigaction sa;
+  uint16_t port = htons(DEFAULT_PORT);
 
   memset(&listen_addr, 0, sizeof(struct sockaddr_in6));
 
@@ -266,7 +288,6 @@ main(int argc, char **argv) {
 #endif
 
   listen_addr.sin6_family = AF_INET6;
-  listen_addr.sin6_port = htons(DEFAULT_PORT);
   listen_addr.sin6_addr = in6addr_any;
 
   while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
@@ -278,7 +299,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      listen_addr.sin6_port = htons(atoi(optarg));
+      port = htons(atoi(optarg));
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
@@ -288,6 +309,7 @@ main(int argc, char **argv) {
       exit(1);
     }
   }
+  listen_addr.sin6_port = port;
 
   dtls_set_log_level(log_level);
 
@@ -310,20 +332,40 @@ main(int argc, char **argv) {
   }
 #endif
   on = 1;
+  if (listen_addr.sin6_family == AF_INET6) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off)) < 0) {
+      dtls_alert("setsockopt IPV6_V6ONLY: %s\n", strerror(errno));
+    }
 #ifdef IPV6_RECVPKTINFO
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
 #else /* IPV6_RECVPKTINFO */
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+      dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+  if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on)) < 0) {
+    dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
   }
 
-  if (bind(fd, (struct sockaddr *)&listen_addr, sizeof(listen_addr)) < 0) {
+  if (bind(fd, (struct sockaddr *)&listen_addr,
+           listen_addr.sin6_family == AF_INET ? sizeof(struct sockaddr_in) :
+                                                sizeof(listen_addr)) < 0) {
     dtls_alert("bind: %s\n", strerror(errno));
     goto error;
   }
 
   dtls_init();
+
+  memset (&sa, 0, sizeof(sa));
+  sigemptyset(&sa.sa_mask);
+  sa.sa_handler = dtls_handle_signal;
+  sa.sa_flags = 0;
+  sigaction (SIGINT, &sa, NULL);
+  sigaction (SIGTERM, &sa, NULL);
+  /* So we do not exit on a SIGPIPE */
+  sa.sa_handler = SIG_IGN;
+  sigaction (SIGPIPE, &sa, NULL);
 
   the_context = dtls_new_context(&fd);
 

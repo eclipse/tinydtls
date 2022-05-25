@@ -1,6 +1,6 @@
 # Makefile for tinydtls
 #
-# Copyright (c) 2011, 2012, 2013, 2014, 2015 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2020 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -38,10 +38,11 @@ else
 ECC_OBJECTS:= $(patsubst %.c, %.o, $(ECC_SOURCES)) ecc_test.o
 PROGRAMS:= testecc testfield
 CPPFLAGS=@CPPFLAGS@
-CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ -DTEST_INCLUDE
+CFLAGS=-Wall -std=c99 -pedantic @CFLAGS@ @WARNING_CFLAGS@ -DTEST_INCLUDE
+LDFLAGS=@LDFLAGS@
 LDLIBS=@LIBS@
 
-.PHONY: all dirs clean install distclean .gitignore doc
+.PHONY: all dirs clean install distclean .gitignore doc uninstall
 
 .SUFFIXES:
 .SUFFIXES:      .c .o
@@ -75,8 +76,14 @@ dist:	$(FILES)
 	cp -p $(FILES) $(DISTDIR)/ecc
 
 install:	$(ECC_HEADERS)
-	test -d $(includedir)/ecc || mkdir -p $(includedir)/ecc
-	$(install) $(ECC_HEADERS) $(includedir)/ecc
+	test -d $(DESTDIR)$(includedir)/ecc || mkdir -p $(DESTDIR)$(includedir)/ecc
+	$(install) $(ECC_HEADERS) $(DESTDIR)$(includedir)/ecc
+
+uninstall:
+	for file in $(ECC_HEADERS); do \
+		if test -f $(DESTDIR)$(includedir)/ecc/$$file ; then $(RM) $(DESTDIR)$(includedir)/ecc/$$file ; fi ;\
+	done
+	if test -d $(DESTDIR)$(includedir)/ecc ; then $(RMDIR) $(DESTDIR)$(includedir)/ecc ; fi
 
 .gitignore:
 	echo "core\n*~\n*.[oa]\n*.gz\n*.cap\n$(PROGRAM)\n$(DISTDIR)\n.gitignore" >$@

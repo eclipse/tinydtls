@@ -27,20 +27,20 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 # files and flags
-SOURCES:= dtls-server.c ccm-test.c prf-test.c \
+SOURCES:= dtls-server.c ccm-test.c \
   dtls-client.c
   #cbc_aes128-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
 HEADERS:=
-CFLAGS:=-Wall @CFLAGS@ 
+CFLAGS:=-Wall -std=c99 @CFLAGS@ @WARNING_CFLAGS@ -D_GNU_SOURCE
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
-LDFLAGS:=-L$(top_builddir) 
-LDLIBS:=-ltinydtls @LIBS@
+LDFLAGS:=-L$(top_builddir) @LDFLAGS@
+LDLIBS:=$(top_srcdir)/libtinydtls.a @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
 FILES:=Makefile.in $(SOURCES) ccm-testdata.c #cbc_aes128-testdata.c
 
-.PHONY: all dirs clean distclean .gitignore doc
+.PHONY: all dirs clean distclean .gitignore doc install uninstall
 
 .SUFFIXES:
 .SUFFIXES:      .c .o
@@ -70,6 +70,9 @@ dist:	$(FILES)
 
 # this directory contains no installation candidates
 install:
+	:
+
+uninstall:
 	:
 
 .gitignore:

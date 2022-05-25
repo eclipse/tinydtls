@@ -62,5 +62,8 @@ void	 rijndael_encrypt(rijndael_ctx *, const u_char *, u_char *);
 int	rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int keyBits);
 int	rijndaelKeySetupDec(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int keyBits);
 void	rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16], aes_u8 ct[16]);
+#ifdef WITH_AES_DECRYPT
+void	rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16], aes_u8 pt[16]);
+#endif
 
 #endif /* __RIJNDAEL_H */

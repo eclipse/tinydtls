@@ -139,7 +139,7 @@ char* dtls_sha256_data(const uint8_t*, size_t, char[DTLS_SHA256_DIGEST_STRING_LE
 #ifdef WITH_SHA384
 void dtls_sha384_init(dtls_sha384_ctx*);
 void dtls_sha384_update(dtls_sha384_ctx*, const uint8_t*, size_t);
-void dtls_sha384_final(uint8_t[DTLS_SHA384_DIGEST_LENGTH], SHA384_CTX*);
+void dtls_sha384_final(uint8_t[DTLS_SHA384_DIGEST_LENGTH], dtls_sha384_ctx*);
 char* dtls_sha384_end(dtls_sha384_ctx*, char[DTLS_SHA384_DIGEST_STRING_LENGTH]);
 char* dtls_sha384_data(const uint8_t*, size_t, char[DTLS_SHA384_DIGEST_STRING_LENGTH]);
 #endif

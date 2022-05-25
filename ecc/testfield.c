@@ -101,12 +101,14 @@ static const uint32_t orderResultDoubleMod[8] = {0xFC63254F, 0xF3B9CAC2, 0xA7179
 uint32_t temp[8];
 uint32_t temp2[16];
 
-void nullEverything(){
+static void
+nullEverything(void){
 	memset(temp, 0, sizeof(temp));
 	memset(temp2, 0, sizeof(temp));
 }
 
-void fieldAddTest(){
+static void
+fieldAddTest(void){
 	assert(ecc_isSame(one, one, arrayLength));
 	ecc_fieldAdd(one, null, ecc_prime_r, temp);
 	assert(ecc_isSame(temp, one, arrayLength));
@@ -121,7 +123,8 @@ void fieldAddTest(){
 	assert(ecc_isSame(temp, resultFullAdd, arrayLength));
 }
 
-void fieldSubTest(){
+static void
+fieldSubTest(void){
 	assert(ecc_isSame(one, one, arrayLength));
 	ecc_fieldSub(one, null, ecc_prime_m, temp);
 	assert(ecc_isSame(one, temp, arrayLength));
@@ -133,7 +136,8 @@ void fieldSubTest(){
 	assert(ecc_isSame(primeMinusOne, temp, arrayLength));
 }
 
-void fieldMultTest(){
+static void
+fieldMultTest(void){
 	ecc_fieldMult(one, null, temp2, arrayLength);
 	assert(ecc_isSame(temp2, null64, arrayLength * 2));
 	nullEverything();
@@ -152,7 +156,8 @@ void fieldMultTest(){
 	assert(ecc_isSame(temp, one, arrayLength));
 }
 
-void fieldModPTest(){
+static void
+fieldModPTest(void){
 	ecc_fieldMult(primeMinusOne, primeMinusOne, temp2, arrayLength);
 	ecc_fieldModP(temp, temp2);
 	assert(ecc_isSame(temp, one, arrayLength));
@@ -169,7 +174,8 @@ void fieldModPTest(){
 	assert(ecc_isSame(temp, resultFullMod, arrayLength));*/
 }
 
-void fieldModOTest(){
+static void
+fieldModOTest(void){
 	ecc_fieldMult(orderMinusOne, orderMinusOne, temp2, arrayLength);
 	ecc_fieldModO(temp2, temp, arrayLength * 2);
 	assert(ecc_isSame(temp, one, arrayLength));
@@ -184,7 +190,8 @@ void fieldModOTest(){
 }
 
 
-// void rShiftTest(){
+// static void
+// rShiftTest(void){
 // 	printNumber(full, 32);
 // 	rshift(full);
 // 	printNumber(full, 32);
@@ -196,7 +203,8 @@ void fieldModOTest(){
 // 	printNumber(four, 32);
 // }
 
-// void isOneTest(){
+// static void
+// isOneTest(void){
 // 	printf("%d\n", isone(one));
 // 	printf("%d\n", isone(two));
 // 	printf("%d\n", isone(four));
@@ -204,7 +212,8 @@ void fieldModOTest(){
 // 	printf("%d\n", isone(null));
 // }
 
-void fieldInvTest(){
+static void
+fieldInvTest(void){
 	nullEverything();
 	ecc_fieldInv(two, ecc_prime_m, ecc_prime_r, temp);
 	ecc_fieldMult(temp, two, temp2, arrayLength);
@@ -232,7 +241,8 @@ void fieldInvTest(){
 	assert(ecc_isSame(one, temp, arrayLength));
 }
 
-// void randomStuff(){
+// static void
+// randomStuff(void){
 
 // }
 
@@ -267,6 +277,9 @@ PROCESS_THREAD(ecc_field_test, ev, d)
 #else /* CONTIKI */
 int main(int argc, char const *argv[])
 {
+	(void)argc;
+	(void)argv;
+
 	nullEverything();
 	//randomStuff();
 	nullEverything();

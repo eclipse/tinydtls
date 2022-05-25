@@ -11,7 +11,10 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
+
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <signal.h>
@@ -31,9 +34,6 @@
 #else
 #define UNUSED_PARAM
 #endif /* __GNUC__ */
-
-static char buf[200];
-static size_t len = 0;
 
 typedef struct {
   size_t length;               /* length of string */
@@ -67,7 +67,7 @@ static const unsigned char ecdsa_pub_key_y[] = {
 #endif /* DTLS_ECC */
 
 #ifdef DTLS_PSK
-ssize_t
+static ssize_t
 read_from_file(char *arg, unsigned char *buf, size_t max_buf_len) {
   FILE *f;
   ssize_t result = 0;
@@ -114,7 +114,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
   switch (type) {
   case DTLS_PSK_IDENTITY:
     if (id_len) {
-      dtls_debug("got psk_identity_hint: '%.*s'\n", id_len, id);
+      dtls_debug("got psk_identity_hint: '%.*s'\n", (int)id_len, id);
     }
 
     if (result_length < psk_id_length) {
@@ -136,7 +136,6 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     memcpy(result, psk_key, psk_key_length);
     return psk_key_length;
   case DTLS_PSK_HINT:
-    return 0;
   default:
     dtls_warn("unsupported request type: %d\n", type);
   }
@@ -156,6 +155,8 @@ get_ecdsa_key(struct dtls_context_t *ctx,
     .pub_key_x = ecdsa_pub_key_x,
     .pub_key_y = ecdsa_pub_key_y
   };
+  (void)ctx;
+  (void)session;
 
   *result = &ecdsa_key;
   return 0;
@@ -167,12 +168,17 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 const unsigned char *other_pub_x,
 		 const unsigned char *other_pub_y,
 		 size_t key_size) {
+  (void)ctx;
+  (void)session;
+  (void)other_pub_x;
+  (void)other_pub_y;
+  (void)key_size;
   return 0;
 }
 #endif /* DTLS_ECC */
 
 static void
-try_send(struct dtls_context_t *ctx, session_t *dst) {
+try_send(struct dtls_context_t *ctx, session_t *dst, size_t len, char *buf) {
   int res;
   res = dtls_write(ctx, dst, (uint8 *)buf, len);
   if (res >= 0) {
@@ -182,15 +188,18 @@ try_send(struct dtls_context_t *ctx, session_t *dst) {
 }
 
 static void
-handle_stdin() {
-  if (fgets(buf + len, sizeof(buf) - len, stdin))
-    len += strlen(buf + len);
+handle_stdin(size_t *len, char *buf) {
+  if (fgets(buf + *len, sizeof(buf) - *len, stdin))
+    *len += strlen(buf + *len);
 }
 
 static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
+  (void)ctx;
+  (void)session;
+
   for (i = 0; i < len; i++)
     printf("%c", data[i]);
   return 0;
@@ -249,7 +258,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
   struct addrinfo *res, *ainfo;
   struct addrinfo hints;
   static char addrstr[256];
-  int error;
+  int error, result;
 
   memset(addrstr, 0, sizeof(addrstr));
   if (server && strlen(server) > 0)
@@ -261,28 +270,30 @@ resolve_address(const char *server, struct sockaddr *dst) {
   hints.ai_socktype = SOCK_DGRAM;
   hints.ai_family = AF_UNSPEC;
 
-  error = getaddrinfo(addrstr, "", &hints, &res);
+  error = getaddrinfo(addrstr, NULL, &hints, &res);
 
   if (error != 0) {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(error));
     return error;
   }
 
-  for (ainfo = res; ainfo != NULL; ainfo = ainfo->ai_next) {
+  result = -1;
+  for (ainfo = res; (result == -1) && (ainfo != NULL); ainfo = ainfo->ai_next) {
 
     switch (ainfo->ai_family) {
     case AF_INET6:
     case AF_INET:
 
       memcpy(dst, ainfo->ai_addr, ainfo->ai_addrlen);
-      return ainfo->ai_addrlen;
+      result = ainfo->ai_addrlen;
+      break;
     default:
       ;
     }
   }
 
   freeaddrinfo(res);
-  return -1;
+  return result;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -341,10 +352,14 @@ main(int argc, char **argv) {
   unsigned short port = DEFAULT_PORT;
   char port_str[NI_MAXSERV] = "0";
   log_t log_level = DTLS_LOG_WARN;
-  int fd, result;
+  int fd;
+  ssize_t result;
   int on = 1;
   int opt, res;
   session_t dst;
+  char buf[200];
+  size_t len = 0;
+
 
   dtls_init();
   snprintf(port_str, sizeof(port_str), "%d", port);
@@ -359,24 +374,22 @@ main(int argc, char **argv) {
   while ((opt = getopt(argc, argv, "p:o:v:" PSK_OPTIONS)) != -1) {
     switch (opt) {
 #ifdef DTLS_PSK
-    case 'i' : {
-      ssize_t result = read_from_file(optarg, psk_id, PSK_ID_MAXLEN);
+    case 'i' :
+      result = read_from_file(optarg, psk_id, PSK_ID_MAXLEN);
       if (result < 0) {
 	dtls_warn("cannot read PSK identity\n");
       } else {
 	psk_id_length = result;
       }
       break;
-    }
-    case 'k' : {
-      ssize_t result = read_from_file(optarg, psk_key, PSK_MAXLEN);
+    case 'k' :
+      result = read_from_file(optarg, psk_key, PSK_MAXLEN);
       if (result < 0) {
 	dtls_warn("cannot read PSK\n");
       } else {
 	psk_key_length = result;
       }
       break;
-    }
 #endif /* DTLS_PSK */
     case 'p' :
       strncpy(port_str, optarg, NI_MAXSERV-1);
@@ -443,12 +456,19 @@ main(int argc, char **argv) {
   }
 #endif
   on = 1;
+  if (dst.addr.sa.sa_family == AF_INET6) {
 #ifdef IPV6_RECVPKTINFO
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on) ) < 0) {
 #else /* IPV6_RECVPKTINFO */
-  if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
+    if (setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on) ) < 0) {
 #endif /* IPV6_RECVPKTINFO */
-    dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+      dtls_alert("setsockopt IPV6_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+  else {
+    if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on) ) < 0) {
+      dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
+    }
   }
 
   if (signal(SIGINT, dtls_handle_signal) == SIG_ERR) {
@@ -489,7 +509,7 @@ main(int argc, char **argv) {
       else if (FD_ISSET(fd, &rfds))
 	dtls_handle_read(dtls_context);
       else if (FD_ISSET(fileno(stdin), &rfds))
-	handle_stdin();
+	handle_stdin(&len, buf);
     }
 
     if (len) {
@@ -522,7 +542,7 @@ main(int argc, char **argv) {
 	}
 	len = 0;
       } else {
-	try_send(dtls_context, &dst);
+	try_send(dtls_context, &dst, len, buf);
       }
     }
   }

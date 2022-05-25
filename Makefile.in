@@ -1,7 +1,7 @@
 # Makefile for tinydtls
 #
 #
-# Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Olaf Bergmann (TZI) and others.
+# Copyright (c) 2011-2021 Olaf Bergmann (TZI) and others.
 # All rights reserved. This program and the accompanying materials
 # are made available under the terms of the Eclipse Public License v1.0
 # and Eclipse Distribution License v. 1.0 which accompanies this distribution.
@@ -12,6 +12,7 @@
 #
 # Contributors:
 #    Olaf Bergmann  - initial API and implementation
+#    Hugo Damer     - support for pkg-config
 #
 
 # the library's version
@@ -36,38 +37,47 @@ includedir = @includedir@/@PACKAGE_NAME@
 package = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 
 install := cp
+RMDIR?=rmdir
 
 # files and flags
-SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c dtls_debug.c
-SUB_OBJECTS:=aes/rijndael.o @OPT_OBJS@
+SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c dtls_debug.c dtls_prng.c
+SUB_OBJECTS:=aes/rijndael.o aes/rijndael_wrap.o @OPT_OBJS@
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES)) $(SUB_OBJECTS)
 HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h global.h ccm.h \
- netq.h alert.h utlist.h prng.h peer.h state.h dtls_time.h session.h \
- tinydtls.h
-CFLAGS:=-Wall -pedantic -std=c99 @CFLAGS@ @WARNING_CFLAGS@
+ netq.h alert.h utlist.h dtls_prng.h peer.h state.h dtls_time.h session.h \
+ tinydtls.h dtls_mutex.h
+PKG_CONFIG_FILES:=tinydtls.pc
+CFLAGS:=-Wall -pedantic -std=c99 -DSHA2_USE_INTTYPES_H @CFLAGS@ @WARNING_CFLAGS@
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE -I$(top_srcdir)
-SUBDIRS:=tests doc platform-specific sha2 aes ecc
+SUBDIRS:=tests tests/unit-tests doc platform-specific sha2 aes ecc
 DISTSUBDIRS:=$(SUBDIRS)
 DISTDIR=$(top_builddir)/$(package)
-FILES:=Makefile.in configure configure.in dtls_config.h.in tinydtls.h.in \
+FILES:=Makefile.in configure configure.ac dtls_config.h.in \
   Makefile.tinydtls $(SOURCES) $(HEADERS)
-LIB:=libtinydtls.a
-LDFLAGS:=@LIBS@
+LIB:=libtinydtls
+LIBS:=$(LIB).a
+ifeq ("@ENABLE_SHARED@", "1")
+LIBS:=$(LIBS) $(LIB).so
+endif
+LDFLAGS:=@LDFLAGS@ @LIBS@
 ARFLAGS:=cru
 doc:=doc
 
-.PHONY: all dirs clean install dist distclean .gitignore doc TAGS
+.PHONY: all dirs clean install dist distclean .gitignore doc TAGS uninstall
 
 ifneq ("@WITH_CONTIKI@", "1")
 .SUFFIXES:
 .SUFFIXES:      .c .o
 
-all:	$(LIB) dirs
+all:	$(LIBS) dirs
 
-check:	
+check:	tests
 	echo DISTDIR: $(DISTDIR)
 	echo top_builddir: $(top_builddir)
 	$(MAKE) -C tests check
+
+tests: $(LIBS)
+	$(MAKE) -C tests
 
 dirs:	$(SUBDIRS)
 	for dir in $^; do \
@@ -77,12 +87,15 @@ dirs:	$(SUBDIRS)
 $(SUB_OBJECTS)::
 	$(MAKE) -C $(@D) $(@F)
 
-$(LIB):	$(OBJECTS)
+$(LIB).so: $(OBJECTS)
+	$(LINK.c) $(LDFLAGS) -shared $^ -o $@
+
+$(LIB).a: $(OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^ 
 	$(RANLIB) $@
 
 clean:
-	@rm -f $(PROGRAM) main.o $(LIB) $(OBJECTS)
+	@rm -f $(PROGRAM) main.o $(LIBS) $(OBJECTS)
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean ; \
 	done
@@ -103,14 +116,27 @@ dist:	$(FILES) $(DISTSUBDIRS)
 	done
 	tar czf $(package).tar.gz $(DISTDIR)
 
-install:	$(LIB) $(HEADERS) $(SUBDIRS)
-	test -d $(libdir) || mkdir -p $(libdir)
-	test -d $(includedir) || mkdir -p $(includedir)
-	$(install) $(LIB) $(libdir)/
-	$(install) $(HEADERS) $(includedir)/
+install:	$(LIBS) $(HEADERS) $(SUBDIRS)
+	test -d $(DESTDIR)$(libdir)/pkgconfig/ || mkdir -p $(DESTDIR)$(libdir)/pkgconfig
+	test -d $(DESTDIR)$(includedir) || mkdir -p $(DESTDIR)$(includedir)
+	$(install) $(LIBS) $(DESTDIR)$(libdir)/
+	$(install) $(HEADERS) $(DESTDIR)$(includedir)/
+	$(install) $(PKG_CONFIG_FILES) $(DESTDIR)$(libdir)/pkgconfig/
 	for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) install; \
 	done
+
+uninstall:
+	for file in $(LIBS); do \
+		if test -f $(DESTDIR)$(libdir)/$$file ; then $(RM) $(DESTDIR)$(libdir)/$$file ; fi ;\
+	done
+	for file in $(HEADERS); do \
+		if test -f $(DESTDIR)$(includedir)/$$file ; then $(RM) $(DESTDIR)$(includedir)/$$file ; fi ;\
+	done
+	for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir install="$(install)" includedir=$(includedir) RMDIR=$(RMDIR) uninstall; \
+	done
+	if test -d $(DESTDIR)$(includedir) ; then $(RMDIR) $(DESTDIR)$(includedir) ; fi
 
 TAGS:	
 	$(ETAGS) -o $@.new $(SOURCES) 
@@ -120,8 +146,8 @@ TAGS:
 # files that should be ignored by git
 GITIGNOREDS:= core \*~ \*.[oa] \*.gz \*.cap \*.pcap Makefile \
  autom4te.cache/ config.h config.log config.status configure \
- doc/Doxyfile doc/doxygen.out doc/html/ $(LIB) tests/ccm-test \
- tests/dtls-client tests/dtls-server tests/prf-test $(package) \
+ doc/Doxyfile doc/doxygen.out doc/html/ $(LIBS) tests/ccm-test \
+ tests/dtls-client tests/dtls-server $(package) \
  $(DISTDIR)/ TAGS \*.patch .gitignore ecc/testecc ecc/testfield \
  \*.d \*.hex \*.elf \*.map obj_\* tinydtls.h dtls_config.h \
  $(addprefix \*., $(notdir $(wildcard ../../platform/*))) \
