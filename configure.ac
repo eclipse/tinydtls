@@ -34,7 +34,7 @@ m4_ifdef([AM_PROG_AR], [AM_PROG_AR], [AR=ar])
 
 AC_C_BIGENDIAN
 
-CFLAGS="-fPIC"
+CFLAGS="${CFLAGS} -fPIC"
 
 # Adding some default warning options for code QS
 # see https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
