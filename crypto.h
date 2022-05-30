@@ -49,6 +49,8 @@
 #define DTLS_MASTER_SECRET_LENGTH 48
 #define DTLS_RANDOM_LENGTH 32
 
+#define DTLS_CIPHER_INDEX_NULL 0
+
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
@@ -105,7 +107,7 @@ typedef struct {
 typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
-  dtls_cipher_t cipher;		/**< cipher type */
+  int cipher_index;	     /**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
   uint16_t epoch;	     /**< counter for cipher state changes*/
   uint64_t rseq;	     /**< sequence number of last record sent */
 
@@ -135,7 +137,7 @@ typedef struct {
   dtls_hs_state_t hs_state;  /**< handshake protocol status */
 
   dtls_compression_t compression;		/**< compression method */
-  dtls_cipher_t cipher;		/**< cipher type */
+  int cipher_index;		/**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   union {
