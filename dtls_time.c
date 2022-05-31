@@ -43,12 +43,12 @@ dtls_tick_t dtls_clock_offset;
 
 void
 dtls_clock_init(void) {
-  dtls_clock_offset = xtimer_now64().ticks64;
+  dtls_clock_offset = ztimer_now(ZTIMER_MSEC);
 }
 
 void
 dtls_ticks(dtls_tick_t *t) {
-  *t = xtimer_now64().ticks64 -dtls_clock_offset;
+  *t = ztimer_now(ZTIMER_MSEC) - dtls_clock_offset;
 }
 
 #endif /* RIOT_VERSION */
