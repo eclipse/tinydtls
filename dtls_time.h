@@ -42,15 +42,16 @@
 
 #elif defined(RIOT_VERSION)
 
-#include <xtimer.h>
+#include "ztimer.h"
+#include "timex.h"
 
 /* this macro is already present on FreeBSD
    which causes a redefine error otherwise */
 #ifndef CLOCK_SECOND
-#define CLOCK_SECOND (xtimer_ticks_from_usec64(1000000UL).ticks64)
+#define CLOCK_SECOND (MS_PER_SEC)
 #endif
 
-typedef uint64_t clock_time_t;
+typedef uint32_t clock_time_t;
 
 #else /* WITH_CONTIKI || RIOT_VERSION */
 
