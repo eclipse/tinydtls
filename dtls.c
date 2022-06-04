@@ -4168,11 +4168,14 @@ handle_ccs(dtls_context_t *ctx, dtls_peer_t *peer,
 /**
  * Handles incoming Alert messages. This function returns \c 1 if the
  * connection should be closed and the peer is to be invalidated.
+ * \c 0 if the Alert is valid, but not closing the connection.
+ * Less than \c 0 if the Alert could not be decoded.
  */
 static int
 handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 	     uint8 *record_header, uint8 *data, size_t data_length) {
   int free_peer = 0;		/* indicates whether to free peer */
+  int close_notify = 0;
   (void)record_header;
 
   assert(peer);
@@ -4188,8 +4191,9 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
    * invoked with the still existing peer object. Finally, the storage
    * used by peer is released.
    */
-  if (data[0] == DTLS_ALERT_LEVEL_FATAL || data[1] == DTLS_ALERT_CLOSE_NOTIFY) {
-    if (data[1] == DTLS_ALERT_CLOSE_NOTIFY)
+  close_notify = data[1] == DTLS_ALERT_CLOSE_NOTIFY;
+  if (data[0] == DTLS_ALERT_LEVEL_FATAL || close_notify) {
+    if (close_notify)
       dtls_info("invalidate peer (Close Notify)\n");
     else
       dtls_alert("%d invalidate peer\n", data[1]);
@@ -4210,8 +4214,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
 
   (void)CALL(ctx, event, &peer->session,
 	     (dtls_alert_level_t)data[0], (unsigned short)data[1]);
-  switch (data[1]) {
-  case DTLS_ALERT_CLOSE_NOTIFY:
+  if (close_notify) {
     /* If state is DTLS_STATE_CLOSING, we have already sent a
      * close_notify so, do not send that again. */
     if (peer->state != DTLS_STATE_CLOSING) {
@@ -4220,9 +4223,6 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
                       DTLS_ALERT_CLOSE_NOTIFY);
     } else
       peer->state = DTLS_STATE_CLOSED;
-    break;
-  default:
-    ;
   }
 
   if (free_peer) {
@@ -4432,19 +4432,25 @@ dtls_handle_message(dtls_context_t *ctx,
 
     case DTLS_CT_ALERT:
       if (peer->state == DTLS_STATE_WAIT_FINISHED) {
-          dtls_info("** drop alert before Finish.\n");
-          return 0;
+        dtls_info("** drop alert before Finish.\n");
+        return 0;
       }
-      dtls_stop_retransmission(ctx, peer);
       err = handle_alert(ctx, peer, msg, data, data_length);
-      if (err < 0 || err == 1) {
-         if (data[1] == DTLS_ALERT_CLOSE_NOTIFY)
-            dtls_info("received alert, peer has been invalidated\n");
-         else
-           dtls_warn("received alert, peer has been invalidated\n");
-         /* handle alert has invalidated peer */
-         peer = NULL;
-         return err < 0 ?err:-1;
+      if (err < 0) {
+        /* Alert could not be decoded, ignore it */
+        dtls_info("** drop alert, decode error.\n");
+        return err;
+      }
+      if (err == 1) {
+        if (data[1] == DTLS_ALERT_CLOSE_NOTIFY)
+          dtls_info("received close_notify alert, peer has been invalidated\n");
+        else
+          dtls_warn("received fatal alert, peer has been invalidated\n");
+        /* handle alert has invalidated peer */
+        peer = NULL;
+        err = -1;
+      } else {
+        dtls_stop_retransmission(ctx, peer);
       }
       break;
 
