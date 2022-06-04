@@ -3635,6 +3635,9 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
 #endif /* DTLS_ECC */
 
   case DTLS_HT_SERVER_KEY_EXCHANGE:
+    if (state != DTLS_STATE_WAIT_SERVERKEYEXCHANGE && state != DTLS_STATE_WAIT_SERVERHELLODONE) {
+      return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
+    }
 
 #ifdef DTLS_ECC
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher)) {
