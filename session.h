@@ -32,14 +32,23 @@ typedef struct {
 } session_t;
  /* TODO: Add support for RIOT over sockets  */
 #elif defined(WITH_RIOT_SOCK)
+#include "net/ipv4/addr.h"
 #include "net/ipv6/addr.h"
 typedef struct {
-  unsigned char size;     /**< size of session_t::addr */
+  unsigned char size;       /**< size of session_t::addr */
   struct {
-    unsigned short port;  /**< transport layer port */
-    ipv6_addr_t addr6;    /**< IPv6 address */
-  } addr;                 /**< session IP address and port */
-  int ifindex;            /**< network interface index */
+    unsigned short family;  /**< IP address family */
+    unsigned short port;    /**< transport layer port */
+    union {
+#ifdef SOCK_HAS_IPV4
+      ipv4_addr_t ipv4;     /**< IPv4 address */
+#endif
+#ifdef SOCK_HAS_IPV6
+      ipv6_addr_t ipv6;     /**< IPv6 address */
+#endif
+    };
+  } addr;                   /**< session IP address and port */
+  int ifindex;              /**< network interface index */
 } session_t;
 #else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
 
