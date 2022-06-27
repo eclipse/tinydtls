@@ -6,23 +6,35 @@ Thanks for your interest in this project.
 Project description:
 --------------------
 
-tinydtls is a library for Datagram Transport Layer Security (DTLS) covering both the client and the server state machine. It is implemented in C and provides support for the mandatory cipher suites specified in CoAP.
+tinydtls is a library for Datagram Transport Layer Security (DTLS) covering
+both the client and the server state machine. It is implemented in C and
+provides support for the mandatory cipher suites specified in CoAP.
 
 - https://projects.eclipse.org/projects/iot.tinydtls
 
 Developer resources:
 --------------------
 
-Information regarding source code management, builds, coding standards, and more.
+Information regarding source code management, builds, and more.
 
 - https://projects.eclipse.org/projects/iot.tinydtls/developer
 
-Contributor License Agreement:
-------------------------------
+Eclipse Contributor Agreement
+-----------------------------
 
-Before your contribution can be accepted by the project, you need to create and electronically sign the Eclipse Foundation Contributor License Agreement (CLA).
+Before your contribution can be accepted by the project team contributors must
+electronically sign the Eclipse Contributor Agreement (ECA).
 
-- http://www.eclipse.org/legal/CLA.php
+* http://www.eclipse.org/legal/ECA.php
+
+Commits that are provided by non-committers must have a Signed-off-by field in
+the footer indicating that the author is aware of the terms by which the
+contribution has been provided to the project. The non-committer must
+additionally have an Eclipse Foundation account and must have a signed Eclipse
+Contributor Agreement (ECA) on file.
+
+For more information, please see the Eclipse Committer Handbook:
+https://www.eclipse.org/projects/handbook/#resources-commit
 
 Contact:
 --------
@@ -41,25 +53,46 @@ This project uses Bugzilla to track ongoing development and issues.
 Create a new bug:
 -----------------
 
-Be sure to search for existing bugs before you create another one. Remember 
-that contributions are always welcome!
+Be sure to search for existing bugs before you create another one.
+Remember that contributions are always welcome!
 
 - https://bugs.eclipse.org/bugs/enter_bug.cgi?product=tinydtls
 
-Submit Patches via Gerrit:
+Submit Patches via GitHub:
 --------------------------
 
 Patches must follow to the tinydtls coding style and must be submitted
-to [gerrit](https://git.eclipse.org/r/p/tinydtls/org.eclipse.tinydtls)
-for review. To submit a patch to gerrit, the author needs to have a
-CLA on file and must have a Signed-off-by entry with the same email
-address in the commit message footer.
-
-- https://www.eclipse.org/projects/handbook/#resources-source 
+as pull request at https://github.com/eclipse/tinydtls for review. To
+submit a patch, the author needs to have a Eclipse Contributor Agreement
+as explained above.
 
 Every new file must contain the Eclipse license information and the
 copyright holder(s). Please take a look into existing files and adopt
 the needed changes to your new file(s).
+
+Main and Develop:
+-----------------
+
+Please prepare all patches against the "main" branch.
+
+It may take sometimes a little longer for a pull request to be processed
+and merged to "main". Therefore some of the pending pull requests will be
+available on the "develop" branch as preview. If you want to test a specific
+pending pull request which is currently not on "develop", let us know by
+adding a comment to that pull request. If a pull request is cherry-picked
+to the "develop" branch, that doesn't grant that it is merged as-it-is.
+For house-keeping, it may in some cases be required to push the "develop"
+branch with "--force-with-lease" in order to adjust the branch for later
+changes in a pull request before it gets merged into "main" or if "develop"
+is rebased to "main".
+
+In some rare cases, it may be required to include another still pending pull
+request/commit into your pull request additionally. If that other pull request
+gets merged, please rebase then your pull request using the new "main".
+
+Currently (July 2022) this process change is in progress. Therefore some
+pull requests are merged into "develop" and will be included in "main"
+after the review finally completes.
 
 Tinydtls Coding style:
 ----------------------
@@ -69,8 +102,8 @@ Tinydtls Coding style:
   'if-else'. Don't use TABs any there! Avoid trailing white spaces at
   the end of a line.
 
-* Single lines within the source code should not be longer then 78
-  characters.
+* Single lines within the source code should not be longer than 72
+  characters and must not be longer than 80.
 
 * In the implementation (i.e., in files ending with '.c'), function
   identifiers start on the first column of a line. The function's
