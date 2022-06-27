@@ -153,14 +153,12 @@ dtls_handshake_parameters_t *dtls_handshake_new(void)
 
   memset(handshake, 0, sizeof(*handshake));
 
-  if (handshake) {
-    /* initialize the handshake hash wrt. the hard-coded DTLS version */
-    dtls_debug("DTLSv12: initialize HASH_SHA256\n");
-    /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
-    /* FIXME: we use the default SHA256 here, might need to support other 
-              hash functions as well */
-    dtls_hash_init(&handshake->hs_state.hs_hash);
-  }
+  /* initialize the handshake hash wrt. the hard-coded DTLS version */
+  dtls_debug("DTLSv12: initialize HASH_SHA256\n");
+  /* TLS 1.2:  PRF(secret, label, seed) = P_<hash>(secret, label + seed) */
+  /* FIXME: we use the default SHA256 here, might need to support other
+            hash functions as well */
+  dtls_hash_init(&handshake->hs_state.hs_hash);
   return handshake;
 }
 
@@ -185,10 +183,9 @@ dtls_security_parameters_t *dtls_security_new(void)
 
   memset(security, 0, sizeof(*security));
 
-  if (security) {
-    security->cipher = TLS_NULL_WITH_NULL_NULL;
-    security->compression = TLS_COMPRESSION_NULL;
-  }
+  security->cipher = TLS_NULL_WITH_NULL_NULL;
+  security->compression = TLS_COMPRESSION_NULL;
+
   return security;
 }
 
