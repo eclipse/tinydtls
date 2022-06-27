@@ -6,12 +6,12 @@
 #  information regarding copyright ownership.
 #
 #  This program and the accompanying materials are made available under the
-#  terms of the Eclipse Public License 2.0 
-#  which is available at http://www.eclipse.org/legal/epl-2.0
+#  terms of the Eclipse Public License 1.0 
+#  which is available at https://www.eclipse.org/legal/epl-v10.html
 #  and the Eclipse Distribution License v. 1.0
 #  available at http://www.eclipse.org/org/documents/edl-v10.php
 #
-#  SPDX-License-Identifier: EPL-2.0
+#  SPDX-License-Identifier: EPL-1.0
 #
 #  Contributors:
 #     Jimmy Björklund  - initial version
