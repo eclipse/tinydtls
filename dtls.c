@@ -62,6 +62,13 @@
 
 #define DTLS10_VERSION 0xfeff
 
+/* Flags for dtls_destroy_peer()
+ *
+ *  DTLS_DESTROY_CLOSE indicates that the connection should be closed
+ *                     when applicable
+ */
+#define DTLS_DESTROY_CLOSE 0x02
+
 #ifdef RIOT_VERSION
 # include <memarray.h>
 
@@ -1887,16 +1894,16 @@ dtls_close(dtls_context_t *ctx, const session_t *remote) {
   return res;
 }
 
-static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink)
-{
-  if (peer->state != DTLS_STATE_CLOSED && peer->state != DTLS_STATE_CLOSING) {
+static void
+dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int flags) {
+  if ((flags & DTLS_DESTROY_CLOSE) &&
+      (peer->state != DTLS_STATE_CLOSED) &&
+      (peer->state != DTLS_STATE_CLOSING)) {
     dtls_close(ctx, &peer->session);
   }
   dtls_stop_retransmission(ctx, peer);
-  if (unlink) {
-    DEL_PEER(ctx->peers, peer);
-    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "removed peer", &peer->session);
-  }
+  DEL_PEER(ctx->peers, peer);
+  dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "removed peer", &peer->session);
   dtls_free_peer(peer);
 }
 
@@ -4222,8 +4229,7 @@ handle_alert(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   if (free_peer) {
-    dtls_stop_retransmission(ctx, peer);
-    dtls_destroy_peer(ctx, peer, 1);
+    dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
   }
 
   return free_peer;
@@ -4408,7 +4414,7 @@ dtls_handle_message(dtls_context_t *ctx,
         dtls_alert_send_from_err(ctx, peer, err);
 
         /* invalidate peer */
-        dtls_destroy_peer(ctx, peer, 1);
+        dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
         peer = NULL;
 
         return err;
@@ -4444,7 +4450,7 @@ dtls_handle_message(dtls_context_t *ctx,
           /* invalidate peer */
           peer->state = DTLS_STATE_CLOSED;
           dtls_stop_retransmission(ctx, peer);
-          dtls_destroy_peer(ctx, peer, 1);
+          dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
           peer = NULL;
         }
         return err;
@@ -4516,8 +4522,7 @@ dtls_new_context(void *app_data) {
 
 void dtls_reset_peer(dtls_context_t *ctx, dtls_peer_t *peer)
 {
-    dtls_stop_retransmission(ctx, peer);
-    dtls_destroy_peer(ctx, peer, 1);
+  dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
 }
 
 void
@@ -4534,7 +4539,7 @@ dtls_free_context(dtls_context_t *ctx) {
 #else /* DTLS_PEERS_NOHASH */
     HASH_ITER(hh, ctx->peers, p, tmp) {
 #endif /* DTLS_PEERS_NOHASH */
-      dtls_destroy_peer(ctx, p, 1);
+      dtls_destroy_peer(ctx, p, DTLS_DESTROY_CLOSE);
     }
   }
 
