@@ -2005,11 +2005,9 @@ dtls_asn1_len(uint8 **data, size_t *data_len)
     (*data_len)--;
     if (octets && *data_len == 0)
       return (size_t)-1;
-    while (octets) {
+    while (octets > 0 && *data_len > 0) {
       len = (len << 8) + (**data);
       (*data)++;
-      if (*data_len == 0)
-        return (size_t)-1;
       (*data_len)--;
       octets--;
     }
