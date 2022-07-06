@@ -3892,9 +3892,7 @@ handle_0_verified_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephem
   dtls_peer_t *peer = dtls_get_peer(ctx, ephemeral_peer->session);
   if (peer) {
      dtls_debug("removing the peer, new handshake\n");
-     DEL_PEER(ctx->peers, peer);
-
-     dtls_free_peer(peer);
+     dtls_destroy_peer(ctx, peer, 0);
      peer = NULL;
   }
   dtls_debug("creating new peer\n");
@@ -3936,8 +3934,7 @@ handle_0_verified_client_hello(dtls_context_t *ctx, dtls_ephemeral_peer_t *ephem
 
   err = handle_verified_client_hello(ctx, peer, data, data_length);
   if (err < 0) {
-    DEL_PEER(ctx->peers, peer);
-    dtls_free_peer(peer);
+    dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
     return err;
   }
 
