@@ -46,7 +46,9 @@ Also, if you need a specific commit of tinyDTLS you can modify
 
 ## CMake
 
-The current cmake support is experimental. Don't hesitate to report issues and/or provided fixes for it. For general and more details on using CMake, please consider [CMake - help](https://cmake.org/cmake/help/latest/index.html).
+The current cmake support is experimental. Don't hesitate to report issues
+and/or provided fixes for it. For general and more details on using CMake,
+please consider [CMake - help](https://cmake.org/cmake/help/latest/index.html).
 
 Usage:
 
