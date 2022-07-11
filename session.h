@@ -57,11 +57,18 @@ typedef struct {
 #ifdef HAVE_NET_SOCKET_H
 #include <net/socket.h>
 #endif /* HAVE_NET_SOCKET_H */
-#else /* WITH_ZEPHYR */
+
+#elif defined(WITH_LWIP)
+#include "lwip/sockets.h"
+#undef write
+#undef read
+typedef unsigned char uint8_t;
+
+#else /* ! WITH_ZEPHYR && ! WITH_LWIP */
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif /* WITH_ZEPHYR */
+#endif /* ! WITH_ZEPHYR && ! WITH_LWIP */
 
 typedef struct {
   socklen_t size;		/**< size of addr */
