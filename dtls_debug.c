@@ -41,6 +41,7 @@ typedef int in_port_t;
 
 #include "global.h"
 #include "dtls_debug.h"
+#include "dtls_mutex.h"
 
 #ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
@@ -242,16 +243,11 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #endif /* NDEBUG */
 
 #if !defined(WITH_CONTIKI) && !defined(_MSC_VER)
-void
-dsrv_log(log_t level, const char *format, ...) {
+
+static void
+dtls_logging_handler(log_t level, const char *message) {
   static char timebuf[32];
-  va_list ap;
-  FILE *log_fd;
-
-  if (maxlog < (int) level)
-    return;
-
-  log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
+  FILE* log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
 
   if (print_timestamp(timebuf,sizeof(timebuf), time(NULL)))
     fprintf(log_fd, "%s ", timebuf);
@@ -259,11 +255,62 @@ dsrv_log(log_t level, const char *format, ...) {
   if (level <= DTLS_LOG_DEBUG)
     fprintf(log_fd, "%s ", loglevels[level]);
 
-  va_start(ap, format);
-  vfprintf(log_fd, format, ap);
-  va_end(ap);
+  fwrite(message, strlen(message), 1, log_fd);
   fflush(log_fd);
 }
+
+static dtls_log_handler_t log_handler = dtls_logging_handler;
+
+void
+dtls_set_log_handler(dtls_log_handler_t app_handler) {
+  if (app_handler == NULL)
+    log_handler = dtls_logging_handler;
+  else
+    log_handler = app_handler;
+}
+
+#ifndef DTLS_DEBUG_BUF_SIZE
+#define DTLS_DEBUG_BUF_SIZE 128
+#endif
+
+#ifdef DTLS_CONSTRAINED_STACK
+static dtls_mutex_t static_mutex = DTLS_MUTEX_INITIALIZER;
+static char message[DTLS_DEBUG_BUF_SIZE];
+#endif /* DTLS_CONSTRAINED_STACK */
+
+/*
+ * Caution. If DTLS_CONSTRAINED_STACK is set, then the same mutex will get
+ * locked in dtls_log() and/or dtls_dsrv_hexdump_log() so these functions
+ * cannot call each other.  Furthermore, if log_handler() calls dsrv_log() /
+ * dtls_dsrv_hexdump_log() there will be a recursive lookup.
+ */
+void
+dsrv_log(log_t level, const char *format, ...) {
+  va_list ap;
+  size_t len;
+#ifndef DTLS_CONSTRAINED_STACK
+  char message[DTLS_DEBUG_BUF_SIZE];
+#endif /* ! DTLS_CONSTRAINED_STACK */
+
+  if (maxlog < (int) level)
+    return;
+
+#ifdef DTLS_CONSTRAINED_STACK
+  dtls_mutex_lock(&static_mutex);
+#endif /* DTLS_CONSTRAINED_STACK */
+  va_start(ap, format);
+  len = vsnprintf( message, sizeof(message), format, ap);
+  va_end(ap);
+  if (len + 1 > sizeof(message)) {
+    /* 6 is needed as trailing 0 byte space needed */
+    snprintf(&message[sizeof(message)-6], 6, " ...\n");
+  }
+  log_handler(level, message);
+#ifdef DTLS_CONSTRAINED_STACK
+  dtls_mutex_unlock(&static_mutex);
+#endif /* DTLS_CONSTRAINED_STACK */
+}
+
 #elif defined (HAVE_VPRINTF) /* WITH_CONTIKI */
 void
 dsrv_log(log_t level, char *format, ...) {
@@ -346,46 +393,66 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
 #ifndef WITH_CONTIKI
 void
 dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, size_t length, int extend) {
-  static char timebuf[32];
-  FILE *log_fd;
   int n = 0;
+#ifndef DTLS_CONSTRAINED_STACK
+  char message[DTLS_DEBUG_BUF_SIZE];
+#endif /* ! DTLS_CONSTRAINED_STACK */
+  size_t len;
 
   if (maxlog < (int) level)
     return;
 
-  log_fd = level <= DTLS_LOG_CRIT ? stderr : stdout;
-
-  if (print_timestamp(timebuf, sizeof(timebuf), time(NULL)))
-    fprintf(log_fd, "%s ", timebuf);
-
-  if (level <= DTLS_LOG_DEBUG)
-    fprintf(log_fd, "%s ", loglevels[level]);
-
+#ifdef DTLS_CONSTRAINED_STACK
+  dtls_mutex_lock(&static_mutex);
+#endif /* DTLS_CONSTRAINED_STACK */
   if (extend) {
-    fprintf(log_fd, "%s: (%zu bytes):\n", name, length);
-
-    while (length--) {
-      if (n % 16 == 0)
-        fprintf(log_fd, "%08X ", n);
-
-      fprintf(log_fd, "%02X ", *buf++);
-
+    snprintf(message, sizeof(message), "%s: (%zu bytes):\n", name, length);
+    log_handler(level, message);
+    len = 0;
+    while (length-- && len + 1 < sizeof(message)) {
+      if (n % 16 == 0) {
+        len += snprintf(&message[len], sizeof(message)-len, "%08X ", n);
+        if (len + 1 >= sizeof(message))
+          break;
+      }
+      len += snprintf(&message[len], sizeof(message)-len, "%02X ", *buf++);
+      if (len + 1 >= sizeof(message))
+        break;
       n++;
       if (n % 8 == 0) {
-        if (n % 16 == 0)
-          fprintf(log_fd, "\n");
-        else
-          fprintf(log_fd, " ");
+        if (n % 16 == 0) {
+          if (len + 2 < sizeof(message))
+            snprintf(&message[len], sizeof(message)-len, "\n");
+          else {
+            /* 6 is needed as trailing 0 byte space needed */
+            snprintf(&message[sizeof(message)-6], 6, " ...\n");
+          }
+          log_handler(level, message);
+          len = 0;
+        } else {
+          len += snprintf(&message[len], sizeof(message)-len, " ");
+        }
       }
     }
   } else {
-    fprintf(log_fd, "%s: (%zu bytes): ", name, length);
-    while (length--)
-      fprintf(log_fd, "%02X", *buf++);
+    len = snprintf(message, sizeof(message), "%s: (%zu bytes): ", name, length);
+    while (length-- && len + 1 < sizeof(message)) {
+      len += snprintf(&message[len], sizeof(message)-len, "%02X", *buf++);
+    }
   }
-  fprintf(log_fd, "\n");
-
-  fflush(log_fd);
+  if (len) {
+    /* Process any new output */
+    if (len + 2 < sizeof(message)) {
+      snprintf(&message[len], sizeof(message)-len, "\n");
+    } else {
+      /* 6 is needed as trailing 0 byte space needed */
+      snprintf(&message[sizeof(message)-6], 6, " ...\n");
+    }
+    log_handler(level, message);
+  }
+#ifdef DTLS_CONSTRAINED_STACK
+  dtls_mutex_unlock(&static_mutex);
+#endif /* DTLS_CONSTRAINED_STACK */
 }
 #else /* WITH_CONTIKI */
 void
