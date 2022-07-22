@@ -73,6 +73,24 @@ log_t dtls_get_log_level(void);
 /** Sets the log level to the specified value. */
 void dtls_set_log_level(log_t level);
 
+/**
+ * Logging callback handler definition.
+ *
+ * Note: The maximum message length is controlled by the size of the definition
+ * for DTLS_DEBUG_BUF_SIZE (default 128) less 1 for the zero termination.
+ *
+ * @param level One of the DTLS_LOG_* values.
+ * @param message Zero-terminated string message to log.
+ */
+typedef void (*dtls_log_handler_t) (log_t level, const char *message);
+
+/**
+ * Add a custom log callback handler.
+ *
+ * @param app_handler The logging handler to use or @p NULL to use default handler.
+ */
+void dtls_set_log_handler(dtls_log_handler_t app_handler);
+
 /** 
  * Writes the given text to \c stdout. The text is output only when \p
  * level is below or equal to the log level that set by
