@@ -291,6 +291,23 @@ int dtls_close(dtls_context_t *ctx, const session_t *remote);
  */
 int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
 
+/**
+ * Writes the application data given in multiple buffers to the peer
+ * specified by @p session.
+ *
+ * @param ctx      The DTLS context to use.
+ * @param session  The remote transport address and local interface.
+ * @param buf_array     Array of buffers with the data to write.
+ * @param buf_len_array The length of the arrays in @p buf_array.
+ * @param buf_array_len The number of data arrays.
+ *
+ * @return The number of bytes written, @c -1 on error or @c 0
+ *         if the peer already exists but is not connected yet.
+ */
+int dtls_writev(struct dtls_context_t *ctx,
+		session_t *session, uint8 *buf_array[],
+		size_t buf_len_array[], size_t buf_array_len);
+
 /** 
  * Writes the application data given in @p buf to the peer specified
  * by @p session. 
@@ -303,8 +320,11 @@ int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
  * @return The number of bytes written, @c -1 on error or @c 0
  *         if the peer already exists but is not connected yet.
  */
-int dtls_write(struct dtls_context_t *ctx, session_t *session, 
-	       uint8 *buf, size_t len);
+static inline
+int dtls_write(struct dtls_context_t *ctx, session_t *session,
+	       uint8 *buf, size_t len) {
+  return dtls_writev(ctx, session, &buf, &len, 1);
+}
 
 /**
  * Checks sendqueue of given DTLS context object for any outstanding
