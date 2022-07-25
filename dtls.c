@@ -304,8 +304,9 @@ dtls_add_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
 }
 
 int
-dtls_write(struct dtls_context_t *ctx,
-	   session_t *dst, uint8 *buf, size_t len) {
+dtls_writev(struct dtls_context_t *ctx,
+	    session_t *dst, uint8 *buf_array[],
+	    size_t buf_len_array[], size_t buf_array_len) {
 
   dtls_peer_t *peer = dtls_get_peer(ctx, dst);
 
@@ -323,7 +324,9 @@ dtls_write(struct dtls_context_t *ctx,
     if (peer->state != DTLS_STATE_CONNECTED) {
       return 0;
     } else {
-      return dtls_send(ctx, peer, DTLS_CT_APPLICATION_DATA, buf, len);
+      return dtls_send_multi(ctx, peer, dtls_security_params(peer),
+                             &peer->session, DTLS_CT_APPLICATION_DATA,
+                             buf_array, buf_len_array, buf_array_len);
     }
   }
 }
