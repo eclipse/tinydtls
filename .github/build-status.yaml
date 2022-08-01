@@ -1,0 +1,43 @@
+name: Build Status
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+
+  build-linux-autotools:
+    name: Build for Linux using Autotools
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build tinydtls
+      run: |
+        ./autogen.sh
+        ./configure
+        make
+
+  build-linux-cmake:
+    name: Build for Linux using CMake
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build tinydtls
+      run: |
+        cmake -Dmake_tests=ON .
+        make
+
+  build-macos-cmake:
+    name: Build for macOS using CMake
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build tinydtls
+      run: |
+        cmake -Dmake_tests=ON .
+        make
