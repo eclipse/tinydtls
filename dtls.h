@@ -310,7 +310,7 @@ int dtls_writev(struct dtls_context_t *ctx,
 
 /** 
  * Writes the application data given in @p buf to the peer specified
- * by @p session. 
+ * by @p session.
  * 
  * @param ctx      The DTLS context to use.
  * @param session  The remote transport address and local interface.
@@ -320,11 +320,8 @@ int dtls_writev(struct dtls_context_t *ctx,
  * @return The number of bytes written, @c -1 on error or @c 0
  *         if the peer already exists but is not connected yet.
  */
-static inline
 int dtls_write(struct dtls_context_t *ctx, session_t *session,
-	       uint8 *buf, size_t len) {
-  return dtls_writev(ctx, session, &buf, &len, 1);
-}
+	       uint8 *buf, size_t len);
 
 /**
  * Checks sendqueue of given DTLS context object for any outstanding

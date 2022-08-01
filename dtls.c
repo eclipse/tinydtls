@@ -331,6 +331,12 @@ dtls_writev(struct dtls_context_t *ctx,
   }
 }
 
+int
+dtls_write(struct dtls_context_t *ctx, session_t *session,
+	       uint8 *buf, size_t len) {
+  return dtls_writev(ctx, session, &buf, &len, 1);
+}
+
 static int
 dtls_get_cookie(uint8 *msg, size_t msglen, uint8 **cookie) {
   /* To access the cookie, we have to determine the session id's
