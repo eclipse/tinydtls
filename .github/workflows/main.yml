@@ -1,0 +1,64 @@
+name: Build Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - gh-workflows
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  PLATFORM: posix
+  TESTS: yes
+
+jobs:
+  build-linux-autotools:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        CC: ["gcc", "clang" ]
+    steps:
+      - uses: actions/checkout@v3
+      - name: setup
+        run: |
+          sudo apt-get update && sudo apt-get install -y libcunit1-dev libtool libtool-bin exuberant-ctags valgrind
+          ./autogen.sh
+      - name: configure
+        run: |
+          # mkdir build-${{matrix.CC}}
+          # cd build-${{matrix.CC}}
+          $GITHUB_WORKSPACE/configure --enable-tests
+      - name: compile
+        run: |
+          # cd build-${{matrix.CC}}
+          make EXTRA_CFLAGS=-Werror
+      - name: tests
+        run: |
+          # cd build-${{matrix.CC}}
+          libtool --mode=execute valgrind --track-origins=yes --leak-check=yes --show-reachable=yes --error-exitcode=123 --quiet tests/unit-tests/testdriver
+          libtool --mode=execute valgrind --track-origins=yes --leak-check=yes --show-reachable=yes --error-exitcode=123 --quiet tests/ccm-test
+
+  build-linux-cmake:
+    name: Build for Linux using CMake
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build tinydtls
+      run: |
+        cmake -Dmake_tests=ON .
+        make
+  build-macos-cmake:
+    name: Build for macOS using CMake
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build tinydtls
+      run: |
+        cmake -Dmake_tests=ON .
+        make
