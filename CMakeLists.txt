@@ -25,7 +25,12 @@ project(tinydtls)
 
 include (AutoConf.cmake)
 
-option(BUILD_SHARED_LIBS "Link using shared libs" OFF)
+if(NOT ZEPHYR_BASE)
+   option(BUILD_SHARED_LIBS "Link using shared libs" OFF)
+else()
+    # provided by the zephyr build system
+endif()
+
 option(make_tests "Make test programs and examples" OFF)
 
 if(NOT PLATFORM)
@@ -38,8 +43,13 @@ set(PACKAGE_NAME "tinydtls")
 set(PACKAGE_VERSION "0.8.6" )
 set(SOVERSION "0" )
  
-option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
-option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
+if(NOT ZEPHYR_BASE)
+   option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
+   option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
+else()
+   # provided by zephyr/CMakeLists.txt and zephyr/Kconfig
+endif()
+
 option(WARNING_TO_ERROR "force all compiler warnings to be errors" OFF)
 
 configure_file(dtls_config.h.cmake.in dtls_config.h )
