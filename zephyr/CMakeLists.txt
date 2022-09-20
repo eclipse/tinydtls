@@ -26,11 +26,13 @@ if(CONFIG_LIBTINYDTLS)
   if(${ARCH} STREQUAL "arm")
      set(CMAKE_C_BYTE_ORDER LITTLE_ENDIAN)
   endif()
+  # replaces the option DTLS_PSK
   if(CONFIG_LIBTINYDTLS_PSK)
     set(DTLS_PSK On)
   else()
     set(DTLS_PSK Off)
   endif()
+  # replaces the option DTLS_ECC
   if(CONFIG_LIBTINYDTLS_ECDHE_ECDSA)
     set(DTLS_ECC On)
   else()
