@@ -246,7 +246,7 @@ memarray_init(&dtlscontext_storage, dtlscontext_storage_data,
  */
 #define CALL(Context, which, ...)					\
   ((Context)->h && (Context)->h->which					\
-   ? (Context)->h->which((Context), ##__VA_ARGS__)			\
+   ? (Context)->h->which((Context), __VA_ARGS__)			\
    : -1)
 
 static int

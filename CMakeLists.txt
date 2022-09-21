@@ -40,6 +40,7 @@ set(SOVERSION "0" )
  
 option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
 option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
+option(WARNING_TO_ERROR "force all compiler warnings to be errors" OFF)
 
 configure_file(dtls_config.h.cmake.in dtls_config.h )
 
@@ -67,8 +68,14 @@ target_compile_definitions(tinydtls PUBLIC DTLSv12 WITH_SHA256 SHA2_USE_INTTYPES
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "Export all symbols when compiling to a .dll" ON)
     target_compile_options(tinydtls PRIVATE -Wall)
+    if(${WARNING_TO_ERROR})
+        target_compile_options(tinydtls PRIVATE -WX)
+     endif()
 elseif(NOT ZEPHYR_BASE)
     target_compile_options(tinydtls PRIVATE -fPIC -pedantic -std=c99 -Wall -Wextra -Wformat-security -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wstrict-prototypes -Wswitch-default -Wswitch-enum -Wunused)
+    if(${WARNING_TO_ERROR})
+        target_compile_options(tinydtls PRIVATE -Werror)
+    endif()
 endif()
 
 set_target_properties(tinydtls PROPERTIES VERSION ${PACKAGE_VERSION} SOVERSION ${SOVERSION})
@@ -83,6 +90,8 @@ else()
     install(TARGETS    tinydtls       DESTINATION ${CMAKE_INSTALL_LIBDIR} )
 endif()
 
-file(CONFIGURE OUTPUT .gitignore
-  NEWLINE_STYLE UNIX
-  CONTENT "*")
+if(NOT (${CMAKE_VERSION} VERSION_LESS "3.18.0"))
+    file(CONFIGURE OUTPUT .gitignore
+        NEWLINE_STYLE UNIX
+        CONTENT "*")
+endif()
