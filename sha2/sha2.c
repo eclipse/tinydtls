@@ -224,6 +224,7 @@ static inline sha2_word64 get64be(const sha2_byte* data)
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */
 }
 
+#if defined(WITH_SHA512) || (defined(WITH_SHA384) && BYTE_ORDER == LITTLE_ENDIAN)
 static inline void put64be(sha2_byte* data, sha2_word64 val)
 {
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -239,6 +240,7 @@ static inline void put64be(sha2_byte* data, sha2_word64 val)
 	MEMCPY_BCOPY(data, &val, sizeof(val));
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */
 }
+#endif /* WITH_SHA512 || (WITH_SHA364 && BYTE_ORDER == LITTLE_ENDIAN) */
 
 /*
  * Macro for incrementally adding the unsigned 64-bit integer n to the
