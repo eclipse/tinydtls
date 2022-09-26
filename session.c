@@ -31,7 +31,9 @@
    && (A)->port == (B)->port					\
    && uip_ipaddr_cmp(&((A)->addr),&((B)->addr))			\
    && (A)->ifindex == (B)->ifindex)
+
 #elif defined(WITH_RIOT_SOCK)
+
 #include "net/af.h"
 #ifdef SOCK_HAS_IPV4
 #define _dtls_ipv4_address_equals_impl(A,B)                   \
@@ -49,7 +51,16 @@
      && (A)->addr.family == (B)->addr.family                  \
      && ipv6_addr_equal(&((A)->addr.ipv6),&((B)->addr.ipv6))
 #endif
-#else /* WITH_CONTIKI */
+
+#elif defined(WITH_LWIP_NO_SOCKET)
+
+#define _dtls_address_equals_impl(A,B)				\
+  ((A)->size == (B)->size					\
+   && (A)->port == (B)->port					\
+   && ip_addr_cmp(&((A)->addr),&((B)->addr))			\
+   && (A)->ifindex == (B)->ifindex)
+
+#else /* ! WITH_CONTIKI && !WITH_RIOT_SOCK && ! WITH_LWIP_NO_SOCKET */
 
 static inline int 
 _dtls_address_equals_impl(const session_t *a,
@@ -74,7 +85,7 @@ _dtls_address_equals_impl(const session_t *a,
  }
  return 0;
 }
-#endif /* WITH_CONTIKI */
+#endif /* ! WITH_CONTIKI && !WITH_RIOT_SOCK && ! WITH_LWIP_NO_SOCKET */
 
 void
 dtls_session_init(session_t *sess) {
@@ -98,7 +109,7 @@ dtls_session_init(session_t *sess) {
  * for sessions and peers and store a pointer to a session in the peer
  * struct.
  */
-#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) && !(defined (WITH_LWIP_NO_SOCKET))
 session_t*
 dtls_new_session(struct sockaddr *addr, socklen_t addrlen) {
   session_t *sess;
@@ -127,7 +138,7 @@ dtls_session_addr(session_t *sess, socklen_t *addrlen) {
   *addrlen = sess->size;
   return &sess->addr.sa;
 }
-#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
+#endif /* ! WITH_CONTIKI && ! RIOT_VERSION && ! WITH_LWIP_NO_SOCKET */
 
 int
 dtls_session_equals(const session_t *a, const session_t *b) {

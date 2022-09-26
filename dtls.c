@@ -189,6 +189,9 @@ static const unsigned char cert_asn1_header[] = {
 
 PROCESS(dtls_retransmit_process, "DTLS retransmit process");
 
+#endif /* WITH_CONTIKI */
+
+#if defined(WITH_CONTIKI) ||  defined(WITH_LWIP)
 static dtls_context_t the_dtls_context;
 
 static inline dtls_context_t *
@@ -200,7 +203,7 @@ static inline void
 free_context(dtls_context_t *context) {
 }
 
-#endif /* WITH_CONTIKI */
+#endif /* WITH_CONTIKI || WITH_LWIP */
 
 #ifdef RIOT_VERSION
 static inline dtls_context_t *

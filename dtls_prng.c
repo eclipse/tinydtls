@@ -33,6 +33,9 @@
 #elif defined (IS_WINDOWS)
 #include "platform-specific/dtls_prng_win.c"
 
+#elif defined (WITH_LWIP)
+#include "platform-specific/dtls_prng_lwip.c"
+
 #elif defined (WITH_POSIX)
 #include "platform-specific/dtls_prng_posix.c"
 
