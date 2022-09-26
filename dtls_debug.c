@@ -182,7 +182,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
   len -= err;
 
   return p - buf;
-#else /* HAVE_INET_NTOP */
+#else /* ! HAVE_INET_NTOP */
 
 #ifdef WITH_CONTIKI
   char *p = buf;
@@ -236,7 +236,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #endif /* WITH_POSIX */
 
   return 0;
-#endif /* HAVE_ARPA_INET_H */
+#endif /* ! HAVE_INET_NTOP */
 }
 
 #endif /* NDEBUG */

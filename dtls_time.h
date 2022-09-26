@@ -63,7 +63,16 @@ typedef uint32_t clock_time_t;
 
 typedef int64_t clock_time_t;
 
-#else /* WITH_CONTIKI || RIOT_VERSION */
+#elif defined(WITH_LWIP)
+#include "lwip/sys.h"
+
+#ifndef CLOCK_SECOND
+# define CLOCK_SECOND 1000
+#endif
+
+typedef uint32_t clock_time_t;
+
+#else /* ! WITH_CONTIKI && ! RIOT_VERSION && ! WITH_ZEPHYR && ! WITH_LWIP */
 
 #ifdef HAVE_TIME_H
 #include <time.h>
@@ -75,7 +84,7 @@ typedef int64_t clock_time_t;
 
 typedef uint32_t clock_time_t;
 
-#endif /* WITH_CONTIKI || RIOT_VERSION */
+#endif /* ! WITH_CONTIKI && ! RIOT_VERSION && ! WITH_ZEPHYR && ! WITH_LWIP */
 
 typedef clock_time_t dtls_tick_t;
 

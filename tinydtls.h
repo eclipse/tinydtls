@@ -36,6 +36,11 @@
 #define IS_WINDOWS 1
 #endif
 
+#ifdef WITH_LWIP
+#include "platform-specific/lwip_platform.h"
+#endif /* WITH_LWIP */
+
+#ifndef WITH_LWIP
 #ifndef CONTIKI
 #ifndef RIOT_VERSION
 #ifndef IS_WINDOWS
@@ -47,6 +52,7 @@
 #include "dtls_config.h"
 #endif /* RIOT_VERSION */
 #endif /* CONTIKI */
+#endif /* WITH_LWIP */
 
 #ifndef DTLS_ECC
 #ifndef DTLS_PSK

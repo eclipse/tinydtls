@@ -30,8 +30,10 @@ typedef struct {
   unsigned short port;    /**< transport layer port */
   int ifindex;            /**< network interface index */
 } session_t;
+
  /* TODO: Add support for RIOT over sockets  */
 #elif defined(WITH_RIOT_SOCK)
+
 #include "net/ipv4/addr.h"
 #include "net/ipv6/addr.h"
 typedef struct {
@@ -50,7 +52,20 @@ typedef struct {
   } addr;                   /**< session IP address and port */
   int ifindex;              /**< network interface index */
 } session_t;
-#else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
+
+#elif defined(WITH_LWIP_NO_SOCKET)
+
+#include <lwip/ip_addr.h>
+typedef struct {
+  unsigned char size;     /**< size of session_t::addr */
+  unsigned short port;    /**< transport layer port */
+  ip_addr_t addr;         /**< session IP address */
+  int ifindex;            /**< network interface index */
+} session_t;
+
+#undef INET_NTOP
+
+#else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK && ! WITH_LWIP_NO_SOCKET */
 
 #ifdef WITH_ZEPHYR
 #include <zephyr.h>
@@ -69,10 +84,11 @@ typedef unsigned char uint8_t;
 #include <ws2tcpip.h>
 
 #else /* ! WITH_ZEPHYR && ! WITH_LWIP && ! IS_WINDOWS */
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif /* ! WITH_ZEPHYR && ! WITH_LWIP */
+#endif /* ! WITH_ZEPHYR  && ! WITH_LWIP */
 
 typedef struct {
   socklen_t size;		/**< size of addr */
@@ -84,7 +100,7 @@ typedef struct {
   } addr;
   int ifindex;
 } session_t;
-#endif /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK */
+#endif /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK && ! WITH_LWIP_NO_LWIP_SOCKET */
 
 /** 
  * Resets the given session_t object @p sess to its default
@@ -95,7 +111,7 @@ typedef struct {
  */
 void dtls_session_init(session_t *sess);
 
-#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+#if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) && !(defined (WITH_LWIP_NO_SOCKET))
 /**
  * Creates a new ::session_t for the given address.
  *
@@ -122,7 +138,7 @@ void dtls_free_session(session_t *sess);
  * @return The address or @c NULL if @p sess was @c NULL.
  */
 struct sockaddr* dtls_session_addr(session_t *sess, socklen_t *addrlen);
-#endif /* !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION)) */
+#endif /* ! WITH_CONTIKI && ! RIOT_VERSION && ! WITH_LWIP_NO_SOCKET */
 
 /**
  * Compares the given session objects. This function returns @c 0
