@@ -77,7 +77,7 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
 
   len = dtls_hash_finalize(result, &ctx->data);
 
-  return len;
+  return (int) len;
 }
 
 #ifdef HMAC_TEST

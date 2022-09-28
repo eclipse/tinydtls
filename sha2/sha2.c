@@ -228,14 +228,14 @@ static inline sha2_word64 get64be(const sha2_byte* data)
 static inline void put64be(sha2_byte* data, sha2_word64 val)
 {
 #if BYTE_ORDER == LITTLE_ENDIAN
-	data[7] = val; val >>= 8;
-	data[6] = val; val >>= 8;
-	data[5] = val; val >>= 8;
-	data[4] = val; val >>= 8;
-	data[3] = val; val >>= 8;
-	data[2] = val; val >>= 8;
-	data[1] = val; val >>= 8;
-	data[0] = val;
+	data[7] = (sha2_byte) val; val >>= 8;
+	data[6] = (sha2_byte) val; val >>= 8;
+	data[5] = (sha2_byte) val; val >>= 8;
+	data[4] = (sha2_byte) val; val >>= 8;
+	data[3] = (sha2_byte) val; val >>= 8;
+	data[2] = (sha2_byte) val; val >>= 8;
+	data[1] = (sha2_byte) val; val >>= 8;
+	data[0] = (sha2_byte) val;
 #else /* BYTE_ORDER != LITTLE_ENDIAN */
 	MEMCPY_BCOPY(data, &val, sizeof(val));
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */

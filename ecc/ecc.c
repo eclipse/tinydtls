@@ -48,7 +48,7 @@ static uint32_t add( const uint32_t *x, const uint32_t *y, uint32_t *result, uin
 		//printf("%02x + %02x + %01x = ", x[v], y[v], d);
 		d += (uint64_t) x[v] + (uint64_t) y[v];
 		//printf("%02x\n", d);
-		result[v] = d;
+		result[v] = (uint32_t) d;
 		d = d>>32; //save carry
 	}
 	

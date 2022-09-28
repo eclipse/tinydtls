@@ -281,7 +281,7 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
 	 const unsigned char *packet, size_t length,
 	 unsigned char *buf) {
   uint16 L;
-  dtls_int_to_uint16(L, length);
+  dtls_int_to_uint16(L, (uint16_t) length);
 
   assert(hmac_ctx);
   dtls_hmac_update(hmac_ctx, record +3, sizeof(uint16) + sizeof(uint48));
@@ -340,7 +340,7 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
     return -1;
   }
 
-  dtls_int_to_uint16(p, keylen);
+  dtls_int_to_uint16(p, (uint16_t) keylen);
   p += sizeof(uint16);
 
   memset(p, 0, keylen);
@@ -351,7 +351,7 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
   
   memcpy(p, key, keylen);
 
-  return 2 * (sizeof(uint16) + keylen);
+  return (int) (2 * (sizeof(uint16) + keylen));
 }
 #endif /* DTLS_PSK */
 
@@ -360,7 +360,7 @@ static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
 				  uint32_t *result) {
   int i;
 
-  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
+  for (i = (int) ((key_size / sizeof(uint32_t)) - 1); i >= 0 ; i--) {
     *result = dtls_uint32_to_int(&key[i * sizeof(uint32_t)]);
     result++;
   }
@@ -370,7 +370,7 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
 				    unsigned char *result) {
   int i;
 
-  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
+  for (i = (int) ((key_size / sizeof(uint32_t)) - 1); i >= 0 ; i--) {
     dtls_int_to_uint32(result, key[i]);
     result += 4;
   }
@@ -428,8 +428,8 @@ int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
       key_size++;
   }
   /* Update the length of positive ASN.1 integer */
-  dtls_int_to_uint8(lptr, key_size);
-  return key_size + 2; 
+  dtls_int_to_uint8(lptr, (uint8_t) key_size);
+  return (int) (key_size + 2);
 }
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
@@ -455,7 +455,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   ecc_ecdh(pub_x, pub_y, priv, result_x, result_y);
 
   dtls_ec_key_from_uint32(result_x, key_size, result);
-  return key_size;
+  return (int) key_size;
 }
 
 void
@@ -568,7 +568,7 @@ dtls_encrypt_params(const dtls_ccm_params_t *params,
   ctx->data.tag_length = params->tag_length;
   ctx->data.l = params->l;
 
-  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, (int) (8 * keylen));
   if (ret < 0) {
     /* cleanup everything in case the key has the wrong size */
     dtls_warn("cannot set rijndael key\n");
@@ -577,7 +577,7 @@ dtls_encrypt_params(const dtls_ccm_params_t *params,
 
   if (src != buf)
     memmove(buf, src, length);
-  ret = dtls_ccm_encrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
+  ret = (int) dtls_ccm_encrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
 
 error:
   dtls_cipher_context_release();
@@ -610,7 +610,7 @@ dtls_decrypt_params(const dtls_ccm_params_t *params,
   ctx->data.tag_length = params->tag_length;
   ctx->data.l = params->l;
 
-  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, (int) (8 * keylen));
   if (ret < 0) {
     /* cleanup everything in case the key has the wrong size */
     dtls_warn("cannot set rijndael key\n");
@@ -619,7 +619,7 @@ dtls_decrypt_params(const dtls_ccm_params_t *params,
 
   if (src != buf)
     memmove(buf, src, length);
-  ret = dtls_ccm_decrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
+  ret = (int) dtls_ccm_decrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
 
 error:
   dtls_cipher_context_release();

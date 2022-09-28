@@ -362,7 +362,7 @@ void dump(unsigned char *buf, size_t len) {
 void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr)
 {
   char addrbuf[73];
-  int len;
+  size_t len;
 
   len = dsrv_print_addr(addr, addrbuf, sizeof(addrbuf));
   if (!len)

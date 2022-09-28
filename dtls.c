@@ -873,7 +873,7 @@ static int verify_ext_eliptic_curves(uint8 *data, size_t data_length) {
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
-  for (i = data_length - sizeof(uint16); i > 0; i -= sizeof(uint16)) {
+  for (i = (int) data_length - sizeof(uint16); i > 0; i -= sizeof(uint16)) {
     /* check if this curve is supported */
     curve_name = dtls_uint16_to_int(data);
     data += sizeof(uint16);
@@ -897,7 +897,7 @@ static int verify_ext_cert_type(uint8 *data, size_t data_length) {
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
-  for (i = data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
+  for (i = (int) data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
     /* check if this cert type is supported */
     cert_type = dtls_uint8_to_int(data);
     data += sizeof(uint8);
@@ -921,7 +921,7 @@ static int verify_ext_ec_point_formats(uint8 *data, size_t data_length) {
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
-  for (i = data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
+  for (i = (int) data_length - sizeof(uint8); i > 0; i -= sizeof(uint8)) {
     /* check if this ec_point_format is supported */
     cert_type = dtls_uint8_to_int(data);
     data += sizeof(uint8);
@@ -945,7 +945,7 @@ static int verify_ext_sig_hash_algo(uint8 *data, size_t data_length) {
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
-  for (i = data_length - sizeof(uint16); i > 0; i -= sizeof(uint16)) {
+  for (i = (int) data_length - sizeof(uint16); i > 0; i -= sizeof(uint16)) {
     /* check if this _sig_hash_algo is supported */
     hash_type = dtls_uint8_to_int(data);
     data += sizeof(uint8);
@@ -1429,7 +1429,7 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 
       memcpy(p, data_array[i], data_len_array[i]);
       p += data_len_array[i];
-      res += data_len_array[i];
+      res += (int) data_len_array[i];
     }
   } else { /* TLS_PSK_WITH_AES_128_CCM_8 or TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 */
     /**
@@ -1504,7 +1504,7 @@ dtls_prepare_record(dtls_peer_t *peer, dtls_security_parameters_t *security,
 
       memcpy(p, data_array[i], data_len_array[i]);
       p += data_len_array[i];
-      res += data_len_array[i];
+      res += (int) data_len_array[i];
     }
 
     memset(nonce, 0, DTLS_CCM_BLOCKSIZE);
@@ -1628,10 +1628,10 @@ dtls_0_send_hello_verify_request(dtls_context_t *ctx,
   dtls_int_to_uint16(buf + 1, DTLS10_VERSION);
 
   /* fix length of fragment in sendbuf */
-  dtls_int_to_uint16(buf + 11, DTLS_HS_LENGTH + data_length);
+  dtls_int_to_uint16(buf + 11, (uint16_t) (DTLS_HS_LENGTH + data_length));
 
-  p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST, &(ephemeral_peer->mseq), data_length, 0,
-			    data_length, p);
+  p = dtls_set_handshake_header(DTLS_HT_HELLO_VERIFY_REQUEST, &(ephemeral_peer->mseq), (int) data_length, 0,
+			    (int) data_length, p);
 
   memcpy(p, data, data_length);
 
@@ -1658,8 +1658,8 @@ dtls_send_handshake_msg_hash(dtls_context_t *ctx,
   int i = 0;
   dtls_security_parameters_t *security = dtls_security_params(peer);
 
-  dtls_set_handshake_header(header_type, &(peer->handshake_params->hs_state.mseq_s), data_length, 0,
-			    data_length, buf);
+  dtls_set_handshake_header(header_type, &(peer->handshake_params->hs_state.mseq_s), (int) data_length, 0,
+			    (int) data_length, buf);
 
   if (add_hash) {
     update_hs_hash(peer, buf, sizeof(buf));
@@ -2066,7 +2066,7 @@ dtls_asn1_integer_to_ec_key(uint8 *data, size_t data_len, uint8 *key,
     /* drop leading 0s if needed */
     memcpy(key, data + length - key_len, key_len); 
   }
-  return length + 2;
+  return (int) length + 2;
 }
 
 static int
@@ -2135,7 +2135,7 @@ dtls_check_ecdsa_signature_elem(uint8 *data, size_t data_length,
   data += ret;
   data_length -= ret;
 
-  return data - data_orig;
+  return (int) (data - data_orig);
 }
 
 static int
@@ -2456,7 +2456,7 @@ dtls_send_server_key_exchange_psk(dtls_context_t *ctx, dtls_peer_t *peer,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  dtls_int_to_uint16(p, len);
+  dtls_int_to_uint16(p, (uint16_t) len);
   p += sizeof(uint16);
 
   memcpy(p, psk_hint, len);
@@ -2768,7 +2768,7 @@ dtls_send_finished(dtls_context_t *ctx, dtls_peer_t *peer,
 
   copy_hs_hash(peer, &hs_hash);
 
-  length = dtls_hash_finalize(hash, &hs_hash);
+  length = (int) dtls_hash_finalize(hash, &hs_hash);
 
   dtls_prf(peer->handshake_params->tmp.master_secret,
 	   DTLS_MASTER_SECRET_LENGTH,
@@ -2829,7 +2829,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint8);
 
   /* cookie */
-  dtls_int_to_uint8(p, cookie_length);
+  dtls_int_to_uint8(p, (uint8_t) cookie_length);
   p += sizeof(uint8);
   if (cookie_length != 0) {
     memcpy(p, cookie, cookie_length);
@@ -3417,7 +3417,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
   int clen;
 
   *cleartext = (uint8 *)packet + sizeof(dtls_record_header_t);
-  clen = length - sizeof(dtls_record_header_t);
+  clen = (int) (length - sizeof(dtls_record_header_t));
 
   if (!security) {
     dtls_alert("No security context for epoch: %i\n", dtls_get_epoch(header));

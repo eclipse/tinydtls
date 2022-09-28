@@ -41,7 +41,7 @@ dtls_prng(unsigned char *buf, size_t len) {
     }
     *buf++ = number & 0xFF;
   }
-  return klen;
+  return (int) klen;
 }
 
 void
