@@ -6,7 +6,7 @@
 #  information regarding copyright ownership.
 #
 #  This program and the accompanying materials are made available under the
-#  terms of the Eclipse Public License 1.0 
+#  terms of the Eclipse Public License 1.0
 #  which is available at https://www.eclipse.org/legal/epl-v10.html
 #  and the Eclipse Distribution License v. 1.0
 #  available at http://www.eclipse.org/org/documents/edl-v10.php

@@ -6,7 +6,7 @@
 #  information regarding copyright ownership.
 #
 #  This program and the accompanying materials are made available under the
-#  terms of the Eclipse Public License 1.0 
+#  terms of the Eclipse Public License 1.0
 #  which is available at https://www.eclipse.org/legal/epl-v10.html
 #  and the Eclipse Distribution License v. 1.0
 #  available at http://www.eclipse.org/org/documents/edl-v10.php
@@ -42,7 +42,7 @@ endif()
 set(PACKAGE_NAME "tinydtls")
 set(PACKAGE_VERSION "0.8.6" )
 set(SOVERSION "0" )
- 
+
 if(NOT ZEPHYR_BASE)
    option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
    option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
@@ -56,7 +56,7 @@ configure_file(dtls_config.h.cmake.in dtls_config.h )
 
 add_library(tinydtls)
 
-target_sources(tinydtls PRIVATE 
+target_sources(tinydtls PRIVATE
    dtls.c
    netq.c
    peer.c
