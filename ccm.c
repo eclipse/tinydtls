@@ -164,8 +164,8 @@ mac(rijndael_ctx *ctx,
 
 }
 
-long int
 dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
+size_t
 			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la) {
@@ -225,7 +225,7 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   for (i = 0; i < M; ++i)
     *msg++ = X[i] ^ S[i];
 
-  return (long int) (len + M);
+  return len + M;
 }
 
 long int
