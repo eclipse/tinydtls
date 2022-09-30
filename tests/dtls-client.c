@@ -123,7 +123,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     }
 
     memcpy(result, psk_id, psk_id_length);
-    return psk_id_length;
+    return (int) psk_id_length;
   case DTLS_PSK_KEY:
     if (id_len != psk_id_length || memcmp(psk_id, id, id_len) != 0) {
       dtls_warn("PSK for unknown id requested, exiting\n");
@@ -134,7 +134,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     }
 
     memcpy(result, psk_key, psk_key_length);
-    return psk_key_length;
+    return (int) psk_key_length;
   case DTLS_PSK_HINT:
   default:
     dtls_warn("unsupported request type: %d\n", type);
@@ -189,7 +189,7 @@ try_send(struct dtls_context_t *ctx, session_t *dst, size_t len, char *buf) {
 
 static void
 handle_stdin(size_t *len, char *buf) {
-  if (fgets(buf + *len, sizeof(buf) - *len, stdin))
+  if (fgets(buf + *len, (int) (sizeof(buf) - *len), stdin))
     *len += strlen(buf + *len);
 }
 
@@ -210,7 +210,7 @@ send_to_peer(struct dtls_context_t *ctx,
 	     session_t *session, uint8 *data, size_t len) {
 
   int fd = *(int *)dtls_get_app_data(ctx);
-  return sendto(fd, data, len, MSG_DONTWAIT,
+  return (int) sendto(fd, data, len, MSG_DONTWAIT,
 		&session->addr.sa, session->size);
 }
 
@@ -229,7 +229,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
-  len = recvfrom(fd, buf, MAX_READ_BUF, 0, 
+  len = (int) recvfrom(fd, buf, MAX_READ_BUF, 0,
 		 &session.addr.sa, &session.size);
   
   if (len < 0) {
