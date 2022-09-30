@@ -1570,8 +1570,8 @@ dtls_0_send_alert(dtls_context_t *ctx,
   dtls_int_to_uint16(buf + 11, DTLS_ALERT_LENGTH);
 
   /* Alert */
-  dtls_int_to_uint8(p, level);
-  dtls_int_to_uint8(p + 1, description);
+  dtls_int_to_uint8(p, (uint8_t) level);
+  dtls_int_to_uint8(p + 1, (uint8_t) description);
 
   dtls_debug("send alert - protocol version  packet\n");
 
@@ -1846,7 +1846,7 @@ return_unlock:
 static inline int
 dtls_send_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
 		dtls_alert_t description) {
-  uint8_t msg[] = { level, description };
+  uint8_t msg[] = { (uint8_t) level, (uint8_t) description };
 
   dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg));
 
@@ -1863,8 +1863,8 @@ dtls_send_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level
     n->epoch = peer->security_params[0]->epoch;
     n->type = DTLS_CT_ALERT;
     n->length = 2;
-    n->data[0] = level;
-    n->data[1] = description;
+    n->data[0] = (uint8_t) level;
+    n->data[1] = (uint8_t) description;
     n->job = TIMEOUT;
 
     if (!netq_insert_node(&ctx->sendqueue, n)) {
@@ -2225,7 +2225,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   if (handshake->cipher != TLS_NULL_WITH_NULL_NULL) {
     /* selected cipher suite */
-    dtls_int_to_uint16(p, handshake->cipher);
+    dtls_int_to_uint16(p, (uint16_t) handshake->cipher);
     p += sizeof(uint16);
 
     /* selected compression method */
