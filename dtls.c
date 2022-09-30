@@ -2685,7 +2685,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 #endif /* DTLS_ECC */
 
   case TLS_NULL_WITH_NULL_NULL:
-    dtls_crit("NULL cipher requested");
+    dtls_crit("NULL cipher requested\n");
     assert(0);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
 
