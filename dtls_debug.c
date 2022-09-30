@@ -159,7 +159,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
     return append;
   }
 
-  if (inet_ntop(addr->addr.sa.sa_family, addrptr, p, len) == 0) {
+  if (inet_ntop(addr->addr.sa.sa_family, addrptr, p, (socklen_t) len) == 0) {
     perror("dsrv_print_addr");
     return 0;
   }
