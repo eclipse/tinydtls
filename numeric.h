@@ -37,15 +37,15 @@ static inline int dtls_int_to_uint8(unsigned char *field, uint8_t value)
 
 static inline int dtls_int_to_uint16(unsigned char *field, uint16_t value)
 {
-  field[0] = (value >> 8) & 0xff;
-  field[1] = value & 0xff;
+  field[0] = (value >> 8) & 0xffu;
+  field[1] = value & 0xffu;
   return 2;
 }
 
 static inline int dtls_int_to_uint24(unsigned char *field, uint32_t value)
 {
-  field[0] = (value >> 16) & 0xff;
-  field[1] = (value >> 8) & 0xff;
+  field[0] = (value >> 16) & 0xffu;
+  field[1] = (value >> 8) & 0xffu;
   field[2] = value & 0xff;
   return 3;
 }
