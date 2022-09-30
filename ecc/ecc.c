@@ -168,8 +168,8 @@ static int fieldMult(const uint32_t *x, const uint32_t *y, uint32_t *result, uin
 		for (n = 0; n < length; n++){ 
 			l = (uint64_t)x[n]*(uint64_t)y[k];
 			temp[n+k] = l&0xFFFFFFFF;
-			temp[n+k+1] = l>>32;
-			add(&temp[n+k], &result[n+k], &result[n+k], (length * 2) - (n + k));
+			temp[n+k+1] = (uint32_t) (l>>32);
+			add(&temp[n+k], &result[n+k], &result[n+k], (uint8_t) ((length * 2) - (n + k)));
 
 			setZero(temp, length * 2);
 		}
@@ -408,7 +408,7 @@ static void fieldInv(const uint32_t *A, const uint32_t *modulus, const uint32_t 
 			}
 			
 		} 
-		t=sub(u,v,tempm,arrayLength); 				/* tempm=u-v */
+		t = (uint8_t) sub(u,v,tempm,arrayLength); 				/* tempm=u-v */
 		if (t==0) {							/* If u > 0 */
 			copy(tempm,u,arrayLength); 					/* u=u-v */
 			fieldSub(x1,x2,modulus,tempm); 			/* tempm=x1-x2 */

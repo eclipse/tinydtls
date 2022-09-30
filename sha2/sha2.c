@@ -196,10 +196,10 @@ static inline sha2_word32 get32be(const sha2_byte* data)
 static inline void put32be(sha2_byte* data, sha2_word32 val)
 {
 #if BYTE_ORDER == LITTLE_ENDIAN
-	data[3] = val; val >>= 8;
-	data[2] = val; val >>= 8;
-	data[1] = val; val >>= 8;
-	data[0] = val;
+	data[3] = (sha2_byte) val; val >>= 8;
+	data[2] = (sha2_byte) val; val >>= 8;
+	data[1] = (sha2_byte) val; val >>= 8;
+	data[0] = (sha2_byte) val;
 #else /* BYTE_ORDER != LITTLE_ENDIAN */
 	MEMCPY_BCOPY(data, &val, sizeof(val));
 #endif /* BYTE_ORDER != LITTLE_ENDIAN */

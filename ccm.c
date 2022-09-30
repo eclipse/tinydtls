@@ -35,7 +35,7 @@
     memset((A) + DTLS_CCM_BLOCKSIZE - (L), 0, (L));			\
     (C) = (cnt) & MASK_L(L);						\
     for (i_ = DTLS_CCM_BLOCKSIZE - 1; (C) && (i_ > (L)); --i_, (C) >>= 8) \
-      (A)[i_] |= (C) & 0xFF;						\
+      (A)[i_] |= (unsigned char) (C) & 0xFF;						\
   }
 
 static inline void 
@@ -164,8 +164,8 @@ mac(rijndael_ctx *ctx,
 
 }
 
-dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
 size_t
+dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la) {
