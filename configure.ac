@@ -54,7 +54,7 @@ WARNING_CFLAGS="\
 -Wswitch-default \
 -Wswitch-enum \
 -Wunused \
--Wconversion
+-Wconversion \
 "
 
 AC_SUBST([WARNING_CFLAGS])
