@@ -222,7 +222,7 @@ int main(int argc, char const *argv[])
 	(void)argc;
 	(void)argv;
 
-	srand(time(NULL));
+	srand((unsigned int) time(NULL));
 	addTest();
 	doubleTest();
 	multTest();

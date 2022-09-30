@@ -59,7 +59,7 @@ t_test_decrypt_message(void) {
     assert(data[n].r_lm - data[n].la <= sizeof(buf));
     memcpy(buf, data[n].result + data[n].la, data[n].r_lm - data[n].la);
 
-    len = dtls_ccm_decrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce, 
+    len = (int) dtls_ccm_decrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce,
 				   buf, data[n].r_lm - data[n].la,
 				   data[n].result, data[n].la);
 
@@ -77,7 +77,7 @@ t_test_dtls_encrypt_params(void) {
     dtls_ccm_params_t params =
       { .nonce = data[n].nonce,
         .tag_length = data[n].M,
-        .l = data[n].L
+        .l = (uint8_t) data[n].L
       };
 
     len = dtls_encrypt_params(&params,
@@ -102,8 +102,8 @@ t_test_dtls_decrypt_params(void) {
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
       { .nonce = data[n].nonce,
-        .tag_length = data[n].M,
-        .l = data[n].L
+        .tag_length = (uint8_t) data[n].M,
+        .l = (uint8_t) data[n].L
       };
 
     assert(data[n].r_lm - data[n].la - data[n].M <= sizeof(buf));
