@@ -283,11 +283,11 @@ static void fieldModO(const uint32_t *A, uint32_t *result, uint8_t length) {
 		return;
 	}
 
-	rshiftby(A, length, q1_q3, 9, ecc_order_k - 1);
+	rshiftby(A, length, q1_q3, 9, (uint8_t) (ecc_order_k - 1));
 
 	fieldMult(ecc_order_mu, q1_q3, q2_tmp, 9);
 
-	rshiftby(q2_tmp, 18, q1_q3, 8, ecc_order_k + 1);
+	rshiftby(q2_tmp, 18, q1_q3, 8, (uint8_t) (ecc_order_k + 1));
 
 	// r1 = first 9 blocks of A
 
