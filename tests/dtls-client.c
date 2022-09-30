@@ -434,7 +434,7 @@ main(int argc, char **argv) {
 
   /* use port number from command line when specified or the listen
      port, otherwise */
-  dst.addr.sin.sin_port = htons(atoi(optind < argc ? argv[optind++] : port_str));
+  dst.addr.sin.sin_port = htons((u_short) atoi(optind < argc ? argv[optind++] : port_str));
 
   
   /* init socket and set it to non-blocking */
