@@ -36,7 +36,7 @@
 int
 dtls_prng(unsigned char *buf, size_t len) {
 #ifdef HAVE_GETRANDOM
-  return getrandom(buf, len, 0);
+  return (int) getrandom(buf, len, 0);
 #else /* !HAVE_GETRANDOM */
   size_t klen = len;
   while (len--)
