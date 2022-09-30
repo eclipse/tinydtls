@@ -41,7 +41,7 @@ dtls_prng(unsigned char *buf, size_t len) {
   size_t klen = len;
   while (len--)
     *buf++ = rand() & 0xFF;
-  return klen;
+  return (int) klen;
 #endif /* !HAVE_GETRANDOM */
 }
 
@@ -67,7 +67,7 @@ dtls_prng_init(unsigned seed) {
   }
 
   fclose(urandom);
-  srand((unsigned long)*buf);
+  srand((unsigned int)*buf);
 #endif /* !HAVE_GETRANDOM */
 }
 
