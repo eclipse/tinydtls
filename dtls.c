@@ -474,8 +474,8 @@ is_record(uint8 *msg, size_t msglen) {
     uint16_t version = dtls_uint16_to_int(msg + 1);
     if ((((version == DTLS_VERSION) || (version == DTLS10_VERSION))
          && known_content_type(msg))) {
-        rlen = DTLS_RH_LENGTH +
-	dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->length);
+        rlen = (unsigned int) (DTLS_RH_LENGTH +
+	dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->length));
 
       /* we do not accept wrong length field in record header */
       if (rlen > msglen)
@@ -2837,7 +2837,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   }
 
   /* add known cipher(s) */
-  dtls_int_to_uint16(p, cipher_size - 2);
+  dtls_int_to_uint16(p, (uint16_t) (cipher_size - 2));
   p += sizeof(uint16);
 
   if (ecdsa) {

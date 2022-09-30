@@ -110,7 +110,7 @@ static inline dtls_security_parameters_t *dtls_security_params_next(dtls_peer_t 
   if (!peer->security_params[1]) {
     return NULL;
   }
-  peer->security_params[1]->epoch = peer->security_params[0]->epoch + 1;
+  peer->security_params[1]->epoch = (uint16_t) (peer->security_params[0]->epoch + 1);
   return peer->security_params[1];
 }
 
