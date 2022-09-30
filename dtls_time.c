@@ -99,8 +99,8 @@ void dtls_ticks(dtls_tick_t *t) {
 #ifdef HAVE_SYS_TIME_H
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  *t = (dtls_tick_t) (tv.tv_sec - dtls_clock_offset) * DTLS_TICKS_PER_SECOND
-    + (tv.tv_usec * DTLS_TICKS_PER_SECOND / 1000000);
+  *t = (dtls_tick_t) ((tv.tv_sec - dtls_clock_offset) * DTLS_TICKS_PER_SECOND
+    + (tv.tv_usec * DTLS_TICKS_PER_SECOND / 1000000));
 
 #elif defined(_MSC_VER)
 
