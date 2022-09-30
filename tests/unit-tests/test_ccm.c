@@ -76,7 +76,7 @@ t_test_dtls_encrypt_params(void) {
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
       { .nonce = data[n].nonce,
-        .tag_length = data[n].M,
+        .tag_length = (uint8_t) data[n].M,
         .l = (uint8_t) data[n].L
       };
 
