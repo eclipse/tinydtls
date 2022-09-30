@@ -788,7 +788,8 @@ calculate_key_block(dtls_context_t *ctx,
   }
 #endif /* DTLS_ECC */
   case TLS_NULL_WITH_NULL_NULL:
-    assert(!"calculate_key_block: tried to use NULL cipher\n");
+    dtls_crit("calculate_key_block: tried to use NULL cipher\n");
+    assert(0);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
 
     /* The following cases cover the enum symbols that are not
@@ -2684,7 +2685,8 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
 #endif /* DTLS_ECC */
 
   case TLS_NULL_WITH_NULL_NULL:
-    assert(!"NULL cipher requested");
+    dtls_crit("NULL cipher requested");
+    assert(0);
     return dtls_alert_fatal_create(DTLS_ALERT_INSUFFICIENT_SECURITY);
 
     /* The following cases cover the enum symbols that are not
