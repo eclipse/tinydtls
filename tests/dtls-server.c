@@ -92,7 +92,7 @@ get_psk_info(struct dtls_context_t *ctx, const session_t *session,
 	}
 
 	memcpy(result, psk[i].key, psk[i].key_length);
-	return psk[i].key_length;
+	return (int) psk[i].key_length;
       }
     }
   }
@@ -147,12 +147,12 @@ read_from_peer(struct dtls_context_t *ctx,
       !memcmp(data, DTLS_SERVER_CMD_CLOSE, strlen(DTLS_SERVER_CMD_CLOSE))) {
     printf("server: closing connection\n");
     dtls_close(ctx, session);
-    return len;
+    return (int) len;
   } else if (len >= strlen(DTLS_SERVER_CMD_RENEGOTIATE) &&
       !memcmp(data, DTLS_SERVER_CMD_RENEGOTIATE, strlen(DTLS_SERVER_CMD_RENEGOTIATE))) {
     printf("server: renegotiate connection\n");
     dtls_renegotiate(ctx, session);
-    return len;
+    return (int) len;
   }
 
   return dtls_write(ctx, session, data, len);
@@ -163,7 +163,7 @@ send_to_peer(struct dtls_context_t *ctx,
 	     session_t *session, uint8 *data, size_t len) {
 
   int fd = *(int *)dtls_get_app_data(ctx);
-  return sendto(fd, data, len, MSG_DONTWAIT,
+  return (int) sendto(fd, data, len, MSG_DONTWAIT,
 		&session->addr.sa, session->size);
 }
 
@@ -180,7 +180,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
-  len = recvfrom(*fd, buf, sizeof(buf), MSG_TRUNC,
+  len = (int) recvfrom(*fd, buf, sizeof(buf), MSG_TRUNC,
 		 &session.addr.sa, &session.size);
 
   if (len < 0) {
@@ -309,7 +309,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      port = htons(atoi(optarg));
+      port = htons((u_short) atoi(optarg));
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
