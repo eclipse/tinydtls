@@ -222,7 +222,7 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 
 #endif /* WITH_CONTIKI */
 
-#if defined(RIOT_VERSION) || defined(IS_WINDOWS)
+#if defined(RIOT_VERSION) || defined(IS_WINDOWS) || defined(WITH_LWIP)
   /* FIXME: Switch to RIOT own DEBUG lines */
   /* TODO: Check if inet_ntop can be used on Windows */
   (void) addr;
