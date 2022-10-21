@@ -201,6 +201,7 @@ malloc_context(void) {
 
 static inline void
 free_context(dtls_context_t *context) {
+  (void)context;
 }
 
 #endif /* WITH_CONTIKI || WITH_LWIP */
