@@ -28,6 +28,10 @@
 #include <logging/log.h>
 #endif /* WITH_ZEPHYR */
 
+#ifdef RIOT_VERSION
+#include "log.h"
+#endif
+
 #ifdef WITH_CONTIKI
 # ifndef DEBUG
 #  define DEBUG DEBUG_PRINT
@@ -126,7 +130,17 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 #define dtls_debug(...) LOG_DBG(__VA_ARGS__)
 #define dtls_debug_hexdump(name, buf, length) { LOG_DBG("%s (%zu bytes):", name, length); LOG_HEXDUMP_DBG(buf, length, name); }
 #define dtls_debug_dump(name, buf, length) { LOG_DBG("%s (%zu bytes):", name, length); LOG_HEXDUMP_DBG(buf, length, name); }
-#else /* WITH_ZEPHYR */
+#elif defined(RIOT_VERSION)
+#define dtls_emerg(...) LOG_ERROR(__VA_ARGS__)
+#define dtls_alert(...) LOG_ERROR(__VA_ARGS__)
+#define dtls_crit(...) LOG_ERROR(__VA_ARGS__)
+#define dtls_warn(...) LOG_WARNING(__VA_ARGS__)
+#define dtls_notice(...) LOG_INFO(__VA_ARGS__)
+#define dtls_info(...) LOG_INFO(__VA_ARGS__)
+#define dtls_debug(...) LOG_DEBUG(__VA_ARGS__)
+#define dtls_debug_hexdump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 1)
+#define dtls_debug_dump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 0)
+#else /* neither RIOT nor Zephyr */
 #define dtls_emerg(...) dsrv_log(DTLS_LOG_EMERG, __VA_ARGS__)
 #define dtls_alert(...) dsrv_log(DTLS_LOG_ALERT, __VA_ARGS__)
 #define dtls_crit(...) dsrv_log(DTLS_LOG_CRIT, __VA_ARGS__)
@@ -136,6 +150,6 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 #define dtls_debug(...) dsrv_log(DTLS_LOG_DEBUG, __VA_ARGS__)
 #define dtls_debug_hexdump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 1)
 #define dtls_debug_dump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 0)
-#endif /* WITH_ZEPHYR */
+#endif
 
 #endif /* _DTLS_DEBUG_H_ */
