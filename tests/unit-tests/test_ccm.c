@@ -97,7 +97,7 @@ t_test_dtls_encrypt_params(void) {
 static void
 t_test_dtls_decrypt_params(void) {
   size_t n;
-  int len;
+  ssize_t len;
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
