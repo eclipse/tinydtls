@@ -86,7 +86,7 @@ typedef struct {
    *         that were sent, or a value less than zero to indicate an 
    *         error.
    */
-  int (*write)(struct dtls_context_t *ctx, 
+  ssize_t (*write)(struct dtls_context_t *ctx,
 	       session_t *session, uint8 *buf, size_t len);
 
   /** 
@@ -101,7 +101,7 @@ typedef struct {
    * @param len  The actual length of @p buf.
    * @return ignored
    */
-  int (*read)(struct dtls_context_t *ctx, 
+  ssize_t (*read)(struct dtls_context_t *ctx,
 	       session_t *session, uint8 *buf, size_t len);
 
   /**
@@ -142,7 +142,7 @@ typedef struct {
    * @return The number of bytes written to @p result or a value
    *         less than zero on error.
    */
-  int (*get_psk_info)(struct dtls_context_t *ctx,
+  ssize_t (*get_psk_info)(struct dtls_context_t *ctx,
 		      const session_t *session,
 		      dtls_credentials_type_t type,
 		      const unsigned char *desc, size_t desc_len,
@@ -260,7 +260,7 @@ static inline void dtls_set_handler(dtls_context_t *ctx, dtls_handler_t *h) {
  * @param dst    The remote party to connect to.
  * @return A value less than zero on error, greater or equal otherwise.
  */
-int dtls_connect(dtls_context_t *ctx, const session_t *dst);
+ssize_t dtls_connect(dtls_context_t *ctx, const session_t *dst);
 
 /**
  * Establishes a DTLS channel with the specified remote peer.
@@ -272,7 +272,7 @@ int dtls_connect(dtls_context_t *ctx, const session_t *dst);
  * @param peer   The peer object that describes the session.
  * @return A value less than zero on error, greater or equal otherwise.
  */
-int dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
+ssize_t dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
 
 /**
  * Closes the DTLS connection associated with @p remote. This function
@@ -289,7 +289,7 @@ int dtls_close(dtls_context_t *ctx, const session_t *remote);
  * @param dst    The session object that describes the existing session.
  * @return A value less than zero on error, greater otherwise.
  */
-int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
+ssize_t dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
 
 /**
  * Writes the application data given in multiple buffers to the peer
@@ -304,7 +304,7 @@ int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
  * @return The number of bytes written, @c -1 on error or @c 0
  *         if the peer already exists but is not connected yet.
  */
-int dtls_writev(struct dtls_context_t *ctx,
+ssize_t dtls_writev(struct dtls_context_t *ctx,
 		session_t *session, uint8 *buf_array[],
 		size_t buf_len_array[], size_t buf_array_len);
 
@@ -320,7 +320,7 @@ int dtls_writev(struct dtls_context_t *ctx,
  * @return The number of bytes written, @c -1 on error or @c 0
  *         if the peer already exists but is not connected yet.
  */
-int dtls_write(struct dtls_context_t *ctx, session_t *session,
+ssize_t dtls_write(struct dtls_context_t *ctx, session_t *session,
 	       uint8 *buf, size_t len);
 
 /**
@@ -427,8 +427,8 @@ int dtls_record_read(dtls_state_t *state, uint8 *msg, int msglen);
  * @param msglen  The actual length of @p msg.
  * @return A value less than zero on error, zero on success.
  */
-int dtls_handle_message(dtls_context_t *ctx, session_t *session,
-			uint8 *msg, int msglen);
+ssize_t dtls_handle_message(dtls_context_t *ctx, session_t *session,
+			uint8 *msg, size_t msglen);
 
 /**
  * Check if @p session is associated with a peer object in @p context.
@@ -482,8 +482,8 @@ void dtls_reset_peer(dtls_context_t *context, dtls_peer_t *peer);
  *
  * The AES implementation is taken from rijndael.{c,h} contained in the crypto 
  * sub-system of the OpenBSD operating system. It is copyright by Vincent Rijmen, *
- * Antoon Bosselaers and Paulo Barreto. See <a 
- * href="http://www.openbsd.org/cgi-bin/cvsweb/src/sys/crypto/rijndael.c">rijndael.c</a> 
+ * Antoon Bosselaers and Paulo Barreto. See <a
+ * href="http://www.openbsd.org/cgi-bin/cvsweb/src/sys/crypto/rijndael.c">rijndael.c</a>
  * for License info.
  *
  * @section download Getting the Files

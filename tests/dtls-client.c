@@ -1,4 +1,4 @@
-#include "tinydtls.h" 
+#include "tinydtls.h"
 
 /* This is needed for apple */
 #define __APPLE_USE_RFC_3542
@@ -19,9 +19,9 @@
 #include <netdb.h>
 #include <signal.h>
 
-#include "global.h" 
+#include "global.h"
 #include "dtls_debug.h"
-#include "dtls.h" 
+#include "dtls.h"
 
 #define DEFAULT_PORT 20220
 
@@ -104,7 +104,7 @@ static size_t psk_key_length = 0;
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identity within this particular
  * session. */
-static int
+static ssize_t
 get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
 	    const session_t *session UNUSED_PARAM,
 	    dtls_credentials_type_t type,
@@ -123,7 +123,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     }
 
     memcpy(result, psk_id, psk_id_length);
-    return (int) psk_id_length;
+    return psk_id_length;
   case DTLS_PSK_KEY:
     if (id_len != psk_id_length || memcmp(psk_id, id, id_len) != 0) {
       dtls_warn("PSK for unknown id requested, exiting\n");
@@ -134,7 +134,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
     }
 
     memcpy(result, psk_key, psk_key_length);
-    return (int) psk_key_length;
+    return psk_key_length;
   case DTLS_PSK_HINT:
   default:
     dtls_warn("unsupported request type: %d\n", type);
@@ -179,7 +179,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 
 static void
 try_send(struct dtls_context_t *ctx, session_t *dst, size_t len, char *buf) {
-  int res;
+  ssize_t res;
   res = dtls_write(ctx, dst, (uint8 *)buf, len);
   if (res >= 0) {
     memmove(buf, buf + res, len - res);
@@ -193,8 +193,8 @@ handle_stdin(size_t *len, char *buf) {
     *len += strlen(buf + *len);
 }
 
-static int
-read_from_peer(struct dtls_context_t *ctx, 
+static ssize_t
+read_from_peer(struct dtls_context_t *ctx,
 	       session_t *session, uint8 *data, size_t len) {
   size_t i;
   (void)ctx;
@@ -205,33 +205,33 @@ read_from_peer(struct dtls_context_t *ctx,
   return 0;
 }
 
-static int
-send_to_peer(struct dtls_context_t *ctx, 
+static ssize_t
+send_to_peer(struct dtls_context_t *ctx,
 	     session_t *session, uint8 *data, size_t len) {
 
   int fd = *(int *)dtls_get_app_data(ctx);
-  return (int) sendto(fd, data, len, MSG_DONTWAIT,
+  return sendto(fd, data, len, MSG_DONTWAIT,
 		&session->addr.sa, session->size);
 }
 
-static int
+static ssize_t
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
   session_t session;
 #define MAX_READ_BUF 2000
   static uint8 buf[MAX_READ_BUF];
-  int len;
+  ssize_t len;
 
   fd = *(int *)dtls_get_app_data(ctx);
-  
+
   if (!fd)
     return -1;
 
   memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
-  len = (int) recvfrom(fd, buf, MAX_READ_BUF, 0,
+  len = recvfrom(fd, buf, MAX_READ_BUF, 0,
 		 &session.addr.sa, &session.size);
-  
+
   if (len < 0) {
     perror("recvfrom");
     return -1;
@@ -241,7 +241,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
-}    
+}
 
 static void dtls_handle_signal(int sig)
 {
@@ -254,7 +254,7 @@ static void dtls_handle_signal(int sig)
 /* stolen from libcoap: */
 static int
 resolve_address(const char *server, struct sockaddr *dst) {
-  
+
   struct addrinfo *res, *ainfo;
   struct addrinfo hints;
   static char addrstr[256];
@@ -345,7 +345,7 @@ static dtls_handler_t cb = {
  */
 #define DTLS_CLIENT_CMD_REHANDSHAKE "client:rehandshake"
 
-int 
+int
 main(int argc, char **argv) {
   fd_set rfds, wfds;
   struct timeval timeout;
@@ -398,7 +398,7 @@ main(int argc, char **argv) {
     case 'o' :
       output_file.length = strlen(optarg);
       output_file.s = (unsigned char *)malloc(output_file.length + 1);
-      
+
       if (!output_file.s) {
 	dtls_crit("cannot set output file: insufficient memory\n");
 	exit(-1);
@@ -417,12 +417,12 @@ main(int argc, char **argv) {
   }
 
   dtls_set_log_level(log_level);
-  
+
   if (argc <= optind) {
     usage(argv[0], dtls_package_version());
     exit(1);
   }
-  
+
   memset(&dst, 0, sizeof(session_t));
   /* resolve destination address where server should be sent */
   res = resolve_address(argv[optind++], &dst.addr.sa);
@@ -436,7 +436,7 @@ main(int argc, char **argv) {
      port, otherwise */
   dst.addr.sin.sin_port = htons((u_short) atoi(optind < argc ? argv[optind++] : port_str));
 
-  
+
   /* init socket and set it to non-blocking */
   fd = socket(dst.addr.sa.sa_family, SOCK_DGRAM, 0);
 
@@ -493,12 +493,12 @@ main(int argc, char **argv) {
     FD_SET(fileno(stdin), &rfds);
     FD_SET(fd, &rfds);
     /* FD_SET(fd, &wfds); */
-    
+
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
-    
+
     result = select(fd+1, &rfds, &wfds, 0, &timeout);
-    
+
     if (result < 0) {		/* error */
       if (errno != EINTR)
 	perror("select");
@@ -527,7 +527,7 @@ main(int argc, char **argv) {
 	         !memcmp(buf, DTLS_CLIENT_CMD_REHANDSHAKE, strlen(DTLS_CLIENT_CMD_REHANDSHAKE))) {
 	printf("client: rehandshake connection\n");
 	if (orig_dtls_context == NULL) {
-	  /* Cache the current context. We cannot free the current context as it will notify 
+	  /* Cache the current context. We cannot free the current context as it will notify
 	   * the Server to close the connection (which we do not want).
 	   */
 	  orig_dtls_context = dtls_context;
@@ -546,7 +546,7 @@ main(int argc, char **argv) {
       }
     }
   }
-  
+
   dtls_free_context(dtls_context);
   dtls_free_context(orig_dtls_context);
   exit(0);

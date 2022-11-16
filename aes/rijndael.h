@@ -29,6 +29,7 @@
 #define __RIJNDAEL_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 #define AES_MAXKEYBITS	(256)
 #define AES_MAXKEYBYTES	(AES_MAXKEYBITS/8)
@@ -55,11 +56,11 @@ typedef struct {
 } rijndael_ctx;
 
 int	 rijndael_set_key(rijndael_ctx *, const u_char *, int);
-int	 rijndael_set_key_enc_only(rijndael_ctx *, const u_char *, int);
+int	 rijndael_set_key_enc_only(rijndael_ctx *, const u_char *, size_t);
 void	 rijndael_decrypt(rijndael_ctx *, const u_char *, u_char *);
 void	 rijndael_encrypt(rijndael_ctx *, const u_char *, u_char *);
 
-int	rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int keyBits);
+int	rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], size_t keyBits);
 int	rijndaelKeySetupDec(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int keyBits);
 void	rijndaelEncrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 pt[16], aes_u8 ct[16]);
 #ifdef WITH_AES_DECRYPT

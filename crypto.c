@@ -258,7 +258,7 @@ dtls_p_hash(dtls_hashfunc_t h,
   return buflen;
 }
 
-size_t 
+size_t
 dtls_prf(const unsigned char *key, size_t keylen,
 	 const unsigned char *label, size_t labellen,
 	 const unsigned char *random1, size_t random1len,
@@ -331,7 +331,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
 }
 
 #ifdef DTLS_PSK
-int
+size_t
 dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 			   unsigned char *result, size_t result_len) {
   unsigned char *p = result;
@@ -351,16 +351,16 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
   
   memcpy(p, key, keylen);
 
-  return (int) (2 * (sizeof(uint16) + keylen));
+  return 2 * (sizeof(uint16) + keylen);
 }
 #endif /* DTLS_PSK */
 
 #ifdef DTLS_ECC
 static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
 				  uint32_t *result) {
-  int i;
+  ssize_t i;
 
-  for (i = (int) ((key_size / sizeof(uint32_t)) - 1); i >= 0 ; i--) {
+  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
     *result = dtls_uint32_to_int(&key[i * sizeof(uint32_t)]);
     result++;
   }
@@ -368,9 +368,9 @@ static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
 
 static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
 				    unsigned char *result) {
-  int i;
+  ssize_t i;
 
-  for (i = (int) ((key_size / sizeof(uint32_t)) - 1); i >= 0 ; i--) {
+  for (i = (key_size / sizeof(uint32_t)) - 1; i >= 0 ; i--) {
     dtls_int_to_uint32(result, key[i]);
     result += 4;
   }
@@ -385,9 +385,9 @@ static void dtls_ec_key_from_uint32(const uint32_t *key, size_t key_size,
  * interpreted as a negative number. In order to prevent this, a zero in the
  * ASN.1 presentation is prepended if that bit 7 is set.
 */
-int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
+ssize_t dtls_ec_key_asn1_from_uint32(const uint32_t *key, ssize_t key_size,
 				 uint8_t *buf) {
-  int i = 0;
+  ssize_t i = 0;
   uint8_t *lptr;
    
   /* ASN.1 Integer r */
@@ -401,16 +401,16 @@ int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
   dtls_ec_key_from_uint32(key, key_size, buf);
   
   /* skip leading 0's */
-  while (i < (int)key_size && buf[i] == 0) {
+  while (i < key_size && buf[i] == 0) {
      ++i;
   }
-  assert(i != (int)key_size);
-  if (i == (int)key_size) {
+  assert(i != key_size);
+  if (i == key_size) {
       dtls_alert("ec key is all zero\n");
       return 0;
   }
   if (buf[i] >= 0x80) {
-    /* 
+    /*
      * Preserve unsigned by adding leading 0 (i may go negative which is
      * explicitely handled below with the assumption that buf is at least 33
      * bytes in size).
@@ -429,10 +429,10 @@ int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
   }
   /* Update the length of positive ASN.1 integer */
   dtls_int_to_uint8(lptr, (uint8_t) key_size);
-  return (int) (key_size + 2);
+  return key_size + 2;
 }
 
-int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+ssize_t dtls_ecdh_pre_master_secret(unsigned char *priv_key,
 				   unsigned char *pub_key_x,
                                    unsigned char *pub_key_y,
                                    size_t key_size,
@@ -455,7 +455,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   ecc_ecdh(pub_x, pub_y, priv, result_x, result_y);
 
   dtls_ec_key_from_uint32(result_x, key_size, result);
-  return (int) key_size;
+  return key_size;
 }
 
 void
@@ -557,18 +557,18 @@ dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 }
 #endif /* DTLS_ECC */
 
-int
+ssize_t
 dtls_encrypt_params(const dtls_ccm_params_t *params,
                     const unsigned char *src, size_t length,
                     unsigned char *buf,
                     const unsigned char *key, size_t keylen,
                     const unsigned char *aad, size_t la) {
-  int ret;
+  ssize_t ret;
   struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
   ctx->data.tag_length = params->tag_length;
   ctx->data.l = params->l;
 
-  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, (int) (8 * keylen));
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
   if (ret < 0) {
     /* cleanup everything in case the key has the wrong size */
     dtls_warn("cannot set rijndael key\n");
@@ -577,14 +577,14 @@ dtls_encrypt_params(const dtls_ccm_params_t *params,
 
   if (src != buf)
     memmove(buf, src, length);
-  ret = (int) dtls_ccm_encrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
+  ret = dtls_ccm_encrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
 
 error:
   dtls_cipher_context_release();
   return ret;
 }
 
-int 
+ssize_t
 dtls_encrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
 	     const unsigned char *nonce,
@@ -598,19 +598,19 @@ dtls_encrypt(const unsigned char *src, size_t length,
   return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
 }
 
-int
+ssize_t
 dtls_decrypt_params(const dtls_ccm_params_t *params,
                     const unsigned char *src, size_t length,
                     unsigned char *buf,
                     const unsigned char *key, size_t keylen,
                     const unsigned char *aad, size_t la)
 {
-  int ret;
+  ssize_t ret;
   struct dtls_cipher_context_t *ctx = dtls_cipher_context_get();
   ctx->data.tag_length = params->tag_length;
   ctx->data.l = params->l;
 
-  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, (int) (8 * keylen));
+  ret = rijndael_set_key_enc_only(&ctx->data.ctx, key, 8 * keylen);
   if (ret < 0) {
     /* cleanup everything in case the key has the wrong size */
     dtls_warn("cannot set rijndael key\n");
@@ -619,14 +619,14 @@ dtls_decrypt_params(const dtls_ccm_params_t *params,
 
   if (src != buf)
     memmove(buf, src, length);
-  ret = (int) dtls_ccm_decrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
+  ret = dtls_ccm_decrypt(&ctx->data, src, length, buf, params->nonce, aad, la);
 
 error:
   dtls_cipher_context_release();
   return ret;
 }
 
-int
+ssize_t
 dtls_decrypt(const unsigned char *src, size_t length,
 	     unsigned char *buf,
 	     const unsigned char *nonce,

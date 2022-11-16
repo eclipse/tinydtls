@@ -33,15 +33,15 @@
  * implementation for prng().  You might want to change prng() to use
  * a better PRNG on your specific platform.
  */
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len) {
 #ifdef HAVE_GETRANDOM
-  return (int) getrandom(buf, len, 0);
+  return getrandom(buf, len, 0);
 #else /* !HAVE_GETRANDOM */
   size_t klen = len;
   while (len--)
     *buf++ = rand() & 0xFF;
-  return (int) klen;
+  return klen;
 #endif /* !HAVE_GETRANDOM */
 }
 

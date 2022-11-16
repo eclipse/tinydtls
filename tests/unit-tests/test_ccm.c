@@ -49,7 +49,7 @@ t_test_encrypt_message(void) {
 static void
 t_test_decrypt_message(void) {
   size_t n;
-  int len;
+  ssize_t len;
   rijndael_ctx ctx;
 
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
@@ -59,11 +59,11 @@ t_test_decrypt_message(void) {
     assert(data[n].r_lm - data[n].la <= sizeof(buf));
     memcpy(buf, data[n].result + data[n].la, data[n].r_lm - data[n].la);
 
-    len = (int) dtls_ccm_decrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce,
+    len = dtls_ccm_decrypt_message(&ctx, data[n].M, data[n].L, data[n].nonce,
 				   buf, data[n].r_lm - data[n].la,
 				   data[n].result, data[n].la);
 
-    CU_ASSERT((size_t)len == data[n].lm - data[n].la);
+    CU_ASSERT(len == data[n].lm - data[n].la);
     CU_ASSERT(memcmp(buf, data[n].msg + data[n].la, len) == 0);
   }
 }
@@ -72,7 +72,7 @@ static void
 t_test_dtls_encrypt_params(void) {
   size_t n;
   int len;
-  
+
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     dtls_ccm_params_t params =
       { .nonce = data[n].nonce,
@@ -126,7 +126,7 @@ static void
 t_test_dtls_encrypt(void) {
   size_t n;
   int len;
-  
+
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     /* The backwards-compatible dtls_encrypt() and dtls_decrypt()
      * only handle cipher suites with M=8 and L=3. */
@@ -149,7 +149,7 @@ static void
 t_test_dtls_decrypt(void) {
   size_t n;
   int len;
-  
+
   for (n = 0; n < sizeof(data)/sizeof(struct test_vector); ++n) {
     /* The backwards-compatible dtls_encrypt() and dtls_decrypt()
      * only handle cipher suites with M=8 and L=3. */

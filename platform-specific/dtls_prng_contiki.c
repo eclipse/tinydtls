@@ -23,11 +23,11 @@
 #include <string.h>
 #include "random.h"
 
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len)
 {
 #ifdef HAVE_PRNG
-  return contiki_prng_impl(buf, len);
+  contiki_prng_impl(buf, len);
 #else /* ! HAVE_PRNG */
   /**
    * Fills \p buf with \p len random bytes. This is the default
@@ -43,9 +43,10 @@ dtls_prng(unsigned char *buf, size_t len)
   }
 
   memcpy(buf, &v, len);
+#endif /* ! HAVE_PRNG */
+
   return len;
 }
-#endif /* ! HAVE_PRNG */
 
 void
 dtls_prng_init(unsigned seed)
