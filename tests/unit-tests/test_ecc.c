@@ -129,7 +129,7 @@ t_test_ecc_dh(void) {
   uint32_t tempBy2[8];
   uint32_t secretA[8];
   uint32_t secretB[8];
-  int ret;
+  size_t ret;
 
   ret = dtls_prng((void *)secretA, sizeof(secretA));
   CU_ASSERT(ret > 1);
