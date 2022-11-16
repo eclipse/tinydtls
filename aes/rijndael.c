@@ -728,7 +728,7 @@ static const aes_u32 rcon[] = {
  * @return	the number of rounds for the given cipher key size.
  */
 int
-rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], int keyBits)
+rijndaelKeySetupEnc(aes_u32 rk[/*4*(Nr + 1)*/], const aes_u8 cipherKey[], size_t keyBits)
 {
    	int i = 0;
 	aes_u32 temp;

@@ -16,6 +16,7 @@
  *******************************************************************************/
 
 #include <string.h>
+#include <sys/types.h>
 
 #include "tinydtls.h"
 #include "global.h"
@@ -35,7 +36,7 @@
     memset((A) + DTLS_CCM_BLOCKSIZE - (L), 0, (L));			\
     (C) = (cnt) & MASK_L(L);						\
     for (i_ = DTLS_CCM_BLOCKSIZE - 1; (C) && (i_ > (L)); --i_, (C) >>= 8) \
-      (A)[i_] |= (C) & 0xFF;						\
+      (A)[i_] |= (unsigned char) (C) & 0xFF;						\
   }
 
 static inline void 
@@ -47,7 +48,7 @@ block0(size_t M,       /* number of auth bytes */
        unsigned char *result) {
   unsigned int i;
 
-  result[0] = CCM_FLAGS(la, M, L);
+  result[0] = (unsigned char) CCM_FLAGS(la, M, L);
 
   /* copy the nonce */
   memcpy(result + 1, nonce, DTLS_CCM_BLOCKSIZE - L - 1);
@@ -88,11 +89,11 @@ add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, uint64_t la,
 #ifndef WITH_CONTIKI
     if (la < 0xFF00) {		/* 2^16 - 2^8 */
       j = 2;
-      dtls_int_to_uint16(B, la);
+      dtls_int_to_uint16(B, (uint16_t) la);
   } else if (la <= UINT32_MAX) {
       j = 6;
       dtls_int_to_uint16(B, 0xFFFE);
-      dtls_int_to_uint32(B+2, la);
+      dtls_int_to_uint32(B+2, (uint32_t) la);
     } else {
       j = 10;
       dtls_int_to_uint16(B, 0xFFFF);
@@ -164,8 +165,8 @@ mac(rijndael_ctx *ctx,
 
 }
 
-long int
-dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L, 
+ssize_t
+dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
 			 const unsigned char *aad, size_t la) {
@@ -184,7 +185,7 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   add_auth_data(ctx, aad, la, B, X);
 
   /* initialize block template */
-  A[0] = L-1;
+  A[0] = (unsigned char) (L-1);
 
   /* copy the nonce */
   memcpy(A + 1, nonce, DTLS_CCM_BLOCKSIZE - L - 1);
@@ -228,7 +229,7 @@ dtls_ccm_encrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   return len + M;
 }
 
-long int
+ssize_t
 dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 			 const unsigned char nonce[DTLS_CCM_BLOCKSIZE],
 			 unsigned char *msg, size_t lm, 
@@ -254,7 +255,7 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
   add_auth_data(ctx, aad, la, B, X);
 
   /* initialize block template */
-  A[0] = L-1;
+  A[0] = (unsigned char) (L-1);
 
   /* copy the nonce */
   memcpy(A + 1, nonce, DTLS_CCM_BLOCKSIZE - L - 1);
@@ -296,8 +297,8 @@ dtls_ccm_decrypt_message(rijndael_ctx *ctx, size_t M, size_t L,
 
   /* return length if MAC is valid, otherwise continue with error handling */
   if (equals(X, msg, M))
-    return len - M;
   
+    return len - M;
  error:
   return -1;
 }

@@ -42,7 +42,7 @@
  *
  * @return 1 buffer filled
  */
-int dtls_prng(unsigned char *buf, size_t len);
+size_t dtls_prng(unsigned char *buf, size_t len);
 
 /**
  * Seeds the random number generator used by the function dtls_prng()

@@ -77,7 +77,7 @@ dtls_alert_fatal_create(dtls_alert_t desc)
  * \return 0 (false), if not, not 0 (true), if it represents an alert.
  */
 static inline int
-dtls_is_alert(int err)
+dtls_is_alert(ssize_t err)
 {
   return (err < -(1 << 8) && err > -(3 << 8));
 }

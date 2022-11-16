@@ -22,7 +22,7 @@
 #include "dtls_prng.h"
 #include "random/rand32.h"
 
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len) {
   sys_csrand_get(buf, len);
   return len;

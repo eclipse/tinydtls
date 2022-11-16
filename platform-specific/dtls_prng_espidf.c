@@ -29,7 +29,7 @@
  * implementation for prng().  You might want to change prng() to use
  * a better PRNG on your specific platform.
  */
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len) {
   esp_fill_random(buf, len);
   return len;

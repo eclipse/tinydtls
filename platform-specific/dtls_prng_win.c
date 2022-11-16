@@ -28,7 +28,7 @@ __declspec(dllimport) int __cdecl rand_s(unsigned int*);
  * Fills @p buf with @p len random bytes. Returns a non-zero
  * value on error.
  */
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len) {
   errno_t err;
   unsigned int number;

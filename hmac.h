@@ -144,7 +144,7 @@ void dtls_hmac_update(dtls_hmac_context_t *ctx,
  * \param result Output parameter where the MAC is written to.
  * \return Length of the MAC written to \p result.
  */
-int dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result);
+size_t dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result);
 
 /**@}*/
 

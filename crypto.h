@@ -6,7 +6,7 @@
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -37,9 +37,9 @@
 #define DTLS_MAC_LENGTH        DTLS_HMAC_DIGEST_SIZE
 #define DTLS_IV_LENGTH         4  /* length of nonce_explicit */
 
-/** 
- * Maximum size of the generated keyblock. Note that MAX_KEYBLOCK_LENGTH must 
- * be large enough to hold the pre_master_secret, i.e. twice the length of the 
+/**
+ * Maximum size of the generated keyblock. Note that MAX_KEYBLOCK_LENGTH must
+ * be large enough to hold the pre_master_secret, i.e. twice the length of the
  * pre-shared key + 1.
  */
 #define MAX_KEYBLOCK_LENGTH  \
@@ -49,7 +49,7 @@
 #define DTLS_MASTER_SECRET_LENGTH 48
 #define DTLS_RANDOM_LENGTH 32
 
-typedef enum { AES128=0 
+typedef enum { AES128=0
 } dtls_crypto_alg;
 
 typedef enum {
@@ -109,14 +109,14 @@ typedef struct {
   uint16_t epoch;	     /**< counter for cipher state changes*/
   uint64_t rseq;	     /**< sequence number of last record sent */
 
-  /** 
+  /**
    * The key block generated from PRF applied to client and server
    * random bytes. The actual size is given by the selected cipher and
    * can be calculated using dtls_kb_size(). Use \c dtls_kb_ macros to
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
-  
+
   seqnum_t cseq;        /**<sequence number of last record received*/
 } dtls_security_parameters_t;
 
@@ -197,8 +197,8 @@ typedef struct {
 /* just for consistency */
 #define dtls_kb_digest_size(Param, Role) DTLS_MAC_LENGTH
 
-/** 
- * Expands the secret and key to a block of DTLS_HMAC_MAX 
+/**
+ * Expands the secret and key to a block of DTLS_HMAC_MAX
  * size according to the algorithm specified in section 5 of
  * RFC 4346.
  *
@@ -207,9 +207,9 @@ typedef struct {
  * \param keylen  Length of \p key.
  * \param label    The label.
  * \param labellen Length of \p label.
- * \param random1 The random pt 1. 
+ * \param random1 The random pt 1.
  * \param random1len Length of \p random1.
- * \param random2 The random pt 2. 
+ * \param random2 The random pt 2.
  * \param random2len Length of \p random2.
  * \param buf     Output buffer where the result is XORed into
  * \param buflen  The available space for \p buf
@@ -217,7 +217,7 @@ typedef struct {
  * \return The actual number of bytes written to \p buf or 0
  * on error.
  */
-size_t dtls_p_hash(dtls_hashfunc_t h, 
+size_t dtls_p_hash(dtls_hashfunc_t h,
 		   const unsigned char *key, size_t keylen,
 		   const unsigned char *label, size_t labellen,
 		   const unsigned char *random1, size_t random1len,
@@ -243,7 +243,7 @@ size_t dtls_prf(const unsigned char *key, size_t keylen,
  * buffer of at least \c sizeof(dtls_record_header_t) bytes. Usually,
  * the remaining packet will be encrypted, therefore, the cleartext
  * is passed separately in \p packet.
- * 
+ *
  * \param hmac_ctx  The HMAC context to use for MAC calculation.
  * \param record    The record header.
  * \param packet    Cleartext payload to apply the MAC to.
@@ -251,7 +251,7 @@ size_t dtls_prf(const unsigned char *key, size_t keylen,
  * \param buf       A result buffer that is large enough to hold
  *                  the generated digest.
  */
-void dtls_mac(dtls_hmac_context_t *hmac_ctx, 
+void dtls_mac(dtls_hmac_context_t *hmac_ctx,
 	      const unsigned char *record,
 	      const unsigned char *packet, size_t length,
 	      unsigned char *buf);
@@ -288,13 +288,13 @@ typedef struct {
  * \return The number of encrypted bytes on success, less than zero
  *         otherwise.
  */
-int dtls_encrypt_params(const dtls_ccm_params_t *params,
+ssize_t dtls_encrypt_params(const dtls_ccm_params_t *params,
                         const unsigned char *src, size_t length,
                         unsigned char *buf,
                         const unsigned char *key, size_t keylen,
                         const unsigned char *aad, size_t aad_length);
 
-/** 
+/**
  * Encrypts the specified \p src of given \p length, writing the
  * result to \p buf. The cipher implementation may add more data to
  * the result buffer such as an initialization vector or padding
@@ -315,12 +315,12 @@ int dtls_encrypt_params(const dtls_ccm_params_t *params,
  * \param aad_length actual size of @p aad
  *
  * \return The number of encrypted bytes on success, less than zero
- *         otherwise. 
+ *         otherwise.
  *
  * \deprecated dtls_encrypt() always sets M=8, L=2. Use
  *             dtls_encrypt_params() instead.
  */
-int dtls_encrypt(const unsigned char *src, size_t length,
+ssize_t dtls_encrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
 		 const unsigned char *nonce,
 		 const unsigned char *key, size_t keylen,
@@ -346,20 +346,20 @@ int dtls_encrypt(const unsigned char *src, size_t length,
  * \return Less than zero on error, the number of decrypted bytes
  *         otherwise.
  */
-int dtls_decrypt_params(const dtls_ccm_params_t *params,
+ssize_t dtls_decrypt_params(const dtls_ccm_params_t *params,
                         const unsigned char *src, size_t length,
                         unsigned char *buf,
                         const unsigned char *key, size_t keylen,
                         const unsigned char *aad, size_t aad_length);
 
-/** 
+/**
  * Decrypts the given buffer \p src of given \p length, writing the
  * result to \p buf. The function returns \c -1 in case of an error,
  * or the number of bytes written. Note that for block ciphers, \p
  * length must be a multiple of the cipher's block size. A return
  * value between \c 0 and the actual length indicates that only \c n-1
  * block have been processed. The provided \p src and \p buf may overlap.
- * 
+ *
  * \param src     The buffer to decrypt.
  * \param length  The length of the input buffer.
  * \param buf     The result buffer.
@@ -369,13 +369,13 @@ int dtls_decrypt_params(const dtls_ccm_params_t *params,
  * \param keylen  The key to use
  * \param a_data  additional authentication data for AEAD ciphers
  * \param a_data_length actual size of @p aad
- * \return Less than zero on error, the number of decrypted bytes 
+ * \return Less than zero on error, the number of decrypted bytes
  *         otherwise.
  *
  * \deprecated dtls_decrypt() always sets M=8, L=2. Use
  *             dtls_decrypt_params() instead.
  */
-int dtls_decrypt(const unsigned char *src, size_t length,
+ssize_t dtls_decrypt(const unsigned char *src, size_t length,
 		 unsigned char *buf,
 		 const unsigned char *nonce,
 		 const unsigned char *key, size_t keylen,
@@ -383,7 +383,7 @@ int dtls_decrypt(const unsigned char *src, size_t length,
 
 /* helper functions */
 
-/** 
+/**
  * Generates pre_master_sercet from given PSK and fills the result
  * according to the "plain PSK" case in section 2 of RFC 4279.
  * Diffie-Hellman and RSA key exchange are currently not supported.
@@ -394,12 +394,12 @@ int dtls_decrypt(const unsigned char *src, size_t length,
  * @param result_len The length of derived pre master secret.
  * @return The actual length of @p result.
  */
-int dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
+size_t dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 			       unsigned char *result, size_t result_len);
 
 #define DTLS_EC_KEY_SIZE 32
 
-int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+ssize_t dtls_ecdh_pre_master_secret(unsigned char *priv_key,
 				unsigned char *pub_key_x,
                                 unsigned char *pub_key_y,
                                 size_t key_size,
@@ -433,7 +433,7 @@ int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 			  const unsigned char *keyx_params, size_t keyx_params_size,
 			  unsigned char *result_r, unsigned char *result_s);
 
-int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
+ssize_t dtls_ec_key_asn1_from_uint32(const uint32_t *key, ssize_t key_size,
 				 unsigned char *buf);
 
 

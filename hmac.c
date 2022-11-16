@@ -61,7 +61,7 @@ dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen) 
     ctx->pad[i] ^= 0x6A;
 }
 
-int
+size_t
 dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
   unsigned char buf[DTLS_HMAC_DIGEST_SIZE];
   size_t len; 

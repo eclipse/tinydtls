@@ -48,7 +48,7 @@ static uint32_t add( const uint32_t *x, const uint32_t *y, uint32_t *result, uin
 		//printf("%02x + %02x + %01x = ", x[v], y[v], d);
 		d += (uint64_t) x[v] + (uint64_t) y[v];
 		//printf("%02x\n", d);
-		result[v] = d;
+		result[v] = (uint32_t) d;
 		d = d>>32; //save carry
 	}
 	
@@ -168,8 +168,8 @@ static int fieldMult(const uint32_t *x, const uint32_t *y, uint32_t *result, uin
 		for (n = 0; n < length; n++){ 
 			l = (uint64_t)x[n]*(uint64_t)y[k];
 			temp[n+k] = l&0xFFFFFFFF;
-			temp[n+k+1] = l>>32;
-			add(&temp[n+k], &result[n+k], &result[n+k], (length * 2) - (n + k));
+			temp[n+k+1] = (uint32_t) (l>>32);
+			add(&temp[n+k], &result[n+k], &result[n+k], (uint8_t) ((length * 2) - (n + k)));
 
 			setZero(temp, length * 2);
 		}
@@ -283,11 +283,11 @@ static void fieldModO(const uint32_t *A, uint32_t *result, uint8_t length) {
 		return;
 	}
 
-	rshiftby(A, length, q1_q3, 9, ecc_order_k - 1);
+	rshiftby(A, length, q1_q3, 9, (uint8_t) (ecc_order_k - 1));
 
 	fieldMult(ecc_order_mu, q1_q3, q2_tmp, 9);
 
-	rshiftby(q2_tmp, 18, q1_q3, 8, ecc_order_k + 1);
+	rshiftby(q2_tmp, 18, q1_q3, 8, (uint8_t) (ecc_order_k + 1));
 
 	// r1 = first 9 blocks of A
 
@@ -408,7 +408,7 @@ static void fieldInv(const uint32_t *A, const uint32_t *modulus, const uint32_t 
 			}
 			
 		} 
-		t=sub(u,v,tempm,arrayLength); 				/* tempm=u-v */
+		t = (uint8_t) sub(u,v,tempm,arrayLength); 				/* tempm=u-v */
 		if (t==0) {							/* If u > 0 */
 			copy(tempm,u,arrayLength); 					/* u=u-v */
 			fieldSub(x1,x2,modulus,tempm); 			/* tempm=x1-x2 */

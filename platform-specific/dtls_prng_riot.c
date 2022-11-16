@@ -22,7 +22,7 @@
 #include "dtls_prng.h"
 #include "random.h"
 
-int
+size_t
 dtls_prng(unsigned char *buf, size_t len) {
   random_bytes(buf, len);
   return len;

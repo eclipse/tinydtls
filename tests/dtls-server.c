@@ -13,8 +13,8 @@
 #endif /* HAVE_SYS_TIME_H */
 #include <signal.h>
 
-#include "tinydtls.h" 
-#include "dtls.h" 
+#include "tinydtls.h"
+#include "dtls.h"
 #include "dtls_debug.h"
 
 #ifdef IS_WINDOWS
@@ -56,7 +56,7 @@ static const unsigned char ecdsa_pub_key_y[] = {
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identity within this particular
  * session. */
-static int
+static ssize_t
 get_psk_info(struct dtls_context_t *ctx, const session_t *session,
 	     dtls_credentials_type_t type,
 	     const unsigned char *id, size_t id_len,
@@ -138,8 +138,8 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #define DTLS_SERVER_CMD_CLOSE "server:close"
 #define DTLS_SERVER_CMD_RENEGOTIATE "server:renegotiate"
 
-static int
-read_from_peer(struct dtls_context_t *ctx, 
+static ssize_t
+read_from_peer(struct dtls_context_t *ctx,
 	       session_t *session, uint8 *data, size_t len) {
   if (write(STDOUT_FILENO, data, len) == -1)
     dtls_debug("write failed: %s\n", strerror(errno));
@@ -158,8 +158,8 @@ read_from_peer(struct dtls_context_t *ctx,
   return dtls_write(ctx, session, data, len);
 }
 
-static int
-send_to_peer(struct dtls_context_t *ctx, 
+static ssize_t
+send_to_peer(struct dtls_context_t *ctx,
 	     session_t *session, uint8 *data, size_t len) {
 
   int fd = *(int *)dtls_get_app_data(ctx);
@@ -167,12 +167,13 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
-static int
+static ssize_t
 dtls_handle_read(struct dtls_context_t *ctx) {
   int *fd;
   session_t session;
   static uint8 buf[DTLS_MAX_BUF];
-  int len;
+  ssize_t len;
+  size_t bytes_lost;
 
   fd = dtls_get_app_data(ctx);
 
@@ -187,15 +188,16 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     perror("recvfrom");
     return -1;
   } else {
-    dtls_debug("got %d bytes from port %d\n", len, 
+    dtls_debug("got %zd bytes from port %d\n", len,
 	     ntohs(session.addr.sin6.sin6_port));
-    if (sizeof(buf) < (size_t)len) {
-      dtls_warn("packet was truncated (%ld bytes lost)\n", len - sizeof(buf));
+    bytes_lost = len - sizeof(buf);
+    if (bytes_lost > 0) {
+      dtls_warn("packet was truncated (%lu bytes lost)\n", bytes_lost);
     }
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
-}    
+}
 
 static void dtls_handle_signal(int sig)
 {
@@ -204,13 +206,14 @@ static void dtls_handle_signal(int sig)
   kill(getpid(), sig);
 }
 
-static int
+static ssize_t
 resolve_address(const char *server, struct sockaddr *dst) {
-  
+
   struct addrinfo *res, *ainfo;
   struct addrinfo hints;
   static char addrstr[256];
-  int error, len=-1;
+  int error;
+  ssize_t len = -1;
 
   memset(addrstr, 0, sizeof(addrstr));
   if (server && strlen(server) > 0)
@@ -233,7 +236,7 @@ resolve_address(const char *server, struct sockaddr *dst) {
     switch (ainfo->ai_family) {
     case AF_INET6:
     case AF_INET:
-      len = (int)ainfo->ai_addrlen;
+      len = ainfo->ai_addrlen;
       memcpy(dst, ainfo->ai_addr, len);
       goto finish;
     default:
@@ -276,7 +279,7 @@ static dtls_handler_t cb = {
 #endif /* DTLS_ECC */
 };
 
-int 
+int
 main(int argc, char **argv) {
   log_t log_level = DTLS_LOG_WARN;
   fd_set rfds, wfds;
@@ -309,7 +312,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      port = htons(atoi(optarg));
+      port = htons((u_short) atoi(optarg));
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
@@ -389,12 +392,12 @@ main(int argc, char **argv) {
 
     FD_SET(fd, &rfds);
     /* FD_SET(fd, &wfds); */
-    
+
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
-    
+
     result = select( fd+1, &rfds, &wfds, 0, &timeout);
-    
+
     if (result < 0) {		/* error */
       if (errno != EINTR)
 	perror("select");
@@ -407,7 +410,7 @@ main(int argc, char **argv) {
       }
     }
   }
-  
+
  error:
   dtls_free_context(the_context);
   exit(0);

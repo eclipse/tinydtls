@@ -20,7 +20,7 @@
 
 /* setup key context for encryption only */
 int
-rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
+rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, size_t bits)
 {
 	int rounds;
 
