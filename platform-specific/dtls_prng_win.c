@@ -15,8 +15,6 @@
 #include "dtls_prng.h"
 #include "dtls_debug.h"
 
-#define _CRT_RAND_S
-
 #include <stdlib.h>
 
 #if defined(__MINGW32__)
