@@ -57,6 +57,15 @@ typedef unsigned char uint48[6];
 #endif /* WITH_CONTIKI || RIOT_VERSION */
 #endif
 
+/*
+ * DTLS send buf is alloctaed on the stack by default
+ */
+#if !defined(DTLS_CONSTRAINED_STACK) && \
+    (defined(WITH_CONTIKI) || defined(RIOT_VERSION)) && \
+    (DTLS_MAX_BUF > 200)
+#define DTLS_CONSTRAINED_STACK 1
+#endif
+
 #ifndef DTLS_DEFAULT_MAX_RETRANSMIT
 /** Number of message retransmissions. */
 #define DTLS_DEFAULT_MAX_RETRANSMIT 7
