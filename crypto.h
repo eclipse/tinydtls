@@ -140,6 +140,7 @@ typedef struct dtls_user_parameters_t {
    */
   dtls_cipher_t cipher_suites[DTLS_MAX_CIPHER_SUITES + 1];
   unsigned int force_extended_master_secret:1; /** force extended master secret extension (RFC7627) */
+  unsigned int force_renegotiation_info:1;     /** force renegotiation info extension (RFC5746) */
 } dtls_user_parameters_t;
 
 typedef struct {
@@ -159,6 +160,7 @@ typedef struct {
   dtls_cipher_index_t cipher_index;		/**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
+  unsigned int renegotiation_info:1;
   union {
 #ifdef DTLS_ECC
     dtls_handshake_parameters_ecdsa_t ecdsa;

@@ -140,6 +140,9 @@ memarray_t dtlscontext_storage;
  * ec point format        := 6 bytes   => 26
  * sign. and hash algos   := 8 bytes
  * extended master secret := 4 bytes   => 12
+ *
+ * (The ClientHello uses TLS_EMPTY_RENEGOTIATION_INFO_SCSV
+ *  instead of renegotiation info)
  */
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_COOKIE_LENGTH_MAX 32
@@ -660,6 +663,7 @@ static const dtls_user_parameters_t default_user_parameters = {
     },
 #endif /* DTLS_DEFAULT_CIPHER_SUITES */
   .force_extended_master_secret = 1,
+  .force_renegotiation_info = 1,
 };
 
 /** only one compression method is currently defined */
@@ -1260,6 +1264,15 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_sig_hash_algo(data, j))
           goto error;
         break;
+      case TLS_EXT_RENEGOTIATION_INFO:
+        /* RFC 5746, minimal version, only empty info is supported */
+        if (j == 1 && *data == 0) {
+          config->renegotiation_info = 1;
+        } else {
+          dtls_warn("only empty renegotiation info is supported.\n");
+          goto error;
+        }
+        break;
       default:
         dtls_notice("unsupported tls extension: %i\n", i);
         break;
@@ -1285,6 +1298,11 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 check_forced_extensions:
   if (config->user_parameters.force_extended_master_secret) {
      if (!config->extended_master_secret) {
+       goto error;
+     }
+  }
+  if (config->user_parameters.force_renegotiation_info) {
+     if (!config->renegotiation_info) {
        goto error;
      }
   }
@@ -1366,9 +1384,13 @@ dtls_update_parameters(dtls_context_t *ctx,
   }
 
   ok = 0;
-  while ((i >= (int)sizeof(uint16)) && !ok) {
-    config->cipher_index = get_cipher_index(config->user_parameters.cipher_suites, dtls_uint16_to_int(data));
-    ok = known_cipher(ctx, config->cipher_index, 0);
+  while ((i >= (int)sizeof(uint16)) && (!ok || !config->renegotiation_info)) {
+    if (dtls_uint16_to_int(data) == TLS_EMPTY_RENEGOTIATION_INFO_SCSV) {
+      config->renegotiation_info = 1;
+    } else if (!ok) {
+      config->cipher_index = get_cipher_index(config->user_parameters.cipher_suites, dtls_uint16_to_int(data));
+      ok = known_cipher(ctx, config->cipher_index, 0);
+    }
     i -= sizeof(uint16);
     data += sizeof(uint16);
   }
@@ -2435,10 +2457,11 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
    * server certificate type := 5 bytes
    * ec_point_formats        := 6 bytes
    * extended master secret  := 4 bytes
+   * renegotiation info      := 5 bytes
    *
    * (no elliptic_curves in ServerHello.)
    */
-  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 6 + 4];
+  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 6 + 4 + 5];
   uint8 *p;
   uint8 extension_size;
   dtls_handshake_parameters_t * const handshake = peer->handshake_params;
@@ -2446,6 +2469,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   const int ecdsa = is_key_exchange_ecdhe_ecdsa(handshake->cipher_index);
 
   extension_size = (handshake->extended_master_secret ? 4 : 0) +
+                   (handshake->renegotiation_info ? 5 : 0) +
                    (ecdsa ? 5 + 5 + 6 : 0);
 
   /* Handshake header */
@@ -2525,6 +2549,19 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     /* length of this extension type */
     dtls_int_to_uint16(p, 0);
     p += sizeof(uint16);
+  }
+
+  if (handshake->renegotiation_info) {
+    /* RFC5746 minimal version, empty renegotiation info, 5 bytes */
+    dtls_int_to_uint16(p, TLS_EXT_RENEGOTIATION_INFO);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 1);
+    p += sizeof(uint16);
+
+    /* empty renegotiation info */
+    *p++ = 0;
   }
 
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));
@@ -3097,6 +3134,11 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_crit("no supported cipher suite provided!\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
+
+  /* RFC5746 add RENEGOTIATION_INFO_SCSV */
+  dtls_int_to_uint16(p, TLS_EMPTY_RENEGOTIATION_INFO_SCSV);
+  p += sizeof(uint16);
+  cipher_suites_size += sizeof(uint16);
 
   /* set size of known cipher suites */
   dtls_int_to_uint16(p_cipher_suites_size, cipher_suites_size);
