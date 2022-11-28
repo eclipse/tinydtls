@@ -566,6 +566,8 @@ static const dtls_cipher_t default_cipher_suites[] =
     TLS_PSK_WITH_AES_128_CCM_8,
     TLS_PSK_WITH_AES_128_CCM,
 #endif /* DTLS_PSK */
+    /* RFC 5746, pseudo cipher suite to indicate secure renegotiation */
+    TLS_EMPTY_RENEGOTIATION_INFO_SCSV,
     /* TLS_NULL_WITH_NULL_NULL must always be the last entry as it
      * indicates the stop marker for the traversal of this table. */
     TLS_NULL_WITH_NULL_NULL
@@ -1056,7 +1058,7 @@ static int verify_ext_sig_hash_algo(uint8 *data, size_t data_length) {
  */
 static int
 dtls_check_tls_extension(dtls_peer_t *peer,
-			 uint8 *data, size_t data_length, int client_hello)
+			 uint8 *data, size_t data_length, int is_client_hello)
 {
   uint16_t i, j;
   int ext_elliptic_curve = 0;
@@ -1107,7 +1109,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         break;
       case TLS_EXT_CLIENT_CERTIFICATE_TYPE:
         ext_client_cert_type = 1;
-        if (client_hello) {
+        if (is_client_hello) {
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
@@ -1117,7 +1119,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         break;
       case TLS_EXT_SERVER_CERTIFICATE_TYPE:
         ext_server_cert_type = 1;
-        if (client_hello) {
+        if (is_client_hello) {
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
@@ -1143,6 +1145,15 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         if (verify_ext_sig_hash_algo(data, j))
           goto error;
         break;
+      case TLS_EXT_RENEGOTIATION_INFO:
+        /* RFC 5746, minimal version, only empty info is supported */
+        if (j == 1 && *data == 0) {
+          peer->handshake_params->renegotiation_info = 1;
+        } else {
+          dtls_warn("only empty renegotiation info is supported.\n");
+          goto error;
+        }
+        break;
       default:
         dtls_warn("unsupported tls extension: %i\n", i);
         break;
@@ -1151,7 +1162,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
     data_length -= j;
   }
   if (ecdsa) {
-    if (client_hello) {
+    if (is_client_hello) {
       if (!ext_elliptic_curve || !ext_client_cert_type || !ext_server_cert_type || !ext_ec_point_formats) {
         dtls_warn("not all required tls extensions found in client hello\n");
         goto error;
@@ -1166,7 +1177,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
   return 0;
 
 error:
-  if (client_hello && peer->state == DTLS_STATE_CONNECTED) {
+  if (is_client_hello && peer->state == DTLS_STATE_CONNECTED) {
     return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
   } else {
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
@@ -1243,9 +1254,13 @@ dtls_update_parameters(dtls_context_t *ctx,
   }
 
   ok = 0;
-  while ((i >= (int)sizeof(uint16)) && !ok) {
-    config->cipher_index = get_cipher_index(config->cipher_suites, dtls_uint16_to_int(data));
-    ok = known_cipher(ctx, config->cipher_index, 0);
+  while ((i >= (int)sizeof(uint16)) && (!ok || !config->renegotiation_info)) {
+    if (dtls_uint16_to_int(data) == TLS_EMPTY_RENEGOTIATION_INFO_SCSV) {
+      config->renegotiation_info = 1;
+    } else if (!ok) {
+      config->cipher_index = get_cipher_index(config->cipher_suites, dtls_uint16_to_int(data));
+      ok = known_cipher(ctx, config->cipher_index, 0);
+    }
     i -= sizeof(uint16);
     data += sizeof(uint16);
   }
@@ -2310,6 +2325,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   const int ecdsa = is_key_exchange_ecdhe_ecdsa(handshake->cipher_index);
 
   extension_size = (handshake->extended_master_secret ? 4 : 0) +
+                   (handshake->renegotiation_info ? 5 : 0) +
                    (ecdsa ? 5 + 5 + 6 : 0);
 
   /* Handshake header */
@@ -2389,6 +2405,19 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     /* length of this extension type */
     dtls_int_to_uint16(p, 0);
     p += sizeof(uint16);
+  }
+
+  if (handshake->renegotiation_info) {
+    /* RFC5746 minimal version, empty renegotiation info */
+    dtls_int_to_uint16(p, TLS_EXT_RENEGOTIATION_INFO);
+    p += sizeof(uint16);
+
+    /* length of this extension type */
+    dtls_int_to_uint16(p, 1);
+    p += sizeof(uint16);
+
+    /* empty renegotiation info */
+    *p++ = 0;
   }
 
   assert((buf <= p) && ((unsigned int)(p - buf) <= sizeof(buf)));
@@ -2963,6 +2992,11 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_crit("no supported cipher suite provided!\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
+
+  /* RFC5746 add RENEGOTIATION_INFO_SCSV */
+  dtls_int_to_uint16(p, TLS_EMPTY_RENEGOTIATION_INFO_SCSV);
+  p += sizeof(uint16);
+  cipher_suites_size += sizeof(uint16);
 
   /* set size of known cipher suites */
   dtls_int_to_uint16(p_cipher_suites_size, cipher_suites_size);
