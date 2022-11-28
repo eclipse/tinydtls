@@ -74,10 +74,11 @@ typedef unsigned char uint48[6];
 /** Known cipher suites.*/
 typedef enum { 
   TLS_NULL_WITH_NULL_NULL = 0x0000,   /**< NULL cipher  */
+  TLS_EMPTY_RENEGOTIATION_INFO_SCSV = 0x00FF, /**< see RFC 5746 */
   TLS_PSK_WITH_AES_128_CCM = 0xC0A4, /**< see RFC 6655 */
   TLS_PSK_WITH_AES_128_CCM_8 = 0xC0A8, /**< see RFC 6655 */
   TLS_ECDHE_ECDSA_WITH_AES_128_CCM = 0xC0AC, /**< see RFC 7251 */
-  TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AE /**< see RFC 7251 */
+  TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xC0AE, /**< see RFC 7251 */
 } dtls_cipher_t;
 
 /** Known compression suites.*/
@@ -92,6 +93,7 @@ typedef enum {
 #define TLS_EXT_SERVER_CERTIFICATE_TYPE	20 /* see RFC 7250 */
 #define TLS_EXT_ENCRYPT_THEN_MAC	22 /* see RFC 7366 */
 #define TLS_EXT_EXTENDED_MASTER_SECRET	23 /* see RFC 7627 */
+#define TLS_EXT_RENEGOTIATION_INFO	65281 /* see RFC 5746 */
 
 #define TLS_CERT_TYPE_RAW_PUBLIC_KEY	2 /* see RFC 7250 */
 
