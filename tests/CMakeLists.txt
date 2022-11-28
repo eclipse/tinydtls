@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(tinydtls-tests)
 
-add_executable(dtls-server dtls-server.c)
+add_executable(dtls-server dtls-server.c dtls_ciphers_util.c)
 target_link_libraries(dtls-server LINK_PUBLIC tinydtls)
 target_compile_options(dtls-server PUBLIC -Wall -DTEST_INCLUDE -DDTLSv12 -DWITH_SHA256)
 if(${WARNING_TO_ERROR})
@@ -37,7 +37,7 @@ if(${WARNING_TO_ERROR})
     target_compile_options(ccm-test PUBLIC -Werror)
 endif()
 
-add_executable(dtls-client dtls-client.c)
+add_executable(dtls-client dtls-client.c dtls_ciphers_util.c)
 target_link_libraries(dtls-client LINK_PUBLIC tinydtls)
 target_compile_options(dtls-client PUBLIC -Wall -DTEST_INCLUDE -DDTLSv12 -DWITH_SHA256)
 if(${WARNING_TO_ERROR})

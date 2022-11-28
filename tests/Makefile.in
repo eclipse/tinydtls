@@ -28,10 +28,10 @@ top_srcdir:= @top_srcdir@
 
 # files and flags
 SOURCES:= dtls-server.c ccm-test.c \
-  dtls-client.c
+  dtls-client.c dtls_ciphers_util.c
   #cbc_aes128-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
-PROGRAMS:= $(patsubst %.c, %, $(SOURCES))
+PROGRAMS:= dtls-server dtls-client ccm-test
 HEADERS:=
 CFLAGS:=-Wall -std=c99 @CFLAGS@ @WARNING_CFLAGS@ $(EXTRA_CFLAGS) -D_GNU_SOURCE
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
@@ -46,6 +46,8 @@ FILES:=Makefile.in $(SOURCES) ccm-testdata.c #cbc_aes128-testdata.c
 .SUFFIXES:      .c .o
 
 all:	$(PROGRAMS)
+
+dtls-client dtls-server:: dtls_ciphers_util.o
 
 check:	
 	echo DISTDIR: $(DISTDIR)

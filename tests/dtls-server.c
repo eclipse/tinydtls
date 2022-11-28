@@ -27,8 +27,9 @@
 #include <signal.h>
 
 #include "tinydtls.h"
-#include "dtls.h"
 #include "dtls_debug.h"
+#include "dtls_ciphers_util.h"
+#include "dtls.h" 
 
 #ifdef IS_WINDOWS
 #include <winsock2.h>
@@ -44,6 +45,9 @@
 #define DEFAULT_PORT 20220
 
 static dtls_context_t *the_context = NULL;
+static volatile int cmd_exit = 0;
+static const dtls_cipher_t* ciphers = NULL;
+static unsigned int force_extended_master_secret = 0;
 
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
@@ -151,8 +155,6 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #define DTLS_SERVER_CMD_CLOSE "server:close"
 #define DTLS_SERVER_CMD_EXIT "server:exit"
 
-static volatile int cmd_exit = 0;
-
 static int
 is_command(const char* cmd, const uint8 *data, size_t len) {
   size_t cmd_len = strlen(cmd);
@@ -189,6 +191,27 @@ send_to_peer(struct dtls_context_t *ctx,
   int fd = *(int *)dtls_get_app_data(ctx);
   return sendto(fd, data, len, MSG_DONTWAIT,
                 &session->addr.sa, session->size);
+}
+
+static void
+get_user_parameters(struct dtls_context_t *ctx,
+                    session_t *session, dtls_user_parameters_t *user_parameters) {
+  (void) ctx;
+  (void) session;
+  user_parameters->force_extended_master_secret = force_extended_master_secret;
+  if (ciphers) {
+    int index = 0;
+    while (index < DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = ciphers[index];
+      if (ciphers[index] == TLS_NULL_WITH_NULL_NULL) {
+        break;
+      }
+      ++index;
+    }
+    if (index == DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = TLS_NULL_WITH_NULL_NULL;
+    }
+  }
 }
 
 static int
@@ -283,17 +306,21 @@ usage(const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
-          "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
-         "usage: %s [-A address] [-p port] [-v num]\n"
-         "\t-A address\t\tlisten on specified address (default is ::)\n"
+         "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
+         "usage: %s [-A address] [-c cipher suites] [-e] [-p port] [-v num]\n"
+         "\t-A address\t\tlisten on specified address (default is ::)\n",
+         program, version, program);
+  cipher_suites_usage(stderr, "\t");
+  fprintf(stderr, "\t-e\t\tforce extended master secret (RFC7627)\n"
          "\t-p port\t\tlisten on specified port (default is %d)\n"
          "\t-v num\t\tverbosity level (default: 3)\n",
-         program, version, program, DEFAULT_PORT);
+         DEFAULT_PORT);
 }
 
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
+  .get_user_parameters = get_user_parameters,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -328,13 +355,19 @@ main(int argc, char **argv) {
   listen_addr.sin6_family = AF_INET6;
   listen_addr.sin6_addr = in6addr_any;
 
-  while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
+  while ((opt = getopt(argc, argv, "A:c:ep:v:")) != -1) {
     switch (opt) {
     case 'A' :
       if (resolve_address(optarg, (struct sockaddr *)&listen_addr) < 0) {
         fprintf(stderr, "cannot resolve address\n");
         exit(-1);
       }
+      break;
+    case 'c' :
+      ciphers = init_cipher_suites(optarg);
+      break;
+    case 'e' :
+      force_extended_master_secret = 1;
       break;
     case 'p' :
       port = htons(atoi(optarg));
