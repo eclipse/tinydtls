@@ -41,7 +41,7 @@ static const struct cipher_entry map[] = {
 static dtls_cipher_t ciphers_table[ARRAY_LENGTH] = { TLS_NULL_WITH_NULL_NULL };
 
 static dtls_cipher_t find_cipher_suite(const char *arg) {
-  for (int index=0; index < ARRAY_LENGTH - 1; ++index) {
+  for (size_t index=0; index < ARRAY_LENGTH - 1; ++index) {
     size_t len = strlen(map[index].name);
     if (strncmp(arg, map[index].name, len) == 0 && (arg[len] == 0 || arg[len] == SEP)) {
       return map[index].cipher;
@@ -51,7 +51,7 @@ static dtls_cipher_t find_cipher_suite(const char *arg) {
 }
 
 static void add_cipher_suite(dtls_cipher_t cipher) {
-  for (int index=0; index < ARRAY_LENGTH - 1; ++index) {
+  for (size_t index=0; index < ARRAY_LENGTH - 1; ++index) {
     if (ciphers_table[index] == cipher) {
       return;
     }

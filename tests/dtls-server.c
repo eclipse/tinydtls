@@ -422,3 +422,6 @@ main(int argc, char **argv) {
   dtls_free_context(the_context);
   exit(0);
 }
+
+#include "dtls_ciphers_util.c"
+
