@@ -14,8 +14,9 @@
 #include <signal.h>
 
 #include "tinydtls.h" 
-#include "dtls.h" 
 #include "dtls_debug.h"
+#include "dtls_ciphers_util.h"
+#include "dtls.h" 
 
 #ifdef IS_WINDOWS
 #include <winsock2.h>
@@ -161,6 +162,16 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
+static const dtls_cipher_t* ciphers = NULL;
+
+static void
+get_cipher_suites(struct dtls_context_t *ctx,
+    session_t *session, const dtls_cipher_t **cipher_suites) {
+  (void) ctx;
+  (void) session;
+  *cipher_suites = ciphers;
+}
+
 static int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int *fd;
@@ -250,16 +261,18 @@ usage(const char *program, const char *version) {
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
 	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
-	  "usage: %s [-A address] [-p port] [-v num]\n"
+	  "usage: %s [-A address] [-p port] [-v num] [-c cipher-suites]\n"
 	  "\t-A address\t\tlisten on specified address (default is ::)\n"
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
 	  "\t-v num\t\tverbosity level (default: 3)\n",
 	   program, version, program, DEFAULT_PORT);
+  cipher_suites_usage(stderr, "\t");
 }
 
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
+  .get_cipher_suites = get_cipher_suites,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -294,7 +307,7 @@ main(int argc, char **argv) {
   listen_addr.sin6_family = AF_INET6;
   listen_addr.sin6_addr = in6addr_any;
 
-  while ((opt = getopt(argc, argv, "A:p:v:")) != -1) {
+  while ((opt = getopt(argc, argv, "A:p:v:c:")) != -1) {
     switch (opt) {
     case 'A' :
       if (resolve_address(optarg, (struct sockaddr *)&listen_addr) < 0) {
@@ -307,6 +320,9 @@ main(int argc, char **argv) {
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
+      break;
+    case 'c' :
+      ciphers = init_cipher_suites(optarg);
       break;
     default:
       usage(argv[0], dtls_package_version());

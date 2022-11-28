@@ -21,6 +21,7 @@
 
 #include "global.h" 
 #include "dtls_debug.h"
+#include "dtls_ciphers_util.h"
 #include "dtls.h" 
 
 #define DEFAULT_PORT 20220
@@ -214,6 +215,16 @@ send_to_peer(struct dtls_context_t *ctx,
 		&session->addr.sa, session->size);
 }
 
+static const dtls_cipher_t* ciphers = NULL;
+
+static void
+get_cipher_suites(struct dtls_context_t *ctx,
+    session_t *session, const dtls_cipher_t **cipher_suites) {
+  (void) ctx;
+  (void) session;
+  *cipher_suites = ciphers;
+}
+
 static int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
@@ -308,9 +319,9 @@ usage( const char *program, const char *version) {
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
 	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
 #ifdef DTLS_PSK
-	  "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] addr [port]\n"
+	  "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] [-c cipher-suites] addr [port]\n"
 #else /*  DTLS_PSK */
-	  "usage: %s [-o file] [-p port] [-v num] addr [port]\n"
+	  "usage: %s [-o file] [-p port] [-v num] [-c cipher-suites] addr [port]\n"
 #endif /* DTLS_PSK */
 #ifdef DTLS_PSK
 	  "\t-i file\t\tread PSK identity from file\n"
@@ -320,11 +331,13 @@ usage( const char *program, const char *version) {
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
 	  "\t-v num\t\tverbosity level (default: 3)\n",
 	   program, version, program, DEFAULT_PORT);
+  cipher_suites_usage(stderr, "\t");
 }
 
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
+  .get_cipher_suites = get_cipher_suites,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -370,7 +383,7 @@ main(int argc, char **argv) {
   memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
-  while ((opt = getopt(argc, argv, "p:o:v:" PSK_OPTIONS)) != -1) {
+  while ((opt = getopt(argc, argv, "p:o:v:c:" PSK_OPTIONS)) != -1) {
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' :
@@ -408,6 +421,9 @@ main(int argc, char **argv) {
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
+      break;
+    case 'c' :
+      ciphers = init_cipher_suites(optarg);
       break;
     default:
       usage(argv[0], dtls_package_version());
