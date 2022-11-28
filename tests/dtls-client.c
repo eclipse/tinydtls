@@ -35,6 +35,7 @@
 
 #include "global.h"
 #include "dtls_debug.h"
+#include "dtls_ciphers_util.h"
 #include "dtls.h"
 
 #define DEFAULT_PORT 20220
@@ -58,6 +59,9 @@ static dtls_str output_file = { 0, NULL }; /* output file name */
 
 static dtls_context_t *dtls_context = NULL;
 static dtls_context_t *orig_dtls_context = NULL;
+
+static const dtls_cipher_t* ciphers = NULL;
+static unsigned int force_extended_master_secret = 0;
 
 
 #ifdef DTLS_ECC
@@ -228,6 +232,27 @@ send_to_peer(struct dtls_context_t *ctx,
                 &session->addr.sa, session->size);
 }
 
+static void
+get_user_parameters(struct dtls_context_t *ctx,
+                    session_t *session, dtls_user_parameters_t *user_parameters) {
+  (void) ctx;
+  (void) session;
+  user_parameters->force_extended_master_secret = force_extended_master_secret;
+  if (ciphers) {
+    int index = 0;
+    while (index < DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = ciphers[index];
+      if (ciphers[index] == TLS_NULL_WITH_NULL_NULL) {
+        break;
+      }
+      ++index;
+    }
+    if (index == DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = TLS_NULL_WITH_NULL_NULL;
+    }
+  }
+}
+
 static int
 dtls_handle_read(struct dtls_context_t *ctx) {
   int fd;
@@ -328,10 +353,13 @@ usage( const char *program, const char *version) {
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
           "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
 #ifdef DTLS_PSK
-          "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] addr [port]\n"
+          "usage: %s [-c cipher suites] [-e] [-i file] [-k file] [-o file] [-p port] [-v num] addr [port]\n",
 #else /*  DTLS_PSK */
-          "usage: %s [-o file] [-p port] [-v num] addr [port]\n"
+          "usage: %s [-c cipher suites] [-e] [-o file] [-p port] [-v num] addr [port]\n",
 #endif /* DTLS_PSK */
+          program, version, program);
+  cipher_suites_usage(stderr, "\t");
+  fprintf(stderr, "\t-e\t\tforce extended master secret (RFC7627)\n"
 #ifdef DTLS_PSK
           "\t-i file\t\tread PSK identity from file\n"
           "\t-k file\t\tread pre-shared key from file\n"
@@ -339,12 +367,13 @@ usage( const char *program, const char *version) {
           "\t-o file\t\toutput received data to this file (use '-' for STDOUT)\n"
           "\t-p port\t\tlisten on specified port (default is %d)\n"
           "\t-v num\t\tverbosity level (default: 3)\n",
-          program, version, program, DEFAULT_PORT);
+          DEFAULT_PORT);
 }
 
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
+  .get_user_parameters = get_user_parameters,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -393,7 +422,7 @@ main(int argc, char **argv) {
   memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
-  while ((opt = getopt(argc, argv, "p:o:v:" PSK_OPTIONS)) != -1) {
+  while ((opt = getopt(argc, argv, "c:eo:p:v:" PSK_OPTIONS)) != -1) {
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' :
@@ -413,9 +442,11 @@ main(int argc, char **argv) {
       }
       break;
 #endif /* DTLS_PSK */
-    case 'p' :
-      strncpy(port_str, optarg, NI_MAXSERV-1);
-      port_str[NI_MAXSERV - 1] = '\0';
+    case 'c' :
+      ciphers = init_cipher_suites(optarg);
+      break;
+    case 'e' :
+      force_extended_master_secret = 1;
       break;
     case 'o' :
       output_file.length = strlen(optarg);
@@ -428,6 +459,10 @@ main(int argc, char **argv) {
         /* copy filename including trailing zero */
         memcpy(output_file.s, optarg, output_file.length + 1);
       }
+      break;
+    case 'p' :
+      strncpy(port_str, optarg, NI_MAXSERV-1);
+      port_str[NI_MAXSERV - 1] = '\0';
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
