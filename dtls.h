@@ -281,17 +281,6 @@ int dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer);
 int dtls_close(dtls_context_t *ctx, const session_t *remote);
 
 /**
- * Renegotiates a DTLS channel based on the specified session.
- * This function returns a value greater than zero when a new ClientHello
- * message was sent, and a value less than zero on error.
- *
- * @param ctx    The DTLS context to use.
- * @param dst    The session object that describes the existing session.
- * @return A value less than zero on error, greater otherwise.
- */
-int dtls_renegotiate(dtls_context_t *ctx, const session_t *dst);
-
-/**
  * Writes the application data given in multiple buffers to the peer
  * specified by @p session.
  *

@@ -3481,51 +3481,6 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
   return clen;
 }
 
-static int
-dtls_send_hello_request(dtls_context_t *ctx, dtls_peer_t *peer)
-{
-  return dtls_send_handshake_msg_hash(ctx, peer, &peer->session,
-				      DTLS_HT_HELLO_REQUEST,
-				      NULL, 0, 0);
-}
-
-int
-dtls_renegotiate(dtls_context_t *ctx, const session_t *dst)
-{
-  dtls_peer_t *peer = NULL;
-  int err;
-
-  peer = dtls_get_peer(ctx, dst);
-
-  if (!peer) {
-    return -1;
-  }
-  if (peer->state != DTLS_STATE_CONNECTED)
-    return -1;
-
-  peer->handshake_params = dtls_handshake_new();
-  if (!peer->handshake_params)
-    return -1;
-
-  peer->handshake_params->hs_state.mseq_r = 0;
-  peer->handshake_params->hs_state.mseq_s = 0;
-  peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
-
-  if (peer->role == DTLS_CLIENT) {
-    /* send ClientHello with empty Cookie */
-    err = dtls_send_client_hello(ctx, peer, NULL, 0);
-    if (err < 0)
-      dtls_warn("cannot send ClientHello\n");
-    else
-      peer->state = DTLS_STATE_CLIENTHELLO;
-    return err;
-  } else if (peer->role == DTLS_SERVER) {
-    return dtls_send_hello_request(ctx, peer);
-  }
-
-  return -1;
-}
-
 /**
  * Process verified ClientHellos.
  *
@@ -3847,24 +3802,9 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t
       return 0;
     }
 
-    if (!peer->handshake_params) {
-      peer->handshake_params = dtls_handshake_new();
-      if (!peer->handshake_params)
-        return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
-
-      peer->handshake_params->hs_state.mseq_r = 0;
-      peer->handshake_params->hs_state.mseq_s = 0;
-    }
-
-    /* send ClientHello with empty Cookie */
-    err = dtls_send_client_hello(ctx, peer, NULL, 0);
-    if (err < 0) {
-      dtls_warn("cannot send ClientHello\n");
-      return err;
-    }
-    peer->state = DTLS_STATE_CLIENTHELLO;
-    peer->optional_handshake_message = DTLS_HT_NO_OPTIONAL_MESSAGE;
-    break;
+    dtls_warn("renegotiation is not supported!\n");
+    /* RFC5246, 7.2.2. Error Alerts, "no_renegotiation" is always a warning */
+    return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
 
   default:
     dtls_crit("unhandled message %d\n", data[0]);
@@ -4047,13 +3987,8 @@ handle_handshake(dtls_context_t *ctx, dtls_peer_t *peer, uint8 *data, size_t dat
 
   if (!peer->handshake_params) {
 
-    /* This is a ClientHello or Hello Request send when doing TLS renegotiation */
-    if (hs_header->msg_type == DTLS_HT_HELLO_REQUEST) {
-      return handle_handshake_msg(ctx, peer, data, data_length);
-    } else {
-      dtls_warn("ignore unexpected handshake message\n");
-      return 0;
-    }
+    dtls_warn("ignore unexpected handshake message\n");
+    return 0;
   }
   uint16_t mseq = dtls_uint16_to_int(hs_header->message_seq);
   if (mseq < peer->handshake_params->hs_state.mseq_r) {
@@ -4575,16 +4510,22 @@ dtls_free_context(dtls_context_t *ctx) {
 int
 dtls_connect_peer(dtls_context_t *ctx, dtls_peer_t *peer) {
   int res;
+  dtls_peer_t* previous_peer;
 
   assert(peer);
   if (!peer)
     return -1;
 
+  previous_peer = dtls_get_peer(ctx, &peer->session);
   /* check if the same peer is already in our list */
-  if (peer == dtls_get_peer(ctx, &peer->session)) {
-    dtls_debug("found peer, try to re-connect\n");
-    res = dtls_renegotiate(ctx, &peer->session);
-    return res < 0 ? -1 : 0;
+  if (previous_peer) {
+    if (previous_peer->role == DTLS_SERVER) {
+        dtls_debug("found peer in server role, exchange role to client\n");
+    } else {
+        dtls_debug("found peer in client role\n");
+    }
+    /* no close_notify, otherwise the other peer may respond. */
+    dtls_destroy_peer(ctx, previous_peer, 0);
   }
 
   /* set local peer role to client, remote is server */
