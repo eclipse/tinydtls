@@ -136,7 +136,6 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #endif /* DTLS_ECC */
 
 #define DTLS_SERVER_CMD_CLOSE "server:close"
-#define DTLS_SERVER_CMD_RENEGOTIATE "server:renegotiate"
 
 static int
 read_from_peer(struct dtls_context_t *ctx, 
@@ -147,11 +146,6 @@ read_from_peer(struct dtls_context_t *ctx,
       !memcmp(data, DTLS_SERVER_CMD_CLOSE, strlen(DTLS_SERVER_CMD_CLOSE))) {
     printf("server: closing connection\n");
     dtls_close(ctx, session);
-    return len;
-  } else if (len >= strlen(DTLS_SERVER_CMD_RENEGOTIATE) &&
-      !memcmp(data, DTLS_SERVER_CMD_RENEGOTIATE, strlen(DTLS_SERVER_CMD_RENEGOTIATE))) {
-    printf("server: renegotiate connection\n");
-    dtls_renegotiate(ctx, session);
     return len;
   }
 
