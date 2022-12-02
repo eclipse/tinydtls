@@ -137,6 +137,7 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #endif /* DTLS_ECC */
 
 #define DTLS_SERVER_CMD_CLOSE "server:close"
+#define DTLS_SERVER_CMD_EXIT "server:exit"
 
 static int
 read_from_peer(struct dtls_context_t *ctx, 
@@ -148,6 +149,11 @@ read_from_peer(struct dtls_context_t *ctx,
     printf("server: closing connection\n");
     dtls_close(ctx, session);
     return len;
+  }
+  if (len >= strlen(DTLS_SERVER_CMD_EXIT) &&
+      !memcmp(data, DTLS_SERVER_CMD_EXIT, strlen(DTLS_SERVER_CMD_EXIT))) {
+    printf("server: exit\n");
+    exit(-2);
   }
 
   return dtls_write(ctx, session, data, len);
@@ -163,13 +169,29 @@ send_to_peer(struct dtls_context_t *ctx,
 }
 
 static const dtls_cipher_t* ciphers = NULL;
+static unsigned int force_extended_master_secret = 0;
+static unsigned int force_renegotiation_info = 0;
 
 static void
-get_cipher_suites(struct dtls_context_t *ctx,
-    session_t *session, const dtls_cipher_t **cipher_suites) {
+get_user_parameters(struct dtls_context_t *ctx,
+    session_t *session, dtls_user_parameters_t *user_parameters) {
   (void) ctx;
   (void) session;
-  *cipher_suites = ciphers;
+  user_parameters->force_extended_master_secret = force_extended_master_secret;
+  user_parameters->force_renegotiation_info = force_renegotiation_info;
+  if (ciphers) {
+    int index = 0;
+    while (index < DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = ciphers[index];
+      if (ciphers[index] == TLS_NULL_WITH_NULL_NULL) {
+        break;
+      }
+      ++index;
+    }
+    if (index == DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = TLS_NULL_WITH_NULL_NULL;
+    }
+  }
 }
 
 static int
@@ -261,10 +283,12 @@ usage(const char *program, const char *version) {
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
 	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
-	  "usage: %s [-A address] [-p port] [-v num] [-c cipher-suites]\n"
+	  "usage: %s [-A address] [-p port] [-v num] [-c cipher-suites] [-r] [-e]\n"
 	  "\t-A address\t\tlisten on specified address (default is ::)\n"
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
-	  "\t-v num\t\tverbosity level (default: 3)\n",
+	  "\t-v num\t\tverbosity level (default: 3)\n"
+	  "\t-r\t\tforce rehandshake info (RFC5746)\n"
+	  "\t-e\t\tforce extended master secret (RFC7627)\n",
 	   program, version, program, DEFAULT_PORT);
   cipher_suites_usage(stderr, "\t");
 }
@@ -272,7 +296,7 @@ usage(const char *program, const char *version) {
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
-  .get_cipher_suites = get_cipher_suites,
+  .get_user_parameters = get_user_parameters,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -307,7 +331,7 @@ main(int argc, char **argv) {
   listen_addr.sin6_family = AF_INET6;
   listen_addr.sin6_addr = in6addr_any;
 
-  while ((opt = getopt(argc, argv, "A:p:v:c:")) != -1) {
+  while ((opt = getopt(argc, argv, "reA:p:v:c:")) != -1) {
     switch (opt) {
     case 'A' :
       if (resolve_address(optarg, (struct sockaddr *)&listen_addr) < 0) {
@@ -323,6 +347,12 @@ main(int argc, char **argv) {
       break;
     case 'c' :
       ciphers = init_cipher_suites(optarg);
+      break;
+    case 'r' :
+      force_renegotiation_info = 1;
+      break;
+    case 'e' :
+      force_extended_master_secret = 1;
       break;
     default:
       usage(argv[0], dtls_package_version());

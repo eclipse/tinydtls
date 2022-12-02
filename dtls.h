@@ -124,12 +124,10 @@ typedef struct {
    *
    * @param ctx     The current dtls context.
    * @param session The session where the cipher suites will be used.
-   * @param cipher_suites The pointer to return the list of cipher suites.
-   *                      The list must be terminated by TLS_NULL_WITH_NULL_NULL
-   *                      If NULL is assigned, the default cipher suites
-   *                      will be used.
+   * @param parameters The pointer to user parameters.
+   *                      The user parameters are initialized with the default values.
    */
-  void (*get_cipher_suites)(struct dtls_context_t *ctx, session_t *session, const dtls_cipher_t **cipher_suites);
+  void (*get_user_parameters)(struct dtls_context_t *ctx, session_t *session, dtls_user_parameters_t *parameters);
 
 #ifdef DTLS_PSK
   /**

@@ -189,20 +189,20 @@ try_send(struct dtls_context_t *ctx, session_t *dst, size_t len, char *buf) {
 }
 
 static void
-handle_stdin(size_t *len, char *buf) {
-  if (fgets(buf + *len, sizeof(buf) - *len, stdin))
+handle_stdin(size_t *len, char *buf, size_t max_len) {
+  if (fgets(buf + *len, max_len - *len, stdin))
     *len += strlen(buf + *len);
 }
 
 static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
-  size_t i;
   (void)ctx;
   (void)session;
 
-  for (i = 0; i < len; i++)
-    printf("%c", data[i]);
+  if (write(STDOUT_FILENO, data, len) == -1)
+    dtls_debug("write failed: %s\n", strerror(errno));
+
   return 0;
 }
 
@@ -216,13 +216,29 @@ send_to_peer(struct dtls_context_t *ctx,
 }
 
 static const dtls_cipher_t* ciphers = NULL;
+static unsigned int force_extended_master_secret = 0;
+static unsigned int force_renegotiation_info = 0;
 
 static void
-get_cipher_suites(struct dtls_context_t *ctx,
-    session_t *session, const dtls_cipher_t **cipher_suites) {
+get_user_parameters(struct dtls_context_t *ctx,
+    session_t *session, dtls_user_parameters_t *user_parameters) {
   (void) ctx;
   (void) session;
-  *cipher_suites = ciphers;
+  user_parameters->force_extended_master_secret = force_extended_master_secret;
+  user_parameters->force_renegotiation_info = force_renegotiation_info;
+  if (ciphers) {
+    int index = 0;
+    while (index < DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = ciphers[index];
+      if (ciphers[index] == TLS_NULL_WITH_NULL_NULL) {
+        break;
+      }
+      ++index;
+    }
+    if (index == DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[index] = TLS_NULL_WITH_NULL_NULL;
+    }
+  }
 }
 
 static int
@@ -319,9 +335,9 @@ usage( const char *program, const char *version) {
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
 	  "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
 #ifdef DTLS_PSK
-	  "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] [-c cipher-suites] addr [port]\n"
+	  "usage: %s [-i file] [-k file] [-o file] [-p port] [-v num] [-c cipher-suites] [-r] [-e] addr [port]\n"
 #else /*  DTLS_PSK */
-	  "usage: %s [-o file] [-p port] [-v num] [-c cipher-suites] addr [port]\n"
+	  "usage: %s [-o file] [-p port] [-v num] [-c cipher-suites] [-r] [-e] addr [port]\n"
 #endif /* DTLS_PSK */
 #ifdef DTLS_PSK
 	  "\t-i file\t\tread PSK identity from file\n"
@@ -329,7 +345,9 @@ usage( const char *program, const char *version) {
 #endif /* DTLS_PSK */
 	  "\t-o file\t\toutput received data to this file (use '-' for STDOUT)\n"
 	  "\t-p port\t\tlisten on specified port (default is %d)\n"
-	  "\t-v num\t\tverbosity level (default: 3)\n",
+	  "\t-v num\t\tverbosity level (default: 3)\n"
+	  "\t-r\t\tforce rehandshake info (RFC5746)\n"
+	  "\t-e\t\tforce extended master secret (RFC7627)\n",
 	   program, version, program, DEFAULT_PORT);
   cipher_suites_usage(stderr, "\t");
 }
@@ -337,7 +355,7 @@ usage( const char *program, const char *version) {
 static dtls_handler_t cb = {
   .write = send_to_peer,
   .read  = read_from_peer,
-  .get_cipher_suites = get_cipher_suites,
+  .get_user_parameters = get_user_parameters,
   .event = NULL,
 #ifdef DTLS_PSK
   .get_psk_info = get_psk_info,
@@ -356,6 +374,8 @@ static dtls_handler_t cb = {
  * Below command tests this feature.
  */
 #define DTLS_CLIENT_CMD_REHANDSHAKE "client:rehandshake"
+
+#define DTLS_CLIENT_CMD_EXIT "client:exit"
 
 int 
 main(int argc, char **argv) {
@@ -383,7 +403,7 @@ main(int argc, char **argv) {
   memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
-  while ((opt = getopt(argc, argv, "p:o:v:c:" PSK_OPTIONS)) != -1) {
+  while ((opt = getopt(argc, argv, "rep:o:v:c:" PSK_OPTIONS)) != -1) {
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' :
@@ -424,6 +444,12 @@ main(int argc, char **argv) {
       break;
     case 'c' :
       ciphers = init_cipher_suites(optarg);
+      break;
+    case 'r' :
+      force_renegotiation_info = 1;
+      break;
+    case 'e' :
+      force_extended_master_secret = 1;
       break;
     default:
       usage(argv[0], dtls_package_version());
@@ -524,7 +550,7 @@ main(int argc, char **argv) {
       else if (FD_ISSET(fd, &rfds))
 	dtls_handle_read(dtls_context);
       else if (FD_ISSET(fileno(stdin), &rfds))
-	handle_stdin(&len, buf);
+	handle_stdin(&len, buf, sizeof(buf));
     }
 
     if (len) {
@@ -533,6 +559,10 @@ main(int argc, char **argv) {
 	printf("client: closing connection\n");
 	dtls_close(dtls_context, &dst);
 	len = 0;
+      } else if (len >= strlen(DTLS_CLIENT_CMD_EXIT) &&
+	  !memcmp(buf, DTLS_CLIENT_CMD_EXIT, strlen(DTLS_CLIENT_CMD_EXIT))) {
+	printf("client: exit\n");
+	break;
       } else if (len >= strlen(DTLS_CLIENT_CMD_REHANDSHAKE) &&
 	         !memcmp(buf, DTLS_CLIENT_CMD_REHANDSHAKE, strlen(DTLS_CLIENT_CMD_REHANDSHAKE))) {
 	printf("client: rehandshake connection\n");
@@ -553,6 +583,7 @@ main(int argc, char **argv) {
 	len = 0;
       } else {
 	try_send(dtls_context, &dst, len, buf);
+	len = 0;
       }
     }
   }

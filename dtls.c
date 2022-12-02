@@ -158,7 +158,7 @@ memarray_t dtlscontext_storage;
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_COOKIE_LENGTH_MAX 32
-#define DTLS_CH_LENGTH_MAX DTLS_CH_LENGTH + DTLS_COOKIE_LENGTH_MAX + 18 + 26 + 12
+#define DTLS_CH_LENGTH_MAX DTLS_CH_LENGTH + DTLS_COOKIE_LENGTH_MAX + 10 + (2 * DTLS_MAX_CIPHER_SUITES) + 26 + 12
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 1 + 1 + 2 + 70)
@@ -588,26 +588,28 @@ dtls_set_handshake_header(uint8 type,
   return buf;
 }
 
-static const dtls_cipher_t default_cipher_suites[] =
+static const dtls_user_parameters_t default_user_parameters = {
+  .cipher_suites =
 #ifdef DTLS_DEFAULT_CIPHER_SUITES
-		DTLS_DEFAULT_CIPHER_SUITES ;
-#else
-{
+    DTLS_DEFAULT_CIPHER_SUITES ,
+#else /* DTLS_DEFAULT_CIPHER_SUITES */
+    {
 #ifdef DTLS_ECC
-    TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
-    TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
+      TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+      TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
-    TLS_PSK_WITH_AES_128_CCM_8,
-    TLS_PSK_WITH_AES_128_CCM,
+      TLS_PSK_WITH_AES_128_CCM_8,
+      TLS_PSK_WITH_AES_128_CCM,
 #endif /* DTLS_PSK */
-    /* RFC 5746, pseudo cipher suite to indicate secure renegotiation */
-    TLS_EMPTY_RENEGOTIATION_INFO_SCSV,
     /* TLS_NULL_WITH_NULL_NULL must always be the last entry as it
      * indicates the stop marker for the traversal of this table. */
-    TLS_NULL_WITH_NULL_NULL
+       TLS_NULL_WITH_NULL_NULL
+    },
+#endif /* DTLS_DEFAULT_CIPHER_SUITES */
+  .force_extended_master_secret = 1,
+  .force_renegotiation_info = 1,
 };
-#endif
 
 /** only one compression method is currently defined */
 static uint8 compression_methods[] = {
@@ -1100,14 +1102,15 @@ dtls_check_tls_extension(dtls_peer_t *peer,
   int ext_client_cert_type = 0;
   int ext_server_cert_type = 0;
   int ext_ec_point_formats = 0;
-  const int ecdsa = is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index);
+  dtls_handshake_parameters_t *config = peer->handshake_params;
+  const int ecdsa = is_key_exchange_ecdhe_ecdsa(config->cipher_index);
 
   if (data_length < sizeof(uint16)) {
     /* no tls extensions specified */
     if (ecdsa) {
       goto error;
     }
-    return 0;
+    goto check_forced_extensions;
   }
 
   /* get the length of the tls extension list */
@@ -1174,7 +1177,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	dtls_info("skipped encrypt-then-mac extension\n");
 	break;
       case TLS_EXT_EXTENDED_MASTER_SECRET:
-    	  peer->handshake_params->extended_master_secret = 1;
+          config->extended_master_secret = 1;
         break;
       case TLS_EXT_SIG_HASH_ALGO:
         if (verify_ext_sig_hash_algo(data, j))
@@ -1183,7 +1186,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
       case TLS_EXT_RENEGOTIATION_INFO:
         /* RFC 5746, minimal version, only empty info is supported */
         if (j == 1 && *data == 0) {
-          peer->handshake_params->renegotiation_info = 1;
+          config->renegotiation_info = 1;
         } else {
           dtls_warn("only empty renegotiation info is supported.\n");
           goto error;
@@ -1208,6 +1211,18 @@ dtls_check_tls_extension(dtls_peer_t *peer,
         goto error;
       }
     }
+  }
+
+check_forced_extensions:
+  if (config->user_parameters.force_extended_master_secret) {
+     if (!config->extended_master_secret) {
+       goto error;
+     }
+  }
+  if (config->user_parameters.force_renegotiation_info) {
+     if (!config->renegotiation_info) {
+       goto error;
+     }
   }
   return 0;
 
@@ -1281,11 +1296,9 @@ dtls_update_parameters(dtls_context_t *ctx,
   data += sizeof(uint16);
   data_length -= sizeof(uint16) + i;
 
-  if (ctx->h->get_cipher_suites != NULL) {
-    ctx->h->get_cipher_suites(ctx, &peer->session, &config->cipher_suites);
-  }
-  if (!config->cipher_suites) {
-    config->cipher_suites = default_cipher_suites;
+  config->user_parameters = default_user_parameters;
+  if (ctx->h->get_user_parameters != NULL) {
+    ctx->h->get_user_parameters(ctx, &peer->session, &config->user_parameters);
   }
 
   ok = 0;
@@ -1293,7 +1306,7 @@ dtls_update_parameters(dtls_context_t *ctx,
     if (dtls_uint16_to_int(data) == TLS_EMPTY_RENEGOTIATION_INFO_SCSV) {
       config->renegotiation_info = 1;
     } else if (!ok) {
-      config->cipher_index = get_cipher_index(config->cipher_suites, dtls_uint16_to_int(data));
+      config->cipher_index = get_cipher_index(config->user_parameters.cipher_suites, dtls_uint16_to_int(data));
       ok = known_cipher(ctx, config->cipher_index, 0);
     }
     i -= sizeof(uint16);
@@ -2977,11 +2990,9 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
 #endif
   dtls_handshake_parameters_t *handshake = peer->handshake_params;
 
-  if (ctx->h->get_cipher_suites != NULL) {
-    ctx->h->get_cipher_suites(ctx, &peer->session, &(handshake->cipher_suites));
-  }
-  if (!handshake->cipher_suites) {
-    handshake->cipher_suites = default_cipher_suites;
+  handshake->user_parameters = default_user_parameters;
+  if (ctx->h->get_user_parameters != NULL) {
+    ctx->h->get_user_parameters(ctx, &peer->session, &(handshake->user_parameters));
   }
 
   dtls_int_to_uint16(p, DTLS_VERSION);
@@ -3018,9 +3029,9 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
   p += sizeof(uint16);
 
   /* add known cipher(s) */
-  for (index = 0; handshake->cipher_suites[index] != TLS_NULL_WITH_NULL_NULL; ++index) {
-    dtls_cipher_t code = handshake->cipher_suites[index];
-    dtls_cipher_index_t cipher_index = get_cipher_index(handshake->cipher_suites, code);
+  for (index = 0; handshake->user_parameters.cipher_suites[index] != TLS_NULL_WITH_NULL_NULL; ++index) {
+    dtls_cipher_t code = handshake->user_parameters.cipher_suites[index];
+    dtls_cipher_index_t cipher_index = get_cipher_index(handshake->user_parameters.cipher_suites, code);
     if (known_cipher(ctx, cipher_index, 1)) {
       dtls_int_to_uint16(p, code);
       p += sizeof(uint16);
@@ -3231,7 +3242,7 @@ check_server_hello(dtls_context_t *ctx,
 
   /* Check if the cipher suite selected by the server
    *  is in our list of cipher suites. */
-  handshake->cipher_index = get_cipher_index(handshake->cipher_suites, dtls_uint16_to_int(data));
+  handshake->cipher_index = get_cipher_index(handshake->user_parameters.cipher_suites, dtls_uint16_to_int(data));
 
   if (!known_cipher(ctx, handshake->cipher_index, 1)) {
     dtls_alert("unsupported cipher 0x%02x 0x%02x\n", data[0], data[1]);
