@@ -119,11 +119,46 @@ memarray_t dtlscontext_storage;
   }
 #endif /* DTLS_PEERS_NOHASH */
 
+/*
+ * ClientHello:
+ *
+ * session_length         := 1 byte
+ * session                := 0 bytes
+ * cookie_length          := 1 byte
+ * cookie                 := n bytes
+ * cipher_length          := 2 bytes
+ * cipher suites (max)    := 4 * 2 + 2 bytes
+ * compression_lenght     := 1 byte
+ * compression            := 1 byte
+ * extensions_length      := 2 bytes   => 18
+ *
+ * client_cert_type       := 6 bytes
+ * server_cert_type       := 6 bytes
+ * ec curves              := 8 bytes
+ * ec point format        := 6 bytes   => 26
+ * sign. and hash algos   := 8 bytes
+ * extended master secret := 4 bytes   => 12
+ *
+ * (The ClientHello uses TLS_EMPTY_RENEGOTIATION_INFO_SCSV
+ *  instead of renegotiation info)
+ */
+
+/*
+ * ServerHello:
+ *
+ * version                := 2 bytes
+ * random                 := 32 bytes
+ * session_length         := 1 byte
+ * session                := 0 bytes
+ * cipher suites          := 2 bytes
+ * compression            := 1 byte
+ */
+
 #define DTLS_RH_LENGTH sizeof(dtls_record_header_t)
 #define DTLS_HS_LENGTH sizeof(dtls_handshake_header_t)
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_COOKIE_LENGTH_MAX 32
-#define DTLS_CH_LENGTH_MAX sizeof(dtls_client_hello_t) + DTLS_COOKIE_LENGTH_MAX + 16 + 26 + 12
+#define DTLS_CH_LENGTH_MAX DTLS_CH_LENGTH + DTLS_COOKIE_LENGTH_MAX + 18 + 26 + 12
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 #define DTLS_SH_LENGTH (2 + DTLS_RANDOM_LENGTH + 1 + 2 + 1)
 #define DTLS_SKEXEC_LENGTH (1 + 2 + 1 + 1 + DTLS_EC_KEY_SIZE + DTLS_EC_KEY_SIZE + 1 + 1 + 2 + 70)
@@ -2316,8 +2351,18 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 {
   /* Ensure that the largest message to create fits in our source
    * buffer. (The size of the destination buffer is checked by the
-   * encoding function, so we do not need to guess.) */
-  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 8 + 6 + 4];
+   * encoding function, so we do not need to guess.)
+   *
+   * extensions length       := 2 bytes
+   * client certificate type := 5 bytes
+   * server certificate type := 5 bytes
+   * ec_point_formats        := 6 bytes
+   * extended master secret  := 4 bytes
+   * renegotiation info      := 5 bytes
+   *
+   * (no elliptic_curves in ServerHello.)
+   */
+  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 6 + 4 + 5];
   uint8 *p;
   uint8 extension_size;
   dtls_handshake_parameters_t * const handshake = peer->handshake_params;
@@ -2359,7 +2404,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   }
 
   if (ecdsa) {
-    /* client certificate type extension */
+    /* client certificate type extension, 5 bytes */
     dtls_int_to_uint16(p, TLS_EXT_CLIENT_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
@@ -2370,7 +2415,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
-    /* client certificate type extension */
+    /* client certificate type extension, 5 bytes */
     dtls_int_to_uint16(p, TLS_EXT_SERVER_CERTIFICATE_TYPE);
     p += sizeof(uint16);
 
@@ -2381,7 +2426,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
     p += sizeof(uint8);
 
-    /* ec_point_formats */
+    /* ec_point_formats, 6 bytes */
     dtls_int_to_uint16(p, TLS_EXT_EC_POINT_FORMATS);
     p += sizeof(uint16);
 
@@ -2398,7 +2443,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 
   }
   if (handshake->extended_master_secret) {
-    /* extended master secret */
+    /* extended master secret, 4 bytes */
     dtls_int_to_uint16(p, TLS_EXT_EXTENDED_MASTER_SECRET);
     p += sizeof(uint16);
 
@@ -2408,7 +2453,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
   }
 
   if (handshake->renegotiation_info) {
-    /* RFC5746 minimal version, empty renegotiation info */
+    /* RFC5746 minimal version, empty renegotiation info, 5 bytes */
     dtls_int_to_uint16(p, TLS_EXT_RENEGOTIATION_INFO);
     p += sizeof(uint16);
 
