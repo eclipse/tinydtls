@@ -1967,18 +1967,15 @@ dtls_0_verify_peer(dtls_context_t *ctx,
     return len;
   }
 
-  dtls_debug_dump("compare with cookie", cookie, len);
-
-  /* check if cookies match */
-  if (len == DTLS_COOKIE_LENGTH && memcmp(cookie, mycookie, len) == 0) {
+  if (len == 0) {
+    dtls_debug("cookie len is 0!\n");
+  } else if (len != DTLS_COOKIE_LENGTH) {
+    dtls_debug("cookie len mismatch recv. %u != %u!\n", len, DTLS_COOKIE_LENGTH);
+  } else if (memcmp(cookie, mycookie, len)) {
+    dtls_debug("not matching cookie!\n");
+  } else {
     dtls_debug("found matching cookie\n");
     return 0;
-  }
-
-  if (len > 0) {
-    dtls_debug_dump("invalid cookie", cookie, len);
-  } else {
-    dtls_debug("cookie len is 0!\n");
   }
 
   /* ClientHello did not contain any valid cookie, hence we send a
