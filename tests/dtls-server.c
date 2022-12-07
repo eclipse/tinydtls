@@ -149,19 +149,36 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 #endif /* DTLS_ECC */
 
 #define DTLS_SERVER_CMD_CLOSE "server:close"
+#define DTLS_SERVER_CMD_EXIT "server:exit"
+
+static volatile int cmd_exit = 0;
+
+static int
+is_command(const char* cmd, const uint8 *data, size_t len) {
+  size_t cmd_len = strlen(cmd);
+  if (len >= cmd_len && memcmp(cmd, data, cmd_len) == 0) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
 
 static int
 read_from_peer(struct dtls_context_t *ctx,
                session_t *session, uint8 *data, size_t len) {
   if (write(STDOUT_FILENO, data, len) == -1)
     dtls_debug("write failed: %s\n", strerror(errno));
-  if (len >= strlen(DTLS_SERVER_CMD_CLOSE) &&
-      !memcmp(data, DTLS_SERVER_CMD_CLOSE, strlen(DTLS_SERVER_CMD_CLOSE))) {
+  if (is_command(DTLS_SERVER_CMD_CLOSE, data, len)) {
     printf("server: closing connection\n");
     dtls_close(ctx, session);
     return len;
+  } else if (is_command(DTLS_SERVER_CMD_EXIT, data, len)) {
+    printf("server: exit\n");
+    cmd_exit = 1;
+    return len;
   }
 
+  /* send it back */
   return dtls_write(ctx, session, data, len);
 }
 
@@ -195,9 +212,13 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     return -1;
   } else {
     dtls_debug("got %d bytes from port %d\n", len, 
-    ntohs(session.addr.sin6.sin6_port));
-    if (sizeof(buf) < (size_t)len) {
-      dtls_warn("packet was truncated (%ld bytes lost)\n", len - sizeof(buf));
+               ntohs(session.addr.sin6.sin6_port));
+    if (len <= DTLS_MAX_BUF) {
+      dtls_debug_dump("bytes from peer", buf, len);
+    } else {
+      dtls_debug_dump("bytes from peer", buf, sizeof(buf));
+      dtls_warn("%d bytes exceeds buffer %d, drop message!", len, DTLS_MAX_BUF);
+      return -1;
     }
   }
 
@@ -414,6 +435,9 @@ main(int argc, char **argv) {
         /* FIXME */;
       else if (FD_ISSET(fd, &rfds)) {
         dtls_handle_read(the_context);
+        if (cmd_exit) {
+          break;
+        }
       }
     }
   }
