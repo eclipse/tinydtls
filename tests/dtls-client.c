@@ -202,20 +202,20 @@ try_send(struct dtls_context_t *ctx, session_t *dst, size_t len, char *buf) {
 }
 
 static void
-handle_stdin(size_t *len, char *buf) {
-  if (fgets(buf + *len, sizeof(buf) - *len, stdin))
+handle_stdin(size_t *len, char *buf, size_t buf_len) {
+  if (fgets(buf + *len, buf_len - *len, stdin))
     *len += strlen(buf + *len);
 }
 
 static int
 read_from_peer(struct dtls_context_t *ctx,
                session_t *session, uint8 *data, size_t len) {
-  size_t i;
   (void)ctx;
   (void)session;
 
-  for (i = 0; i < len; i++)
-    printf("%c", data[i]);
+  if (write(STDOUT_FILENO, data, len) == -1)
+    dtls_debug("write failed: %s\n", strerror(errno));
+
   return 0;
 }
 
@@ -243,7 +243,7 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
   memset(&session, 0, sizeof(session_t));
   session.size = sizeof(session.addr);
-  len = recvfrom(fd, buf, MAX_READ_BUF, 0, 
+  len = recvfrom(fd, buf, MAX_READ_BUF, MSG_TRUNC,
                  &session.addr.sa, &session.size);
 
   if (len < 0) {
@@ -251,7 +251,13 @@ dtls_handle_read(struct dtls_context_t *ctx) {
     return -1;
   } else {
     dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "peer", &session);
-    dtls_debug_dump("bytes from peer", buf, len);
+    if (len <= MAX_READ_BUF) {
+      dtls_debug_dump("bytes from peer", buf, len);
+    } else {
+      dtls_debug_dump("bytes from peer", buf, MAX_READ_BUF);
+      dtls_warn("%d bytes exceeds buffer %d, drop message!", len, MAX_READ_BUF);
+      return -1;
+    }
   }
 
   return dtls_handle_message(ctx, &session, buf, len);
@@ -358,6 +364,8 @@ static dtls_handler_t cb = {
  */
 #define DTLS_CLIENT_CMD_REHANDSHAKE "client:rehandshake"
 
+#define DTLS_CLIENT_CMD_EXIT "client:exit"
+
 int 
 main(int argc, char **argv) {
   fd_set rfds, wfds;
@@ -372,6 +380,7 @@ main(int argc, char **argv) {
   session_t dst;
   char buf[200];
   size_t len = 0;
+  int buf_ready = 0;
 
 
   dtls_init();
@@ -523,18 +532,23 @@ main(int argc, char **argv) {
         /* FIXME */;
       else if (FD_ISSET(fd, &rfds))
         dtls_handle_read(dtls_context);
-      else if (FD_ISSET(fileno(stdin), &rfds))
-        handle_stdin(&len, buf);
+      else if (FD_ISSET(fileno(stdin), &rfds)) {
+        handle_stdin(&len, buf, sizeof(buf));
+        if (len && buf[len - 1] == '\n') {
+          buf_ready = 1;
+        }
+      }
     }
 
-    if (len) {
-      if (len >= strlen(DTLS_CLIENT_CMD_CLOSE) &&
-          !memcmp(buf, DTLS_CLIENT_CMD_CLOSE, strlen(DTLS_CLIENT_CMD_CLOSE))) {
+    if (buf_ready) {
+      buf_ready = 0;
+      if (strstr(buf, DTLS_CLIENT_CMD_CLOSE) == buf) {
         printf("client: closing connection\n");
         dtls_close(dtls_context, &dst);
-        len = 0;
-      } else if (len >= strlen(DTLS_CLIENT_CMD_REHANDSHAKE) &&
-                 !memcmp(buf, DTLS_CLIENT_CMD_REHANDSHAKE, strlen(DTLS_CLIENT_CMD_REHANDSHAKE))) {
+      } else if (strstr(buf, DTLS_CLIENT_CMD_EXIT) == buf) {
+        printf("client: exit\n");
+        break;
+      } else if (strstr(buf, DTLS_CLIENT_CMD_REHANDSHAKE) == buf) {
         printf("client: rehandshake connection\n");
         if (orig_dtls_context == NULL) {
           /* Cache the current context. We cannot free the current context as it will notify
@@ -550,10 +564,10 @@ main(int argc, char **argv) {
           dtls_set_handler(dtls_context, &cb);
           dtls_connect(dtls_context, &dst);
         }
-        len = 0;
       } else {
         try_send(dtls_context, &dst, len, buf);
       }
+      len = 0;
     }
   }
 
