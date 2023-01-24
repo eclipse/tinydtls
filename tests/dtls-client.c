@@ -69,7 +69,9 @@ static dtls_context_t *orig_dtls_context = NULL;
 static const dtls_cipher_t* ciphers = NULL;
 static unsigned int force_extended_master_secret = 0;
 static unsigned int force_renegotiation_info = 0;
-
+#if (DTLS_MAX_CID_LENGTH > 0)
+static unsigned int support_cid = 0;
+#endif
 
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
@@ -246,6 +248,9 @@ get_user_parameters(struct dtls_context_t *ctx,
   (void) session;
   user_parameters->force_extended_master_secret = force_extended_master_secret;
   user_parameters->force_renegotiation_info = force_renegotiation_info;
+#if (DTLS_MAX_CID_LENGTH > 0)
+  user_parameters->support_cid = support_cid;
+#endif
   if (ciphers) {
     int i = 0;
     while (i < DTLS_MAX_CIPHER_SUITES) {
@@ -360,13 +365,18 @@ usage( const char *program, const char *version) {
 
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
           "(c) 2011-2024 Olaf Bergmann <bergmann@tzi.org>\n\n"
+          "usage: %s [-c cipher suites] [-e] "
 #ifdef DTLS_PSK
-          "usage: %s [-c cipher suites] [-e] [-i file] [-k file] [-o file]\n"
-          "       %*s [-p port] [-r] [-v num] addr [port]\n",
+          "[-i file] [-k file] [-o file]\n"
+          "       %*s [-p port] [-r] [-v num]"
 #else /*  DTLS_PSK */
-          "usage: %s [-c cipher suites] [-e] [-o file] [-p port] [-r]\n"
-          "       %*s [-v num] addr [port]\n",
+          "[-o file] [-p port] [-r]\n"
+          "       %*s [-v num]"
 #endif /* DTLS_PSK */
+#if (DTLS_MAX_CID_LENGTH > 0)
+          " [-z]"
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
+          " addr [port]\n",
           program, version, program, (int)strlen(program), "");
   cipher_suites_usage(stderr, "\t");
   fprintf(stderr, "\t-e\t\tforce extended master secret (RFC7627)\n"
@@ -380,6 +390,9 @@ usage( const char *program, const char *version) {
           "\t       \t\t(default is an ephemeral free port).\n"
           "\t-r\t\tforce renegotiation info (RFC5746)\n"
           "\t-v num\t\tverbosity level (default: 3)\n"
+#if (DTLS_MAX_CID_LENGTH > 0)
+          "\t-z\t\tsupport CID (RFC9146)\n"
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
           "\tDefault destination port: %d\n",
           DEFAULT_PORT);
 }
@@ -486,6 +499,11 @@ main(int argc, char **argv) {
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
       break;
+#if (DTLS_MAX_CID_LENGTH > 0)
+    case 'z' :
+      support_cid = 1;
+      break;
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
     case -1 :
       /* handle arguments */
       if (!dst.size) {
