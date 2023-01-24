@@ -48,6 +48,7 @@ static dtls_context_t *the_context = NULL;
 static volatile int cmd_exit = 0;
 static const dtls_cipher_t* ciphers = NULL;
 static unsigned int force_extended_master_secret = 0;
+static unsigned int force_renegotiation_info = 0;
 
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
@@ -199,6 +200,7 @@ get_user_parameters(struct dtls_context_t *ctx,
   (void) ctx;
   (void) session;
   user_parameters->force_extended_master_secret = force_extended_master_secret;
+  user_parameters->force_renegotiation_info = force_renegotiation_info;
   if (ciphers) {
     int i = 0;
     while (i < DTLS_MAX_CIPHER_SUITES) {
@@ -307,12 +309,13 @@ usage(const char *program, const char *version) {
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
          "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
-         "usage: %s [-A address] [-c cipher suites] [-e] [-p port] [-v num]\n"
+         "usage: %s [-A address] [-c cipher suites] [-e] [-p port] [-r] [-v num]\n"
          "\t-A address\t\tlisten on specified address (default is ::)\n",
          program, version, program);
   cipher_suites_usage(stderr, "\t");
   fprintf(stderr, "\t-e\t\tforce extended master secret (RFC7627)\n"
          "\t-p port\t\tlisten on specified port (default is %d)\n"
+         "\t-r\t\tforce renegotiation info (RFC5746)\n"
          "\t-v num\t\tverbosity level (default: 3)\n",
          DEFAULT_PORT);
 }
@@ -355,7 +358,7 @@ main(int argc, char **argv) {
   listen_addr.sin6_family = AF_INET6;
   listen_addr.sin6_addr = in6addr_any;
 
-  while ((opt = getopt(argc, argv, "A:c:ep:v:")) != -1) {
+  while ((opt = getopt(argc, argv, "A:c:ep:rv:")) != -1) {
     switch (opt) {
     case 'A' :
       if (resolve_address(optarg, (struct sockaddr *)&listen_addr) < 0) {
@@ -371,6 +374,9 @@ main(int argc, char **argv) {
       break;
     case 'p' :
       port = htons(atoi(optarg));
+      break;
+    case 'r' :
+      force_renegotiation_info = 1;
       break;
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
