@@ -116,16 +116,25 @@ dtls_get_peer(const dtls_context_t *ctx, const session_t *session) {
 ...
 }
 ```
+* If in this case the line with the function name and parameter-list exceeds
+  the line length of 80 characters caused by that parameter-list, then split
+  this list on multiple lines aligning with the first parameter.
 
+```
+int
+dtls_read(const dtls_context_t *ctx, const session_t *session,
+          uint8_t* buffer, size_t buffer_length) {
+...
+}
+```
 * Declarations in header files do not follow the previous rule. For
   example, the declaration for `dtls_get_peer()` in `dtls.h` reads as
   follows:
 
 ```
 dtls_peer_t *dtls_get_peer(const dtls_context_t *context,
-			   const session_t *session);
+             const session_t *session);
 ```
-
 * A useful source code documentation is mandatory. Mostly to be done
   within the source code files.
 
