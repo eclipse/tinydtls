@@ -63,6 +63,9 @@
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #cmakedefine HAVE_NETINET_IN_H 1
 
+/* Define to 1 if you have the `random' function. */
+#cmakedefine HAVE_RANDOM 1
+
 /* Define to 1 if you have the `select' function. */
 #cmakedefine HAVE_SELECT 1
 

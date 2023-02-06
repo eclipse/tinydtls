@@ -37,7 +37,31 @@ int
 dtls_prng(unsigned char *buf, size_t len) {
 #ifdef HAVE_GETRANDOM
   return getrandom(buf, len, 0);
-#else /* !HAVE_GETRANDOM */
+#elif defined(HAVE_RANDOM)
+
+#define RAND_BYTES (RAND_MAX >= 0xffffff ? 3 : (RAND_MAX >= 0xffff ? 2 : 1))
+
+  if (len) {
+    size_t klen = len;
+    uint8_t byte_counter = RAND_BYTES;
+    uint32_t rand = random();
+    while (1) {
+      *buf++ = rand & 0xFF;
+      if (!--klen) {
+        break;
+      }
+      if (--byte_counter) {
+        rand >>= 8;
+      } else {
+        rand = random();
+        byte_counter = RAND_BYTES;
+      }
+    }
+  }
+  return len;
+#else /*!HAVE_GETRANDOM && !HAVE_RANDOM */
+  #error "CVE-2021-34430: using rand() for crypto randoms is not secure!"
+  #error "Please update you C-library and rerun the auto-configuration."
   size_t klen = len;
   while (len--)
     *buf++ = rand() & 0xFF;
@@ -67,7 +91,11 @@ dtls_prng_init(unsigned seed) {
   }
 
   fclose(urandom);
+#ifdef HAVE_RANDOM
+  srandom((unsigned long)*buf);
+#else
   srand((unsigned long)*buf);
+#endif
 #endif /* !HAVE_GETRANDOM */
 }
 
