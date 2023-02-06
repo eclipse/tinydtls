@@ -70,6 +70,7 @@ check_function_exists (strnlen        HAVE_STRNLEN)
 check_function_exists (fls            HAVE_FLS)
 check_function_exists (vprintf        HAVE_VPRINTF)
 check_function_exists (inet_ntop      HAVE_INET_NTOP)
+check_function_exists (random      HAVE_RANDOM)
 
 if(HAVE_SYS_RANDOM_H)
    # zephyr/ncs 1.9.1 seems to link getrandom but doesn't offer a header
