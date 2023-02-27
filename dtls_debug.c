@@ -53,8 +53,6 @@ typedef int in_port_t;
 LOG_MODULE_REGISTER(TINYDTLS, CONFIG_TINYDTLS_LOG_LEVEL);
 #endif /* WITH_ZEPHYR */
 
-static int maxlog = DTLS_LOG_WARN;      /* default maximum log level */
-
 const char *dtls_package_name(void) {
   return PACKAGE_NAME;
 }
@@ -62,6 +60,9 @@ const char *dtls_package_name(void) {
 const char *dtls_package_version(void) {
   return PACKAGE_VERSION;
 }
+
+#ifndef NDEBUG
+static int maxlog = DTLS_LOG_WARN;      /* default maximum log level */
 
 log_t
 dtls_get_log_level(void) {
@@ -102,8 +103,6 @@ print_timestamp(char *s, size_t len, clock_time_t t) {
 }
 
 #endif /* HAVE_TIME_H */
-
-#ifndef NDEBUG
 
 /**
  * A length-safe strlen() fake.
@@ -242,8 +241,6 @@ dsrv_print_addr(const session_t *addr, char *buf, size_t len) {
 #endif /* ! HAVE_INET_NTOP */
 }
 
-#endif /* NDEBUG */
-
 #if !defined(WITH_CONTIKI) && !defined(_MSC_VER)
 
 static void
@@ -334,7 +331,6 @@ dsrv_log(log_t level, char *format, ...) {
 }
 #endif /* WITH_CONTIKI */
 
-#ifndef NDEBUG
 /** dumps packets in usual hexdump format */
 void hexdump(const unsigned char *packet, int length) {
   int n = 0;
@@ -499,6 +495,16 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
 
 #else /* NDEBUG */
 
+log_t
+dtls_get_log_level(void) {
+  return 0;
+}
+
+void
+dtls_set_log_level(log_t level) {
+  (void)level;
+}
+
 void
 hexdump(const unsigned char *packet, int length) {
   (void)packet;
@@ -518,6 +524,12 @@ dtls_dsrv_hexdump_log(log_t level, const char *name, const unsigned char *buf, s
   (void)buf;
   (void)length;
   (void)extend;
+}
+
+void
+dsrv_log(log_t level, const char *format, ...) {
+  (void)level;
+  (void)format;
 }
 
 void
