@@ -623,7 +623,7 @@ typedef struct cipher_suite_param_t {
 } cipher_suite_param_t;
 
 static const struct cipher_suite_param_t cipher_suite_params[] = {
-  /* The TLS_NULL_WITH_NULL_NULL cipher-suite must be the first
+  /* The TLS_NULL_WITH_NULL_NULL cipher suite must be the first
    * in this table (index DTLS_CIPHER_INDEX_NULL) */
   { TLS_NULL_WITH_NULL_NULL,             0, DTLS_KEY_EXCHANGE_NONE },
 #ifdef DTLS_PSK
@@ -642,13 +642,16 @@ static const dtls_cipher_index_t last_cipher_suite_param =
 /**
  * Check if cipher suite is contained in table.
  *
- * \param cipher_suites table with cipher-suites. Terminated with
+ * \param cipher_suites table with cipher suites. Terminated with
  *                      TLS_NULL_WITH_NULL_NULL.
  * \param cipher_suite cipher suite
- * \return 0, if not contained, != 0, if contained
+ * \return 0 if not contained, != 0 if contained
  */
 static inline uint8_t
 contains_cipher_suite(const dtls_cipher_t* cipher_suites, const dtls_cipher_t cipher_suite) {
+  if (cipher_suite == TLS_NULL_WITH_NULL_NULL) {
+    return 0;
+  }
   while ((*cipher_suites != cipher_suite) &&
          (*cipher_suites != TLS_NULL_WITH_NULL_NULL)) {
     cipher_suites++;
@@ -659,7 +662,7 @@ contains_cipher_suite(const dtls_cipher_t* cipher_suites, const dtls_cipher_t ci
 /**
  * Get index to cipher suite params.
  *
- * \param cipher_suites table with user-selected cipher-suites. Terminated with
+ * \param cipher_suites table with user-selected cipher suites. Terminated with
  *                      TLS_NULL_WITH_NULL_NULL.
  * \param cipher cipher suite
  * \return index to cipher suite params, DTLS_CIPHER_INDEX_NULL if not found.
@@ -710,7 +713,7 @@ get_cipher_suite_mac_len(dtls_cipher_index_t cipher_index) {
   return cipher_suite_params[cipher_index].mac_length;
 }
 
-/** returns true if the cipher-suite uses an ECDHE_ECDSA key exchange */
+/** returns true if the cipher suite uses an ECDHE_ECDSA key exchange */
 static inline int
 is_key_exchange_ecdhe_ecdsa(dtls_cipher_index_t cipher_index) {
 #ifdef DTLS_ECC
@@ -721,7 +724,7 @@ is_key_exchange_ecdhe_ecdsa(dtls_cipher_index_t cipher_index) {
 #endif /* DTLS_ECC */
 }
 
-/** returns true if the cipher-suite uses an PSK key exchange */
+/** returns true if the cipher suite uses an PSK key exchange */
 static inline int
 is_key_exchange_psk(dtls_cipher_index_t cipher_index) {
 #ifdef DTLS_PSK
@@ -775,7 +778,7 @@ is_ecdsa_client_auth_supported(dtls_context_t *ctx) {
  * @param ctx   The current DTLS context
  * @param cipher_index The index to cipher suite params to check
  * @param is_client 1 for a dtls client, 0 for server
- * @return @c 1 if @p code is recognized,
+ * @return @c 1 iff @p code is recognized,
  */
 static int
 known_cipher(dtls_context_t *ctx, dtls_cipher_index_t cipher_index, int is_client) {
@@ -1319,7 +1322,7 @@ dtls_update_parameters(dtls_context_t *ctx,
   if (!ok) {
     /* reset config cipher to a well-defined value */
     config->cipher_index = DTLS_CIPHER_INDEX_NULL;
-    dtls_warn("No matching cipher-suite found\n");
+    dtls_warn("No matching cipher suite found\n");
     goto error;
   }
 
@@ -2382,7 +2385,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
    *
    * (no elliptic_curves in ServerHello.)
    */
-  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 6 + 4 + 5];
+  uint8 buf[DTLS_SH_LENGTH + 2 + 5 + 5 + 6 + 4];
   uint8 *p;
   uint8 extension_size;
   dtls_handshake_parameters_t * const handshake = peer->handshake_params;
@@ -3032,7 +3035,7 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
       ecdsa = ecdsa || is_key_exchange_ecdhe_ecdsa(cipher_index);
 #endif /* DTLS_ECC */
     }
-    /* ignore not supported cipher-suite
+    /* ignore not supported cipher suite
        credentials callback is missing */
   }
 
