@@ -4201,7 +4201,7 @@ dtls_handle_message(dtls_context_t *ctx,
 		    uint8 *msg, int msglen) {
   dtls_peer_t *peer = NULL;
   unsigned int rlen;		/* record length */
-  uint8 *data; 			/* (decrypted) payload */
+  uint8 *data = NULL;		/* (decrypted) payload */
   int data_length;		/* length of decrypted payload
 				   (without MAC and padding) */
   int err;
@@ -4254,18 +4254,6 @@ dtls_handle_message(dtls_context_t *ctx,
     return 0;
   }
 
-  /* check if we have DTLS state for addr/port/ifindex */
-  peer = dtls_get_peer(ctx, session);
-
-  if (!peer) {
-    dtls_debug("dtls_handle_message: PEER NOT FOUND\n");
-    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "peer addr", session);
-    /** no peer, no ClientHello => drop it */
-   return 0;
-  } else {
-    dtls_debug("dtls_handle_message: FOUND PEER\n");
-  }
-
   while ((rlen = is_record(msg,msglen))) {
     dtls_record_header_t *header = DTLS_RECORD_HEADER(msg);
     uint16_t epoch = dtls_get_epoch(header);
@@ -4280,6 +4268,21 @@ dtls_handle_message(dtls_context_t *ctx,
     else {
       dtls_info("got 'unknown %u' epoch %u sequence %" PRIu64 " (%d bytes)\n",
                  content_type, epoch, pkt_seq_nr, rlen);
+    }
+
+    /* check if we have DTLS state for addr/port/ifindex */
+    peer = dtls_get_peer(ctx, session);
+    if (peer) {
+        dtls_debug("dtls_handle_message: FOUND PEER\n");
+    } else {
+      if (data) {
+        dtls_info("Additional record after peer has been removed.\n");
+      } else {
+        dtls_debug("dtls_handle_message: PEER NOT FOUND\n");
+        dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "peer addr", session);
+      }
+      /** no peer => drop it */
+      return 0;
     }
 
     dtls_security_parameters_t *security = dtls_security_params_read_epoch(peer, epoch);
@@ -4392,6 +4395,8 @@ dtls_handle_message(dtls_context_t *ctx,
         /* handle alert has invalidated peer */
         peer = NULL;
         err = -1;
+        /* no more valid records after fatal alerts */
+        return 0;
       } else {
         dtls_stop_retransmission(ctx, peer);
       }
