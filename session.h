@@ -66,9 +66,9 @@ typedef struct {
 #else /* ! WITH_CONTIKI && ! WITH_RIOT_SOCK && ! WITH_LWIP_NO_SOCKET */
 
 #ifdef WITH_ZEPHYR
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 #ifdef HAVE_NET_SOCKET_H
-#include <net/socket.h>
+#include <zephyr/net/socket.h>
 #endif /* HAVE_NET_SOCKET_H */
 
 #elif defined(WITH_LWIP)

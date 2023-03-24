@@ -25,7 +25,7 @@
 #include "session.h"
 
 #ifdef WITH_ZEPHYR
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 #endif /* WITH_ZEPHYR */
 
 #ifdef RIOT_VERSION
