@@ -18,9 +18,10 @@
  *
  *******************************************************************************/
 
+#include <zephyr/random/rand32.h>
+
 #include "tinydtls.h"
 #include "dtls_prng.h"
-#include "random/rand32.h"
 
 int
 dtls_prng(unsigned char *buf, size_t len) {

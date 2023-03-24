@@ -36,7 +36,7 @@
 
 #ifdef WITH_ZEPHYR
 #ifdef HAVE_NET_SOCKET_H
-#include <net/socket.h>
+#include <zephyr/net/socket.h>
 #endif /* HAVE_NET_SOCKET_H */
 typedef int in_port_t;
 #endif /* WITH_ZEPHYR */

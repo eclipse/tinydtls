@@ -55,7 +55,7 @@ typedef uint32_t clock_time_t;
 
 #elif defined(WITH_ZEPHYR)
 
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 
 #ifndef CLOCK_SECOND
 # define CLOCK_SECOND 1000
