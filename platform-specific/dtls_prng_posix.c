@@ -18,6 +18,12 @@
  *
  *******************************************************************************/
 
+#ifdef HAVE_RANDOM
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif /* _GNU_SOURCE */
+#endif /* HAVE_RANDOM */
+
 #include "tinydtls.h"
 #include "dtls_prng.h"
 #include "dtls_debug.h"
@@ -44,16 +50,16 @@ dtls_prng(unsigned char *buf, size_t len) {
   if (len) {
     size_t klen = len;
     uint8_t byte_counter = RAND_BYTES;
-    uint32_t rand = random();
+    uint32_t rand_val = random();
     while (1) {
-      *buf++ = rand & 0xFF;
+      *buf++ = rand_val & 0xFF;
       if (!--klen) {
         break;
       }
       if (--byte_counter) {
-        rand >>= 8;
+        rand_val >>= 8;
       } else {
-        rand = random();
+        rand_val = random();
         byte_counter = RAND_BYTES;
       }
     }
