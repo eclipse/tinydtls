@@ -85,6 +85,8 @@ dirs:	$(SUBDIRS)
 		$(MAKE) -C $$dir ; \
 	done
 
+dtls_prng.o::	$(wildcard platform-specific/dtls_prng_*.c)
+
 $(SUB_OBJECTS)::
 	$(MAKE) -C $(@D) $(@F)
 
