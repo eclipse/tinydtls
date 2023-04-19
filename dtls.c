@@ -1204,7 +1204,7 @@ dtls_check_tls_extension(dtls_peer_t *peer,
           goto error;
         break;
       default:
-        dtls_warn("unsupported tls extension: %i\n", i);
+        dtls_notice("unsupported tls extension: %i\n", i);
         break;
     }
     data += j;
