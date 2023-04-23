@@ -239,16 +239,16 @@ get_user_parameters(struct dtls_context_t *ctx,
   (void) session;
   user_parameters->force_extended_master_secret = force_extended_master_secret;
   if (ciphers) {
-    int index = 0;
-    while (index < DTLS_MAX_CIPHER_SUITES) {
-      user_parameters->cipher_suites[index] = ciphers[index];
-      if (ciphers[index] == TLS_NULL_WITH_NULL_NULL) {
+    int i = 0;
+    while (i < DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[i] = ciphers[i];
+      if (ciphers[i] == TLS_NULL_WITH_NULL_NULL) {
         break;
       }
-      ++index;
+      ++i;
     }
-    if (index == DTLS_MAX_CIPHER_SUITES) {
-      user_parameters->cipher_suites[index] = TLS_NULL_WITH_NULL_NULL;
+    if (i == DTLS_MAX_CIPHER_SUITES) {
+      user_parameters->cipher_suites[i] = TLS_NULL_WITH_NULL_NULL;
     }
   }
 }

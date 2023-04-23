@@ -44,11 +44,11 @@ static dtls_cipher_t ciphers_table[ARRAY_LENGTH] = { TLS_NULL_WITH_NULL_NULL };
 static dtls_cipher_t find_cipher_suite(const char *arg) {
   if (arg) {
     size_t arg_len = strlen(arg);
-    for (size_t index=0; index < ARRAY_LENGTH - 1; ++index) {
-      size_t len = strlen(map[index].name);
+    for (size_t i=0; i < ARRAY_LENGTH - 1; ++i) {
+      size_t len = strlen(map[i].name);
       if (len <= arg_len) {
-        if (strncmp(arg, map[index].name, len) == 0 && (arg[len] == 0 || arg[len] == SEP)) {
-          return map[index].cipher;
+        if (strncmp(arg, map[i].name, len) == 0 && (arg[len] == 0 || arg[len] == SEP)) {
+          return map[i].cipher;
         }
       }
     }
@@ -57,13 +57,13 @@ static dtls_cipher_t find_cipher_suite(const char *arg) {
 }
 
 static void add_cipher_suite(dtls_cipher_t cipher) {
-  for (size_t index=0; index < ARRAY_LENGTH - 1; ++index) {
-    if (ciphers_table[index] == cipher) {
+  for (size_t i=0; i < ARRAY_LENGTH - 1; ++i) {
+    if (ciphers_table[i] == cipher) {
       return;
     }
-    if (ciphers_table[index] == TLS_NULL_WITH_NULL_NULL) {
-      ciphers_table[index] = cipher;
-      ciphers_table[index + 1] = TLS_NULL_WITH_NULL_NULL;
+    if (ciphers_table[i] == TLS_NULL_WITH_NULL_NULL) {
+      ciphers_table[i] = cipher;
+      ciphers_table[i + 1] = TLS_NULL_WITH_NULL_NULL;
       return;
     }
   }
@@ -88,8 +88,8 @@ void
 cipher_suites_usage(FILE* file, const char* head) {
   fprintf(file, "%s-c ciphers\tlist of cipher suites separated by ':'\n", head);
   fprintf(file, "%s\t\t(default is %s", head, map[0].name);
-  for (int index = 1; map[index].name; ++index) {
-     fprintf(file, "\n%s\t\t :%s", head, map[index].name);
+  for (int i = 1; map[i].name; ++i) {
+     fprintf(file, "\n%s\t\t :%s", head, map[i].name);
   }
   fprintf(file, ")\n");
 }
