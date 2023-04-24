@@ -21,7 +21,7 @@
 #include <sys/types.h>
 
 #include "tinydtls.h"
-#include "global.h"
+#include "dtls_global.h"
 
 #ifdef WITH_SHA256
 #ifdef RIOT_VERSION

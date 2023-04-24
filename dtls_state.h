@@ -16,7 +16,7 @@
  *******************************************************************************/
 
 /**
- * @file state.h
+ * @file dtls_state.h
  * @brief state information for DTLS FSM
  */
 
@@ -26,8 +26,8 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-#include "global.h"
-#include "hmac.h"
+#include "dtls_global.h"
+#include "dtls_hmac.h"
 
 typedef enum { 
   DTLS_STATE_INIT = 0, DTLS_STATE_WAIT_CLIENTHELLO, DTLS_STATE_WAIT_CLIENTCERTIFICATE,

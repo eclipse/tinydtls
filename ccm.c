@@ -18,9 +18,9 @@
 #include <string.h>
 
 #include "tinydtls.h"
-#include "global.h"
-#include "numeric.h"
-#include "ccm.h"
+#include "dtls_global.h"
+#include "dtls_numeric.h"
+#include "dtls_ccm.h"
 
 #ifdef HAVE_ASSERT_H
 # include <assert.h>

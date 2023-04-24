@@ -27,7 +27,7 @@
 #endif
 #ifndef WITH_CONTIKI
 #include <stdlib.h>
-#include "global.h"
+#include "dtls_global.h"
 #endif /* WITH_CONTIKI */
 #ifdef HAVE_INTTYPES_H
 #define __STDC_FORMAT_MACROS
@@ -47,17 +47,17 @@
 #endif /* DTLS_PEERS_NOHASH */
 
 #include "dtls_debug.h"
-#include "numeric.h"
-#include "netq.h"
+#include "dtls_numeric.h"
+#include "dtls_netq.h"
 #include "dtls.h"
 
-#include "alert.h"
-#include "session.h"
+#include "dtls_alert.h"
+#include "dtls_session.h"
 #include "dtls_prng.h"
 #include "dtls_mutex.h"
 
 #ifdef WITH_SHA256
-#  include "hmac.h"
+#  include "dtls_hmac.h"
 #endif /* WITH_SHA256 */
 
 #ifdef WITH_ZEPHYR

@@ -16,7 +16,7 @@
  *******************************************************************************/
 
 /**
- * @file peer.h
+ * @file dtls_peer.h
  * @brief information about peers in a DTLS session
  */
 
@@ -26,11 +26,11 @@
 #include <sys/types.h>
 
 #include "tinydtls.h"
-#include "global.h"
-#include "session.h"
+#include "dtls_global.h"
+#include "dtls_session.h"
 
-#include "state.h"
-#include "crypto.h"
+#include "dtls_state.h"
+#include "dtls_crypto.h"
 
 #ifndef DTLS_PEERS_NOHASH
 #include "uthash.h"

@@ -25,15 +25,15 @@
 #define assert(x)
 #endif
 
-#include "global.h"
+#include "dtls_global.h"
 #include "dtls_debug.h"
-#include "numeric.h"
+#include "dtls_numeric.h"
 #include "dtls.h"
-#include "crypto.h"
-#include "ccm.h"
+#include "dtls_crypto.h"
+#include "dtls_ccm.h"
 #include "ecc/ecc.h"
 #include "dtls_prng.h"
-#include "netq.h"
+#include "dtls_netq.h"
 
 #include "dtls_mutex.h"
 

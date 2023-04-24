@@ -16,8 +16,8 @@
 #include "test_ccm.h"
 
 #include "tinydtls.h"
-#include "ccm.h"
-#include "crypto.h"
+#include "dtls_ccm.h"
+#include "dtls_crypto.h"
 #include "../ccm-testdata.c"
 
 #include <stdio.h>

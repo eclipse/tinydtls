@@ -16,7 +16,7 @@
  *******************************************************************************/
 
 #include "dtls_debug.h"
-#include "netq.h"
+#include "dtls_netq.h"
 #include "utlist.h"
 
 #ifdef HAVE_ASSERT_H
