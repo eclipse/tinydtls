@@ -178,16 +178,39 @@ memarray_t dtlscontext_storage;
 #define HANDSHAKE(M) ((dtls_handshake_header_t *)((M) + DTLS_RH_LENGTH))
 #define CLIENTHELLO(M) ((dtls_client_hello_t *)((M) + HS_HDR_LENGTH))
 
-/* The length check here should work because dtls_*_to_int() works on
- * unsigned char. Otherwise, broken messages could cause severe
- * trouble. Note that this macro jumps out of the current program flow
- * when the message is too short. Beware!
+/*
+ * Skip variable length field.
+ *
+ * A variable length field is encoded with a preceding length followed by
+ * the value. That length itself is encoded in one to three bytes using uint8,
+ * uint16, or uint24. Decoding a variable length field requires to check first,
+ * if the length itself is within the bounds, and if so, if the value is also
+ * within the bounds.
+ *
+ * The macro "returns" the calling context with an error when the bounds are
+ * violated.
+ *
+ * \param P  pointer to length of the var field. Will be forwarded the end of
+ *           the var field.
+ * \param L  left overall data of P. Will be reduced by the size of the var
+ *           field.
+ * \param T  length type. e.g. uint8 or uint16
+ * \param A  alert description in case of a length violation
+ * \param M  logging message in case of a length violation
  */
-#define SKIP_VAR_FIELD(P,L,T) {						\
-    if (L < dtls_ ## T ## _to_int(P) + sizeof(T))			\
-      goto error;							\
-    L -= dtls_ ## T ## _to_int(P) + sizeof(T);				\
-    P += dtls_ ## T ## _to_int(P) + sizeof(T);				\
+#define SKIP_VAR_FIELD(P, L, T, A, M) {                \
+    size_t skip_length = sizeof(T);                    \
+    if (L < skip_length) {                             \
+      dtls_info("%s: field length exceeds buffer", M); \
+      return dtls_alert_fatal_create(A);               \
+    }                                                  \
+    skip_length += dtls_ ## T ## _to_int(P);           \
+    if (L < skip_length) {                             \
+      dtls_info("%s: field value exceeds buffer", M);  \
+      return dtls_alert_fatal_create(A);               \
+    }                                                  \
+    L -= skip_length;                                  \
+    P += skip_length;                                  \
   }
 
 /*
@@ -419,16 +442,15 @@ dtls_get_cookie(uint8 *msg, size_t msglen, uint8 **cookie) {
   msglen -= DTLS_HS_LENGTH + DTLS_CH_LENGTH;
   msg += DTLS_HS_LENGTH + DTLS_CH_LENGTH;
 
-  SKIP_VAR_FIELD(msg, msglen, uint8); /* skip session id */
+  /* skip session id */
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "get_cookie, session_id");
 
   if (msglen < (*msg & 0xff) + sizeof(uint8))
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
   *cookie = msg + sizeof(uint8);
   return dtls_uint8_to_int(msg);
-
- error:
-  return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
 static int
@@ -1306,8 +1328,12 @@ dtls_update_parameters(dtls_context_t *ctx,
   data_length -= DTLS_RANDOM_LENGTH;
 
   /* Caution: SKIP_VAR_FIELD may jump to error: */
-  SKIP_VAR_FIELD(data, data_length, uint8);	/* skip session id */
-  SKIP_VAR_FIELD(data, data_length, uint8);	/* skip cookie */
+  /* skip session_id */
+  SKIP_VAR_FIELD(data, data_length, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "update_parameters, session_id");
+  /* skip cookie */
+  SKIP_VAR_FIELD(data, data_length, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "update_parameters, cookie");
 
   if (data_length < sizeof(uint16)) {
     dtls_debug("cipher suites length exceeds record\n");
@@ -3247,7 +3273,9 @@ check_server_hello(dtls_context_t *ctx,
   data += DTLS_RANDOM_LENGTH;
   data_length -= DTLS_RANDOM_LENGTH;
 
-  SKIP_VAR_FIELD(data, data_length, uint8); /* skip session id */
+  /* skip session_id */
+  SKIP_VAR_FIELD(data, data_length, uint8, DTLS_ALERT_DECODE_ERROR,
+                 "ServerHello, session_id");
   /*
    * Need to re-check in case session id was not empty
    *   2 bytes for the selected cipher suite
@@ -3282,9 +3310,6 @@ check_server_hello(dtls_context_t *ctx,
   /* Server may not support extended master secret */
   handshake->extended_master_secret = 0;
   return dtls_check_tls_extension(peer, data, data_length, 0);
-
-error:
-  return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
 }
 
 static int
