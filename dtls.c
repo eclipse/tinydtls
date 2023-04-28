@@ -190,6 +190,41 @@ memarray_t dtlscontext_storage;
     P += dtls_ ## T ## _to_int(P) + sizeof(T);				\
   }
 
+/*
+ * Get variable length field.
+ *
+ * A variable length field is encoded with a preceding length followed by
+ * the value. That length itself is encoded in one to three bytes using uint8,
+ * uint16, or uint24. Decoding a variable length field requires to check first,
+ * if the length itself is within the bounds, and if so, if the value is also
+ * within the bounds.
+ *
+ * The macro "returns" the calling context with an error when the bounds are
+ * violated.
+ *
+ * \param VL value length, variable to assign the length of the field value.
+ * \param P  pointer to length of the var field. Will be forwarded to the
+ *           value of the field.
+ * \param L  left overall data of P. Will be reduced by the size of the field
+ *           length type
+ * \param T  field length type. e.g. uint8 or uint16
+ * \param A  alert description in case of a length violation
+ * \param M  logging message in case of a length violation
+ */
+#define GET_VAR_FIELD(VL, P, L, T, A, M) {              \
+    if (L < sizeof(T)) {                                \
+      dtls_info("%s: field length exceeds buffer", M);  \
+      return dtls_alert_fatal_create(A);                \
+    }                                                   \
+    VL = dtls_ ## T ## _to_int(P);                      \
+    L -= sizeof(T);                                     \
+    P += sizeof(T);                                     \
+    if (L < VL) {                                       \
+        dtls_info("%s: field value exceeds buffer", M); \
+      return dtls_alert_fatal_create(A);                \
+    }                                                   \
+  }
+
 /* some constants for the PRF */
 #define PRF_LABEL(Label) prf_label_##Label
 #define PRF_LABEL_SIZE(Label) (sizeof(PRF_LABEL(Label)) - 1)
@@ -3470,39 +3505,37 @@ check_certificate_request(dtls_context_t *ctx,
 
   assert(is_key_exchange_ecdhe_ecdsa(peer->handshake_params->cipher_index));
 
-  data += DTLS_HS_LENGTH;
-
   if (data_length < DTLS_HS_LENGTH + 5) {
     dtls_alert("the packet length does not match the expected\n");
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
 
-  i = dtls_uint8_to_int(data);
-  data += sizeof(uint8);
-  if (i + 1 > data_length) {
-    dtls_alert("the certificate types are too long\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
+  data += DTLS_HS_LENGTH;
+  data_length -= DTLS_HS_LENGTH;
+
+  GET_VAR_FIELD(i, data, data_length, uint8, DTLS_ALERT_DECODE_ERROR,
+                "CertificateRequest, certificate_types");
 
   auth_alg = 0;
   for (; i > 0 ; i -= sizeof(uint8)) {
-    if (dtls_uint8_to_int(data) == TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN
-	&& auth_alg == 0)
-      auth_alg = dtls_uint8_to_int(data);
+    if (dtls_uint8_to_int(data) == TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN) {
+      auth_alg = TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN;
+      /* skip the rest of the field value */
+      data += i;
+      data_length -=i;
+      break;
+    }
     data += sizeof(uint8);
+    data_length -= sizeof(uint8);
   }
 
   if (auth_alg != TLS_CLIENT_CERTIFICATE_TYPE_ECDSA_SIGN) {
-    dtls_alert("the request authentication algorithm is not supproted\n");
+    dtls_alert("the request authentication algorithm is not supported\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
 
-  i = dtls_uint16_to_int(data);
-  data += sizeof(uint16);
-  if (i + 1 > data_length) {
-    dtls_alert("the signature and hash algorithm list is too long\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
+  GET_VAR_FIELD(i, data, data_length, uint16, DTLS_ALERT_DECODE_ERROR,
+                "CertificateRequest, signature_algorithms");
 
   hash_alg = 0;
   sig_alg = 0;
@@ -3513,7 +3546,7 @@ check_certificate_request(dtls_context_t *ctx,
     dtls_alert("illegal certificate request\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
-  
+
   for (; i >= sizeof(uint16); i -= sizeof(uint16)) {
     int current_hash_alg;
     int current_sig_alg;
@@ -3523,10 +3556,13 @@ check_certificate_request(dtls_context_t *ctx,
     current_sig_alg = dtls_uint8_to_int(data);
     data += sizeof(uint8);
 
+    data_length -= sizeof(uint16);
+
     if (current_hash_alg == TLS_EXT_SIG_HASH_ALGO_SHA256 && hash_alg == 0 &&
         current_sig_alg == TLS_EXT_SIG_HASH_ALGO_ECDSA && sig_alg == 0) {
       hash_alg = current_hash_alg;
       sig_alg = current_sig_alg;
+      break;
     }
   }
 
