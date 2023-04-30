@@ -88,7 +88,6 @@ memarray_t dtlscontext_storage;
 #define dtls_get_version(H) dtls_uint16_to_int((H)->version)
 #define dtls_get_epoch(H) dtls_uint16_to_int((H)->epoch)
 #define dtls_get_sequence_number(H) dtls_uint48_to_ulong((H)->sequence_number)
-#define dtls_get_fragment_length(H) dtls_uint24_to_int((H)->fragment_length)
 
 #ifdef DTLS_PEERS_NOHASH
 #define FIND_PEER(head,sess,out)                                \
@@ -456,11 +455,11 @@ dtls_get_cookie(uint8 *msg, size_t msglen, uint8 **cookie) {
 
 static int
 dtls_create_cookie(dtls_context_t *ctx,
-		   session_t *session,
-		   uint8 *msg, size_t msglen,
-		   uint8 *cookie, int *clen) {
+                   session_t *session,
+                   uint8 *msg, size_t msglen,
+                   uint8 *cookie, int *clen) {
   unsigned char buf[DTLS_HMAC_MAX];
-  size_t e, fragment_length;
+  uint8 *client_hello_msg;
   int len;
 
   /* create cookie with HMAC-SHA256 over:
@@ -478,40 +477,35 @@ dtls_create_cookie(dtls_context_t *ctx,
   dtls_hmac_context_t hmac_context;
   dtls_hmac_init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
 
-  dtls_hmac_update(&hmac_context,
-		   (unsigned char *)&session->addr, session->size);
+  dtls_hmac_update(&hmac_context, (uint8 *)&session->addr, session->size);
+
+  msg += DTLS_HS_LENGTH;
+  msglen -= DTLS_HS_LENGTH;
+
+  client_hello_msg = msg;
+
+  msg += DTLS_CH_LENGTH;
+  msglen -= DTLS_CH_LENGTH;
+
+  /* skip the session_id to include it */
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, session_id");
 
   /* feed in the beginning of the Client Hello up to and including the
      session id */
-  e = DTLS_CH_LENGTH;
-  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  dtls_hmac_update(&hmac_context, client_hello_msg, msg - client_hello_msg);
 
-  e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e) + sizeof(uint8_t);
+  /* skip the cookie to exclude it */
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, cookie");
 
-  if (e + DTLS_HS_LENGTH > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-
-  dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
-
-  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  /* skip cookie bytes and length byte */
-  e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
-  e += sizeof(uint8_t);
-
-  /* read fragment length and check for consistency */
-  fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
-  if ((fragment_length < e) || (e + DTLS_HS_LENGTH) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-
-  dtls_hmac_update(&hmac_context,
-		   msg + DTLS_HS_LENGTH + e,
-		   fragment_length - e);
+  /* feed the rest of the Client Hello */
+  dtls_hmac_update(&hmac_context, msg, msglen);
 
   len = dtls_hmac_finalize(&hmac_context, buf);
 
   if (len < *clen) {
+    /* fill up with 0s*/
     memset(cookie + len, 0, *clen - len);
     *clen = len;
   }
