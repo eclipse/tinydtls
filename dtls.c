@@ -1234,11 +1234,7 @@ check_forced_extensions:
   return 0;
 
 error:
-  if (is_client_hello && peer->state == DTLS_STATE_CONNECTED) {
-    return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
-  } else {
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  }
+  return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
 /**
@@ -1368,11 +1364,7 @@ dtls_update_parameters(dtls_context_t *ctx,
 
   return dtls_check_tls_extension(peer, data, data_length, 1);
 error:
-  if (peer->state == DTLS_STATE_CONNECTED) {
-    return dtls_alert_create(DTLS_ALERT_LEVEL_WARNING, DTLS_ALERT_NO_RENEGOTIATION);
-  } else {
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  }
+  return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 }
 
 /**
@@ -4634,7 +4626,9 @@ dtls_handle_message(dtls_context_t *ctx,
 
       err = handle_handshake(ctx, peer, data, data_length);
       if (err < 0) {
-        dtls_warn("error while handling handshake packet\n");
+        dtls_warn("error 0x%04x handling handshake packet of type: %s (%i),"
+                  " state %d\n", -err, dtls_handshake_type_to_name(data[0]),
+                  data[0], peer->state);
         dtls_alert_send_from_err(ctx, peer, err);
 
         if (peer && DTLS_ALERT_LEVEL_FATAL == ((-err) & 0xff00) >> 8) {
@@ -4803,8 +4797,6 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
    * re-negotiation. */
   if (res > 0) {
     CALL(ctx, event, &peer->session, 0, DTLS_EVENT_CONNECT);
-  } else if (res == 0) {
-    CALL(ctx, event, &peer->session, 0, DTLS_EVENT_RENEGOTIATE);
   }
 
   return res;
