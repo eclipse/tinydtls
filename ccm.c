@@ -70,7 +70,6 @@ block0(size_t M,       /* number of auth bytes */
  *             authentication block.
  * \param X    The output buffer where the result of the CBC calculation
  *             is placed.
- * \return     The result is written to \p X.
  */
 static void
 add_auth_data(rijndael_ctx *ctx, const unsigned char *msg, uint64_t la,
