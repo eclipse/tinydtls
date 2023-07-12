@@ -17,8 +17,6 @@
 #ifndef _DTLS_SESSION_H_
 #define _DTLS_SESSION_H_
 
-#include <string.h>
-
 #include "tinydtls.h"
 #include "global.h"
 
