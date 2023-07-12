@@ -50,6 +50,12 @@
 #define UNUSED_PARAM
 #endif /* __GNUC__ */
 
+#ifndef NI_MAXSERV
+/* Set a default value for NI_MAXSERV in case it does not get defined
+ * by netdb.h */
+#define NI_MAXSERV 32
+#endif
+
 typedef struct {
   size_t length;               /* length of string */
   unsigned char *s;            /* string data */
