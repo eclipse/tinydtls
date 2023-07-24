@@ -13,8 +13,8 @@
 
 //#include "dtls_debug.h"
 #include "tinydtls.h"
-#include "numeric.h"
-#include "ccm.h"
+#include "dtls_numeric.h"
+#include "dtls_ccm.h"
 
 #include "ccm-testdata.c"
 

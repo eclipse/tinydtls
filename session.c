@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-#include "session.h"
+#include "dtls_session.h"
 
 #ifdef HAVE_ASSERT_H
 #include <assert.h>

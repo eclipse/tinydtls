@@ -25,7 +25,7 @@
 #endif /* HAVE_ASSERT_H && !assert */
 
 #include "dtls_debug.h"
-#include "hmac.h"
+#include "dtls_hmac.h"
 
 void
 dtls_hmac_update(dtls_hmac_context_t *ctx,

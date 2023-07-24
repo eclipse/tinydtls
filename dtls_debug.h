@@ -21,8 +21,8 @@
 #include <stdlib.h>
 
 #include "tinydtls.h"
-#include "global.h"
-#include "session.h"
+#include "dtls_global.h"
+#include "dtls_session.h"
 
 #ifdef WITH_ZEPHYR
 #include <logging/log.h>

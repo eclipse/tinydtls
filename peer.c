@@ -15,8 +15,8 @@
  *
  *******************************************************************************/
 
-#include "global.h"
-#include "peer.h"
+#include "dtls_global.h"
+#include "dtls_peer.h"
 #include "dtls_debug.h"
 
 #if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))

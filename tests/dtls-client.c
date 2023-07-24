@@ -33,7 +33,7 @@
 #include <netdb.h>
 #include <signal.h>
 
-#include "global.h"
+#include "dtls_global.h"
 #include "dtls_debug.h"
 #include "dtls_ciphers_util.h"
 #include "dtls.h"

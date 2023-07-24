@@ -19,7 +19,7 @@
 #define _DTLS_NETQ_H_
 
 #include "tinydtls.h"
-#include "global.h"
+#include "dtls_global.h"
 #include "dtls.h"
 #include "dtls_time.h"
 

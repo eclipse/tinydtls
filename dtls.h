@@ -28,16 +28,16 @@
 
 #include "tinydtls.h"
 
-#include "state.h"
-#include "peer.h"
+#include "dtls_state.h"
+#include "dtls_peer.h"
 
 #include "uthash.h"
 
-#include "alert.h"
-#include "crypto.h"
-#include "hmac.h"
+#include "dtls_alert.h"
+#include "dtls_crypto.h"
+#include "dtls_hmac.h"
 
-#include "global.h"
+#include "dtls_global.h"
 #include "dtls_time.h"
 
 #ifndef DTLSv12

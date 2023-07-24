@@ -18,7 +18,7 @@
 #define _DTLS_SESSION_H_
 
 #include "tinydtls.h"
-#include "global.h"
+#include "dtls_global.h"
 
 #ifdef WITH_CONTIKI
 #include "ip/uip.h"

@@ -41,7 +41,7 @@
 typedef int in_port_t;
 #endif /* WITH_ZEPHYR */
 
-#include "global.h"
+#include "dtls_global.h"
 #include "dtls_debug.h"
 #include "dtls_mutex.h"
 

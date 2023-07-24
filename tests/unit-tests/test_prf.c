@@ -17,7 +17,7 @@
 #include "test_prf.h"
 
 #include "tinydtls.h"
-#include "crypto.h"
+#include "dtls_crypto.h"
 
 #include <stdio.h>
 

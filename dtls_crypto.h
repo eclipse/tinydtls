@@ -24,11 +24,11 @@
 #include "aes/rijndael.h"
 
 #include "tinydtls.h"
-#include "global.h"
-#include "state.h"
-#include "numeric.h"
-#include "hmac.h"
-#include "ccm.h"
+#include "dtls_global.h"
+#include "dtls_state.h"
+#include "dtls_numeric.h"
+#include "dtls_hmac.h"
+#include "dtls_ccm.h"
 
 /* TLS_PSK_WITH_AES_128_CCM_8 */
 #define DTLS_MAC_KEY_LENGTH    0

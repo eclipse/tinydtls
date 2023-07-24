@@ -17,7 +17,7 @@
 
 #include <stdio.h>
 
-#include "global.h"
+#include "dtls_global.h"
 
 const dtls_cipher_t* init_cipher_suites(const char* arg);
 
