@@ -15,6 +15,8 @@
  *
  *******************************************************************************/
 
+#include <string.h>
+
 #include "global.h"
 #include "peer.h"
 #include "dtls_debug.h"
