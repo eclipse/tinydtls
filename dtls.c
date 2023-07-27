@@ -130,9 +130,10 @@ memarray_t dtlscontext_storage;
  * cookie                 := n bytes
  * cipher_length          := 2 bytes
  * cipher suites (max)    := 2 bytes + max * 2
+ * empty_renegotiation    := 2 bytes
  * compression_length     := 1 byte
  * compression            := 1 byte
- * extensions_length      := 2 bytes   => 10 + max * 2
+ * extensions_length      := 2 bytes   => 12 + max * 2
  *
  * client_cert_type       := 6 bytes
  * server_cert_type       := 6 bytes
@@ -146,7 +147,7 @@ memarray_t dtlscontext_storage;
  */
 #define DTLS_CH_LENGTH sizeof(dtls_client_hello_t) /* no variable length fields! */
 #define DTLS_COOKIE_LENGTH_MAX 32
-#define DTLS_CH_LENGTH_MAX DTLS_CH_LENGTH + DTLS_COOKIE_LENGTH_MAX + 10 + (2 * DTLS_MAX_CIPHER_SUITES) + 26 + 12
+#define DTLS_CH_LENGTH_MAX DTLS_CH_LENGTH + DTLS_COOKIE_LENGTH_MAX + 12 + (2 * DTLS_MAX_CIPHER_SUITES) + 26 + 12
 #define DTLS_HV_LENGTH sizeof(dtls_hello_verify_t)
 /*
  * ServerHello:
