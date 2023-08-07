@@ -129,10 +129,12 @@ memarray_t dtlscontext_storage;
  * cookie_length          := 1 byte
  * cookie                 := n bytes
  * cipher_length          := 2 bytes
- * cipher suites (max)    := 2 bytes + max * 2
+ * cipher suites (max)    := 2 bytes + max * 2 bytes
+ *    empty_renegotiation    := 2 bytes
+ *    cipher suites          := max * 2 bytes
  * compression_length     := 1 byte
  * compression            := 1 byte
- * extensions_length      := 2 bytes   => 10 + max * 2
+ * extensions_length      := 2 bytes   => 10 bytes + max * 2 bytes
  *
  * client_cert_type       := 6 bytes
  * server_cert_type       := 6 bytes
