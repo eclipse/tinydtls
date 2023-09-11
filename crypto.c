@@ -444,6 +444,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   uint32_t result_x[8];
   uint32_t result_y[8];
 
+  assert(key_size == sizeof(priv));
   if (result_len < key_size) {
     return -1;
   }
