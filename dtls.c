@@ -952,7 +952,7 @@ calculate_key_block(dtls_context_t *ctx,
 		    dtls_peer_type role) {
   (void) ctx;
   (void) session;
-  unsigned char *pre_master_secret;
+  unsigned char pre_master_secret[2 * (sizeof(uint16) + DTLS_PSK_MAX_KEY_LEN)];
   int pre_master_len = 0;
   dtls_security_parameters_t *security = dtls_security_params_next(peer);
   uint8 master_secret[DTLS_MASTER_SECRET_LENGTH];
@@ -962,7 +962,6 @@ calculate_key_block(dtls_context_t *ctx,
     return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
   }
 
-  pre_master_secret = security->key_block;
   switch (get_key_exchange_algorithm(handshake->cipher_index)) {
   case DTLS_KEY_EXCHANGE_PSK:
 #ifdef DTLS_PSK
@@ -978,10 +977,9 @@ calculate_key_block(dtls_context_t *ctx,
         dtls_crit("no psk key for session available\n");
         return len;
       }
-    /* Temporarily use the key_block storage space for the pre master secret. */
       pre_master_len = dtls_psk_pre_master_secret(psk, len,
                         pre_master_secret,
-                        MAX_KEYBLOCK_LENGTH);
+                        sizeof(pre_master_secret));
 
       dtls_debug_hexdump("psk", psk, len);
 
