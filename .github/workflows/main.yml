@@ -77,5 +77,5 @@ jobs:
       run: |
         cmake -E make_directory build_test
         cd build_test
-        cmake -G "Unix Makefiles" -DWARNING_TO_ERROR=ON ..
+        cmake -G "Unix Makefiles" -DWARNING_TO_ERROR=ON -DCMAKE_C_FLAGS="-D__USE_MINGW_ANSI_STDIO" ..
         cmake --build .
