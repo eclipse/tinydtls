@@ -82,11 +82,12 @@ memarray_t dtlscontext_storage;
 
 #define dtls_set_version(H,V) dtls_int_to_uint16((H)->version, (V))
 #define dtls_set_content_type(H,V) ((H)->content_type = (V) & 0xff)
-#define dtls_set_length(H,V)  ((H)->length = (V))
+#define dtls_set_length(H,V)  dtls_int_to_uint16(&((H)->length), (V))
 
 #define dtls_get_content_type(H) ((H)->content_type & 0xff)
 #define dtls_get_version(H) dtls_uint16_to_int((H)->version)
 #define dtls_get_epoch(H) dtls_uint16_to_int((H)->epoch)
+#define dtls_get_length(H) dtls_uint16_to_int((H)->length)
 #define dtls_get_sequence_number(H) dtls_uint48_to_ulong((H)->sequence_number)
 #define dtls_get_fragment_length(H) dtls_uint24_to_int((H)->fragment_length)
 
@@ -563,15 +564,30 @@ is_record(uint8 *msg, size_t msglen) {
   unsigned int rlen = 0;
 
   if (msglen >= DTLS_RH_LENGTH) { /* FIXME allow empty records? */
-    uint16_t version = dtls_uint16_to_int(msg + 1);
-    if ((((version == DTLS_VERSION) || (version == DTLS10_VERSION))
-         && known_content_type(msg))) {
-        rlen = DTLS_RH_LENGTH +
-	dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->length);
+    uint16_t version = dtls_get_version(DTLS_RECORD_HEADER(msg));
 
-      /* we do not accept wrong length field in record header */
-      if (rlen > msglen)
-	rlen = 0;
+    if (DTLS_VERSION == version) {
+      if (!known_content_type(msg)) {
+        return 0;
+      }
+    } else if (DTLS10_VERSION == version) {
+        if (DTLS_CT_HANDSHAKE != msg[0] || DTLS_RH_LENGTH == msglen) {
+          return 0;
+        } else {
+          uint8_t handshake_type = msg[DTLS_RH_LENGTH];
+          if (DTLS_HT_CLIENT_HELLO != handshake_type  &&
+              DTLS_HT_HELLO_VERIFY_REQUEST != handshake_type) {
+            return 0;
+          }
+        }
+    } else {
+      return 0;
+    }
+    rlen = DTLS_RH_LENGTH + dtls_uint16_to_int(DTLS_RECORD_HEADER(msg)->length);
+
+    /* we do not accept wrong length field in record header */
+    if (rlen > msglen) {
+      rlen = 0;
     }
   }
 
