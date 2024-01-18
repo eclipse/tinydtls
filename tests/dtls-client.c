@@ -376,9 +376,11 @@ usage( const char *program, const char *version) {
 #endif /* DTLS_PSK */
           "\t-o file\t\toutput received data to this file\n"
           "\t       \t\t(use '-' for STDOUT)\n"
-          "\t-p port\t\tlisten on specified port (default is %d)\n"
+          "\t-p port\t\tlisten on specified port\n"
+          "\t       \t\t(default is an ephemeral free port).\n"
           "\t-r\t\tforce renegotiation info (RFC5746)\n"
-          "\t-v num\t\tverbosity level (default: 3)\n",
+          "\t-v num\t\tverbosity level (default: 3)\n"
+          "\tDefault destination port: %d\n",
           DEFAULT_PORT);
 }
 
@@ -412,21 +414,22 @@ main(int argc, char **argv) {
   fd_set rfds, wfds;
   struct timeval timeout;
   unsigned short dst_port = 0;
-  unsigned short port = DEFAULT_PORT;
-  char port_str[NI_MAXSERV] = "0";
+  unsigned short local_port = 0;
   log_t log_level = DTLS_LOG_WARN;
   int fd;
   ssize_t result;
   int on = 1;
   int opt, res;
   session_t dst;
+  session_t listen;
   char buf[200];
   size_t len = 0;
   int buf_ready = 0;
 
   memset(&dst, 0, sizeof(session_t));
+  memset(&listen, 0, sizeof(session_t));
+
   dtls_init();
-  snprintf(port_str, sizeof(port_str), "%d", port);
 
 #ifdef DTLS_PSK
   psk_id_length = strlen(PSK_DEFAULT_IDENTITY);
@@ -475,8 +478,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      strncpy(port_str, optarg, NI_MAXSERV-1);
-      port_str[NI_MAXSERV - 1] = '\0';
+      local_port = atoi(optarg);
       break;
     case 'r' :
       force_renegotiation_info = 1;
@@ -558,6 +560,24 @@ main(int argc, char **argv) {
   else {
     if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on) ) < 0) {
       dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+
+  if (local_port) {
+    listen.addr = dst.addr;
+    listen.size = dst.size;
+    if (listen.addr.sa.sa_family == AF_INET6) {
+      listen.addr.sin6.sin6_addr = in6addr_any;
+      listen.addr.sin6.sin6_port = htons(local_port);
+      dtls_info("bind to local IPv6 port %u\n", local_port);
+    } else {
+      listen.addr.sin.sin_addr.s_addr = INADDR_ANY;
+      listen.addr.sin.sin_port = htons(local_port);
+      dtls_info("bind to local IPv4 port %u\n", local_port);
+    }
+    if (bind(fd, (struct sockaddr *)&listen.addr.sa, listen.size) < 0) {
+      dtls_alert("bind: %s\n", strerror(errno));
+      return EXIT_FAILURE;
     }
   }
 
