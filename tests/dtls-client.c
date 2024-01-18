@@ -359,7 +359,7 @@ usage( const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
-          "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
+          "(c) 2011-2024 Olaf Bergmann <bergmann@tzi.org>\n\n"
 #ifdef DTLS_PSK
           "usage: %s [-c cipher suites] [-e] [-i file] [-k file] [-o file]\n"
           "       %*s [-p port] [-r] [-v num] addr [port]\n",
@@ -411,6 +411,7 @@ int
 main(int argc, char **argv) {
   fd_set rfds, wfds;
   struct timeval timeout;
+  unsigned short dst_port = 0;
   unsigned short port = DEFAULT_PORT;
   char port_str[NI_MAXSERV] = "0";
   log_t log_level = DTLS_LOG_WARN;
@@ -423,7 +424,7 @@ main(int argc, char **argv) {
   size_t len = 0;
   int buf_ready = 0;
 
-
+  memset(&dst, 0, sizeof(session_t));
   dtls_init();
   snprintf(port_str, sizeof(port_str), "%d", port);
 
@@ -434,7 +435,8 @@ main(int argc, char **argv) {
   memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
-  while ((opt = getopt(argc, argv, "c:eo:p:rv:" PSK_OPTIONS)) != -1) {
+  while (optind < argc) {
+    opt = getopt(argc, argv, "c:eo:p:rv:z" PSK_OPTIONS);
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' :
@@ -482,31 +484,48 @@ main(int argc, char **argv) {
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
       break;
+    case -1 :
+      /* handle arguments */
+      if (!dst.size) {
+        /* first argument: destination address */
+        /* resolve destination address where server should be sent */
+        res = resolve_address(argv[optind++], &dst.addr.sa);
+        if (res < 0) {
+          dtls_emerg("failed to resolve address\n");
+          exit(-1);
+        }
+        dst.size = res;
+      } else if (!dst_port) {
+        /* second argument: destination port (optional) */
+        dst_port = atoi(argv[optind++]);
+      } else {
+        dtls_warn("too many arguments!\n");
+        usage(argv[0], dtls_package_version());
+        exit(1);
+      }
+      break;
     default:
       usage(argv[0], dtls_package_version());
       exit(1);
     }
   }
 
-  dtls_set_log_level(log_level);
-
-  if (argc <= optind) {
+  if (!dst.size) {
+    dtls_warn("missing destination address!\n");
     usage(argv[0], dtls_package_version());
     exit(1);
   }
-
-  memset(&dst, 0, sizeof(session_t));
-  /* resolve destination address where server should be sent */
-  res = resolve_address(argv[optind++], &dst.addr.sa);
-  if (res < 0) {
-    dtls_emerg("failed to resolve address\n");
-    exit(-1);
+  if (!dst_port) {
+    /* destination port not provided, use default */
+    dst_port = DEFAULT_PORT;
   }
-  dst.size = res;
+  if (dst.addr.sa.sa_family == AF_INET6) {
+    dst.addr.sin6.sin6_port = htons(dst_port);
+  } else {
+    dst.addr.sin.sin_port = htons(dst_port);
+  }
 
-  /* use port number from command line when specified or the listen
-     port, otherwise */
-  dst.addr.sin.sin_port = htons(atoi(optind < argc ? argv[optind++] : port_str));
+  dtls_set_log_level(log_level);
 
   /* init socket and set it to non-blocking */
   fd = socket(dst.addr.sa.sa_family, SOCK_DGRAM, 0);
