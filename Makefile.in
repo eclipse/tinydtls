@@ -87,9 +87,6 @@ dirs:	$(SUBDIRS)
 
 dtls_prng.o::	$(wildcard platform-specific/dtls_prng_*.c)
 
-$(SUB_OBJECTS)::
-	$(MAKE) -C $(@D) $(@F)
-
 $(LIB).so: $(OBJECTS)
 	$(LINK.c) $(LDFLAGS) -shared $^ -o $@
 
