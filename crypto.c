@@ -31,7 +31,7 @@
 #include "dtls.h"
 #include "crypto.h"
 #include "ccm.h"
-#include "ecc/ecc.h"
+#include "ecc/micro-ecc/uECC.h"
 #include "dtls_prng.h"
 #include "netq.h"
 
@@ -438,24 +438,25 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
                                    size_t key_size,
                                    unsigned char *result,
                                    size_t result_len) {
-  uint32_t priv[8];
-  uint32_t pub_x[8];
-  uint32_t pub_y[8];
-  uint32_t result_x[8];
-  uint32_t result_y[8];
+  uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
+  uint8_t priv[DTLS_EC_KEY_SIZE];
 
-  assert(key_size == sizeof(priv));
   if (result_len < key_size) {
     return -1;
   }
 
-  dtls_ec_key_to_uint32(priv_key, key_size, priv);
-  dtls_ec_key_to_uint32(pub_key_x, key_size, pub_x);
-  dtls_ec_key_to_uint32(pub_key_y, key_size, pub_y);
+  memcpy(priv, priv_key, DTLS_EC_KEY_SIZE);
+  memcpy(pub_key, pub_key_x, DTLS_EC_KEY_SIZE);
+  memcpy(pub_key + DTLS_EC_KEY_SIZE, pub_key_y, DTLS_EC_KEY_SIZE);
+  if (!uECC_valid_public_key(pub_key)) {
+    dtls_warn("invalid public key\n");
+  }
 
-  ecc_ecdh(pub_x, pub_y, priv, result_x, result_y);
+  if (!uECC_shared_secret(pub_key, priv, result)) {
+    dtls_warn("cannot generate ECDH shared secret\n");
+    return 0;
+  }
 
-  dtls_ec_key_from_uint32(result_x, key_size, result);
   return key_size;
 }
 
@@ -464,19 +465,15 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
 			unsigned char *pub_key_x,
 			unsigned char *pub_key_y,
 			size_t key_size) {
-  uint32_t priv[8];
-  uint32_t pub_x[8];
-  uint32_t pub_y[8];
+  uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
 
-  do {
-    dtls_prng((unsigned char *)priv, key_size);
-  } while (!ecc_is_valid_key(priv));
-
-  ecc_gen_pub_key(priv, pub_x, pub_y);
-
-  dtls_ec_key_from_uint32(priv, key_size, priv_key);
-  dtls_ec_key_from_uint32(pub_x, key_size, pub_key_x);
-  dtls_ec_key_from_uint32(pub_y, key_size, pub_key_y);
+  assert(key_size == DTLS_EC_KEY_SIZE);
+  if (!uECC_make_key(pub_key, priv_key)
+      || !uECC_valid_public_key(pub_key)) {
+    dtls_crit("cannot generate ECC key pair\n");
+  }
+  memcpy(pub_key_x, pub_key, key_size);
+  memcpy(pub_key_y, pub_key + key_size, key_size);
 }
 
 /* rfc4492#section-5.4 */
@@ -484,17 +481,15 @@ void
 dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   uint32_t point_r[9], uint32_t point_s[9]) {
-  int ret;
-  uint32_t priv[8];
-  uint32_t hash[8];
-  uint32_t randv[8];
-  
-  dtls_ec_key_to_uint32(priv_key, key_size, priv);
-  dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
-  do {
-    dtls_prng((unsigned char *)randv, key_size);
-    ret = ecc_ecdsa_sign(priv, hash, randv, point_r, point_s);
-  } while (ret);
+  uint8_t sign[2 * DTLS_EC_KEY_SIZE];
+
+  assert(key_size == DTLS_EC_KEY_SIZE);
+  assert(sign_hash_size >= uECC_BYTES);
+  assert(sizeof(sign) >= 2 * uECC_BYTES);
+  uECC_sign(priv_key, sign_hash, sign);
+
+  dtls_ec_key_to_uint32(sign, DTLS_EC_KEY_SIZE, point_r);
+  dtls_ec_key_to_uint32(sign + DTLS_EC_KEY_SIZE, DTLS_EC_KEY_SIZE, point_s);
 }
 
 void
@@ -522,19 +517,20 @@ dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			   const unsigned char *pub_key_y, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   unsigned char *result_r, unsigned char *result_s) {
-  uint32_t pub_x[8];
-  uint32_t pub_y[8];
-  uint32_t hash[8];
-  uint32_t point_r[8];
-  uint32_t point_s[8];
+  uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
+  uint8_t sign[2 * DTLS_EC_KEY_SIZE];
+  (void)result_r;
+  (void)result_s;
 
-  dtls_ec_key_to_uint32(pub_key_x, key_size, pub_x);
-  dtls_ec_key_to_uint32(pub_key_y, key_size, pub_y);
-  dtls_ec_key_to_uint32(result_r, key_size, point_r);
-  dtls_ec_key_to_uint32(result_s, key_size, point_s);
-  dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
+  assert(key_size == DTLS_EC_KEY_SIZE);
+  assert(sign_hash_size >= uECC_BYTES);
+  assert(sizeof(sign) >= 2 * uECC_BYTES);
 
-  return ecc_ecdsa_validate(pub_x, pub_y, hash, point_r, point_s);
+  /* clear sign to avoid maybe-unitialized warning */
+  memset(sign, 0, sizeof(sign));
+  memcpy(pub_key, pub_key_x, key_size);
+  memcpy(pub_key + key_size, pub_key_y, key_size);
+  return uECC_verify(pub_key, sign_hash, sign);
 }
 
 int
