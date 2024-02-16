@@ -26,7 +26,7 @@ top_builddir = @top_builddir@
 top_srcdir:= @top_srcdir@
 
 # files and flags
-UNITS= test_ccm.c test_ecc.c test_prf.c
+UNITS= test_ccm.c test_prf.c
 SOURCES:= $(UNITS)
 PROGRAM:=testdriver
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
@@ -36,7 +36,7 @@ CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) @LDFLAGS@
 LDLIBS:=$(top_srcdir)/libtinydtls.a @CUNIT_LIBS@ @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
-FILES:=Makefile.in $(SOURCES)
+FILES:=Makefile.in $(SOURCES) $(HEADERS)
 
 .PHONY: all dirs clean distclean check
 

@@ -32,13 +32,13 @@ SOURCES:= dtls-server.c ccm-test.c \
   #cbc_aes128-test.c #dsrv-test.c
 OBJECTS:= $(patsubst %.c, %.o, $(SOURCES))
 PROGRAMS:= dtls-server dtls-client ccm-test
-HEADERS:=
+HEADERS:=dtls_ciphers_util.h
 CFLAGS:=-Wall -std=c99 @CFLAGS@ @WARNING_CFLAGS@ $(EXTRA_CFLAGS) -D_POSIX_C_SOURCE=200112L
 CPPFLAGS:=-I$(top_srcdir) @CPPFLAGS@
 LDFLAGS:=-L$(top_builddir) @LDFLAGS@
 LDLIBS:=$(top_srcdir)/libtinydtls.a @LIBS@
 DISTDIR=$(top_builddir)/@PACKAGE_TARNAME@-@PACKAGE_VERSION@
-FILES:=Makefile.in $(SOURCES) ccm-testdata.c #cbc_aes128-testdata.c
+FILES:=Makefile.in $(SOURCES) $(HEADERS) ccm-testdata.c
 
 .PHONY: all dirs clean distclean .gitignore doc install uninstall
 
