@@ -24,6 +24,7 @@
 #else
 #define assert(x)
 #endif
+#include <inttypes.h>
 
 #include "global.h"
 #include "dtls_debug.h"
@@ -31,7 +32,9 @@
 #include "dtls.h"
 #include "crypto.h"
 #include "ccm.h"
-#include "ecc/micro-ecc/uECC.h"
+#ifdef DTLS_ECC
+#include "ext/micro-ecc/uECC.h"
+#endif /* DTLS_ECC */
 #include "dtls_prng.h"
 #include "netq.h"
 
@@ -356,6 +359,10 @@ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 #endif /* DTLS_PSK */
 
 #ifdef DTLS_ECC
+#ifdef uECC_SUPPORTS_secp256r1
+const dtls_ecdh_curve default_curve = TLS_EXT_ELLIPTIC_CURVES_SECP256R1;
+#endif /* uECC_SUPPORTS_secp256r1 */
+
 static void dtls_ec_key_to_uint32(const unsigned char *key, size_t key_size,
 				  uint32_t *result) {
   int i;
@@ -432,27 +439,47 @@ int dtls_ec_key_asn1_from_uint32(const uint32_t *key, size_t key_size,
   return key_size + 2; 
 }
 
-int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
-				   unsigned char *pub_key_x,
-                                   unsigned char *pub_key_y,
-                                   size_t key_size,
-                                   unsigned char *result,
-                                   size_t result_len) {
-  uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
-  uint8_t priv[DTLS_EC_KEY_SIZE];
+static int get_uecc_curve(dtls_ecdh_curve curve, uECC_Curve *result) {
+  struct {
+    dtls_ecdh_curve curve;
+    uECC_Curve uecc_curve;
+  } known_curves[] = {
+#if uECC_SUPPORTS_secp256r1
+    { TLS_EXT_ELLIPTIC_CURVES_SECP256R1, uECC_secp256r1() },
+#endif /* uECC_SUPPORTS_secp256r1 */
+  };
+  unsigned int index;
+
+  for (index = 0; index < sizeof(known_curves)/sizeof(known_curves[0]); index++) {
+    if (known_curves[index].curve == curve) {
+      *result = known_curves[index].uecc_curve;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int dtls_ecdh_pre_master_secret2(const unsigned char *priv_key,
+                                 const unsigned char *pub_key,
+                                 size_t key_size,
+                                 dtls_ecdh_curve curve,
+                                 unsigned char *result,
+                                 size_t result_len) {
+  uECC_Curve uecc_curve;
+  if (!get_uecc_curve(curve, &uecc_curve)) {
+    dtls_warn("curve %" PRIu16 " not supported\n", curve);
+    return -1;
+  }
 
   if (result_len < key_size) {
     return -1;
   }
 
-  memcpy(priv, priv_key, DTLS_EC_KEY_SIZE);
-  memcpy(pub_key, pub_key_x, DTLS_EC_KEY_SIZE);
-  memcpy(pub_key + DTLS_EC_KEY_SIZE, pub_key_y, DTLS_EC_KEY_SIZE);
-  if (!uECC_valid_public_key(pub_key)) {
+  if (!uECC_valid_public_key(pub_key, uecc_curve)) {
     dtls_warn("invalid public key\n");
   }
 
-  if (!uECC_shared_secret(pub_key, priv, result)) {
+  if (!uECC_shared_secret(pub_key, priv_key, result, uecc_curve)) {
     dtls_warn("cannot generate ECDH shared secret\n");
     return 0;
   }
@@ -460,20 +487,60 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   return key_size;
 }
 
+int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+				   unsigned char *pub_key_x,
+                                   unsigned char *pub_key_y,
+                                   size_t key_size,
+                                   unsigned char *result,
+                                   size_t result_len) {
+  const dtls_ecdh_curve curve = default_curve;
+  uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
+
+  if (result_len < key_size) {
+    return -1;
+  }
+
+  memcpy(pub_key, pub_key_x, DTLS_EC_KEY_SIZE);
+  memcpy(pub_key + DTLS_EC_KEY_SIZE, pub_key_y, DTLS_EC_KEY_SIZE);
+  return dtls_ecdh_pre_master_secret2(priv_key, pub_key, key_size, curve,
+                                      result, result_len);
+}
+
 void
 dtls_ecdsa_generate_key(unsigned char *priv_key,
 			unsigned char *pub_key_x,
 			unsigned char *pub_key_y,
 			size_t key_size) {
+  const dtls_ecdh_curve curve = default_curve;
   uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
 
-  assert(key_size == DTLS_EC_KEY_SIZE);
-  if (!uECC_make_key(pub_key, priv_key)
-      || !uECC_valid_public_key(pub_key)) {
-    dtls_crit("cannot generate ECC key pair\n");
+  int res = dtls_ecdsa_generate_key2(priv_key, pub_key, key_size, curve);
+  if (res > 0) {
+    memcpy(pub_key_x, pub_key, res);
+    memcpy(pub_key_y, pub_key + res, res);
   }
-  memcpy(pub_key_x, pub_key, key_size);
-  memcpy(pub_key_y, pub_key + key_size, key_size);
+}
+
+int
+dtls_ecdsa_generate_key2(unsigned char *priv_key,
+                         unsigned char *pub_key,
+                         size_t key_size,
+                         dtls_ecdh_curve curve) {
+  uECC_Curve uecc_curve;
+  if (!get_uecc_curve(curve, &uecc_curve)) {
+    dtls_warn("curve %" PRIu16 " not supported\n", curve);
+    return -1;
+  }
+
+  assert(key_size >= (unsigned int)uECC_curve_private_key_size(uecc_curve));
+  assert(2 * key_size >= (unsigned int)uECC_curve_public_key_size(uecc_curve));
+
+  if (!uECC_make_key(pub_key, priv_key, uecc_curve)
+      || !uECC_valid_public_key(pub_key, uecc_curve)) {
+    dtls_crit("cannot generate ECC key pair\n");
+    return 0;
+  }
+  return uECC_curve_private_key_size(uecc_curve);
 }
 
 /* rfc4492#section-5.4 */
@@ -481,15 +548,39 @@ void
 dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   uint32_t point_r[9], uint32_t point_s[9]) {
+  const dtls_ecdh_curve curve = default_curve;
+  dtls_ecdsa_create_sig_hash2(priv_key, key_size,
+                              sign_hash, sign_hash_size,
+                              curve, point_r, point_s);
+
+}
+
+int
+dtls_ecdsa_create_sig_hash2(const unsigned char *priv_key, size_t key_size,
+                            const unsigned char *sign_hash, size_t sign_hash_size,
+                            dtls_ecdh_curve curve,
+                            uint32_t point_r[9], uint32_t point_s[9]) {
   uint8_t sign[2 * DTLS_EC_KEY_SIZE];
+  uECC_Curve uecc_curve;
+  int curve_size;
+  if (!get_uecc_curve(curve, &uecc_curve)) {
+    dtls_warn("curve %" PRIu16 " not supported\n", curve);
+    return -1;
+  }
 
-  assert(key_size == DTLS_EC_KEY_SIZE);
-  assert(sign_hash_size >= uECC_BYTES);
-  assert(sizeof(sign) >= 2 * uECC_BYTES);
-  uECC_sign(priv_key, sign_hash, sign);
+  curve_size = uECC_curve_private_key_size(uecc_curve);
 
-  dtls_ec_key_to_uint32(sign, DTLS_EC_KEY_SIZE, point_r);
-  dtls_ec_key_to_uint32(sign + DTLS_EC_KEY_SIZE, DTLS_EC_KEY_SIZE, point_s);
+  assert(key_size >= (unsigned int)curve_size);
+  assert(sign_hash_size >= (unsigned int)curve_size);
+  assert(sizeof(sign) >= 2 * (unsigned int)curve_size);
+  if (!uECC_sign(priv_key, sign_hash, sign_hash_size, sign, uecc_curve)) {
+    dtls_warn("cannot create signature\n");
+    return -1;
+  }
+
+  dtls_ec_key_to_uint32(sign, curve_size, point_r);
+  dtls_ec_key_to_uint32(sign + curve_size, curve_size, point_s);
+  return 2 * curve_size;
 }
 
 void
@@ -517,20 +608,39 @@ dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			   const unsigned char *pub_key_y, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   unsigned char *result_r, unsigned char *result_s) {
+  const dtls_ecdh_curve curve = default_curve;
   uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
+  memcpy(pub_key, pub_key_x, key_size);
+  memcpy(pub_key + key_size, pub_key_y, key_size);
+  return dtls_ecdsa_verify_sig_hash2(pub_key, key_size,
+                                     sign_hash, sign_hash_size,
+                                     curve,
+                                     result_r, result_s);
+}
+
+int
+dtls_ecdsa_verify_sig_hash2(const unsigned char *pub_key, size_t key_size,
+                            const unsigned char *sign_hash, size_t sign_hash_size,
+                            dtls_ecdh_curve curve,
+                            unsigned char *result_r, unsigned char *result_s) {
   uint8_t sign[2 * DTLS_EC_KEY_SIZE];
+  uECC_Curve uecc_curve;
+  int curve_size;
+  if (!get_uecc_curve(curve, &uecc_curve)) {
+    dtls_warn("curve %" PRIu16 " not supported\n", curve);
+    return -1;
+  }
   (void)result_r;
   (void)result_s;
 
-  assert(key_size == DTLS_EC_KEY_SIZE);
-  assert(sign_hash_size >= uECC_BYTES);
-  assert(sizeof(sign) >= 2 * uECC_BYTES);
+  curve_size = uECC_curve_public_key_size(uecc_curve);
+
+  assert(key_size == (unsigned int)curve_size);
+  assert(sizeof(sign) >= (unsigned int)curve_size);
 
   /* clear sign to avoid maybe-unitialized warning */
   memset(sign, 0, sizeof(sign));
-  memcpy(pub_key, pub_key_x, key_size);
-  memcpy(pub_key + key_size, pub_key_y, key_size);
-  return uECC_verify(pub_key, sign_hash, sign);
+  return uECC_verify(pub_key, sign_hash, sign_hash_size, sign, uecc_curve);
 }
 
 int
