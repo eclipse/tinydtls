@@ -47,14 +47,16 @@ HEADERS:=dtls.h hmac.h dtls_debug.h dtls_config.h uthash.h numeric.h crypto.h gl
  netq.h alert.h utlist.h dtls_prng.h peer.h state.h dtls_time.h session.h \
  tinydtls.h dtls_mutex.h
 PKG_CONFIG_FILES:=tinydtls.pc
+__micro_ecc_path:=ext/micro-ecc
+MICRO_ECC_FILES:=$(addprefix $(__micro_ecc_path)/, uECC.h uECC.c uECC_vli.h types.h) $(wildcard $(__micro_ecc_path)/*.inc)
 CFLAGS:=-Wall -pedantic -std=c99 -DSHA2_USE_INTTYPES_H @CFLAGS@ \
  @WARNING_CFLAGS@ $(EXTRA_CFLAGS)
 CPPFLAGS:=@CPPFLAGS@ -DDTLS_CHECK_CONTENTTYPE -I$(top_srcdir)
-SUBDIRS:=tests tests/unit-tests doc platform-specific sha2 aes ecc
+SUBDIRS:=tests tests/unit-tests doc platform-specific sha2 aes
 DISTSUBDIRS:=$(SUBDIRS)
 DISTDIR=$(top_builddir)/$(package)
 FILES:=Makefile.in configure configure.ac dtls_config.h.in \
-  Makefile.tinydtls $(SOURCES) $(HEADERS)
+  Makefile.tinydtls tinydtls.pc.in ar-lib $(SOURCES) $(HEADERS) $(MICRO_ECC_FILES)
 LIB:=libtinydtls
 LIBS:=$(LIB).a
 ifeq ("@ENABLE_SHARED@", "1")
@@ -101,6 +103,9 @@ clean:
 	done
 endif # WITH_CONTIKI
 
+# Override several warnings for uECC.o
+ext/micro-ecc/uECC.o:: CFLAGS+=-Wno-pedantic -Wno-unused-parameter -Wno-missing-prototypes -Wno-missing-declarations
+
 doc:	
 	$(MAKE) -C doc
 
@@ -110,7 +115,7 @@ distclean:	clean
 
 dist:	$(FILES) $(DISTSUBDIRS)
 	test -d $(DISTDIR) || mkdir $(DISTDIR)
-	cp $(FILES) $(DISTDIR)
+	cp --parents $(FILES) $(DISTDIR)
 	for dir in $(DISTSUBDIRS); do \
 		$(MAKE) -C $$dir dist; \
 	done
