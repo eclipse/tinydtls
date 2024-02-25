@@ -17,9 +17,11 @@
 
 #include "tinydtls.h"
 
+#ifdef IS_WINDOWS
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif /* _GNU_SOURCE */
+#endif /* IS_WINDOWS */
 
 #if defined(HAVE_ASSERT_H) && !defined(assert)
 #include <assert.h>
