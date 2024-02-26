@@ -610,9 +610,10 @@ dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			   unsigned char *result_r, unsigned char *result_s) {
   const dtls_ecdh_curve curve = default_curve;
   uint8_t pub_key[2 * DTLS_EC_KEY_SIZE];
+  assert(sizeof(pub_key) >= (key_size * 2));
   memcpy(pub_key, pub_key_x, key_size);
   memcpy(pub_key + key_size, pub_key_y, key_size);
-  return dtls_ecdsa_verify_sig_hash2(pub_key, key_size,
+  return dtls_ecdsa_verify_sig_hash2(pub_key, key_size * 2,
                                      sign_hash, sign_hash_size,
                                      curve,
                                      result_r, result_s);
@@ -634,7 +635,6 @@ dtls_ecdsa_verify_sig_hash2(const unsigned char *pub_key, size_t key_size,
   (void)result_s;
 
   curve_size = uECC_curve_public_key_size(uecc_curve);
-
   assert(key_size == (unsigned int)curve_size);
   assert(sizeof(sign) >= (unsigned int)curve_size);
 
