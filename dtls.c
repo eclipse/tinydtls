@@ -2465,7 +2465,7 @@ check_client_certificate_verify(dtls_context_t *ctx,
                                    result_r, result_s);
 
   if (ret < 0) {
-    dtls_alert("wrong signature err: %i\n", ret);
+    dtls_alert("client certificate verify, wrong signature err: %i\n", ret);
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   return 0;
@@ -3445,7 +3445,7 @@ check_server_certificate(dtls_context_t *ctx,
 	     config->keyx.ecdsa.other_pub_y,
 	     sizeof(config->keyx.ecdsa.other_pub_x));
   if (err < 0) {
-    dtls_warn("The certificate was not accepted\n");
+    dtls_info("The server certificate was not accepted\n");
     return err;
   }
 
@@ -3483,14 +3483,14 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   key_params = data;
 
   if (dtls_uint8_to_int(data) != TLS_EC_CURVE_TYPE_NAMED_CURVE) {
-    dtls_alert("Only named curves supported\n");
+    dtls_alert("only named curves supported\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
   if (dtls_uint16_to_int(data) != TLS_EXT_ELLIPTIC_CURVES_SECP256R1) {
-    dtls_alert("secp256r1 supported\n");
+    dtls_alert("only secp256r1 supported\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint16);
@@ -3534,7 +3534,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 			    result_r, result_s);
 
   if (ret < 0) {
-    dtls_alert("wrong signature\n");
+    dtls_alert("server key exchange wrong signature\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   return 0;
