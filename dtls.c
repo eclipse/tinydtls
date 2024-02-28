@@ -239,18 +239,18 @@ memarray_t dtlscontext_storage;
  * \param A  alert description in case of a length violation
  * \param M  logging message in case of a length violation
  */
-#define GET_VAR_FIELD(VL, P, L, T, A, M) {              \
-    if (L < sizeof(T)) {                                \
-      dtls_info("%s: field length exceeds buffer", M);  \
-      return dtls_alert_fatal_create(A);                \
-    }                                                   \
-    VL = dtls_ ## T ## _to_int(P);                      \
-    L -= sizeof(T);                                     \
-    P += sizeof(T);                                     \
-    if (L < VL) {                                       \
-        dtls_info("%s: field value exceeds buffer", M); \
-      return dtls_alert_fatal_create(A);                \
-    }                                                   \
+#define GET_VAR_FIELD(VL, P, L, T, A, M) {             \
+    if (L < sizeof(T)) {                               \
+      dtls_info("%s: field length exceeds buffer", M); \
+      return dtls_alert_fatal_create(A);               \
+    }                                                  \
+    VL = dtls_ ## T ## _to_int(P);                     \
+    L -= sizeof(T);                                    \
+    P += sizeof(T);                                    \
+    if (L < VL) {                                      \
+      dtls_info("%s: field value exceeds buffer", M);  \
+      return dtls_alert_fatal_create(A);               \
+    }                                                  \
   }
 
 /* some constants for the PRF */
