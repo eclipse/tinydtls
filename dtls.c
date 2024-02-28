@@ -60,6 +60,10 @@
 #  include "hmac.h"
 #endif /* WITH_SHA256 */
 
+#ifdef DTLS_ECC
+#include "ext/micro-ecc/uECC.h"
+#endif /* DTLS_ECC */
+
 #ifdef WITH_ZEPHYR
 LOG_MODULE_DECLARE(TINYDTLS, CONFIG_TINYDTLS_LOG_LEVEL);
 #endif /* WITH_ZEPHYR */
@@ -326,6 +330,14 @@ free_context(dtls_context_t *context) {
 
 #endif /* WITH_POSIX */
 
+#ifdef DTLS_ECC
+/* Define wrapper function for uECC_set_rng to map the size parameter
+ * from unsigned int to size_t. */
+static inline int uecc_rng_function(uint8_t *dest, unsigned int size) {
+  return dtls_prng(dest, size);
+}
+#endif /* DTLS_ECC */
+
 void
 dtls_init(void) {
   dtls_clock_init();
@@ -337,6 +349,9 @@ dtls_init(void) {
 memarray_init(&dtlscontext_storage, dtlscontext_storage_data,
               sizeof(dtls_context_t), DTLS_CONTEXT_MAX);
 #endif /* RIOT_VERSION */
+#ifdef DTLS_ECC
+ uECC_set_rng(uecc_rng_function);
+#endif /* DTLS_ECC */
 }
 
 /* Calls cb_alert() with given arguments if defined, otherwise an
