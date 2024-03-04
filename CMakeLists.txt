@@ -53,7 +53,7 @@ option(make_tests "Make test programs and examples" OFF)
 if(NOT PLATFORM)
    # PLATFORM seems to be not used
    set(PLATFORM "posix" CACHE STRING "Choose platform." FORCE)
-   set_property(CACHE PLATFORM PROPERTY STRINGS "posix" "riot")
+   set_property(CACHE PLATFORM PROPERTY STRINGS "contiki" "espidf" "posix" "riot" "zephyr" "windows")
 endif()
 
 set(PACKAGE_NAME "tinydtls")
@@ -62,7 +62,7 @@ set(SOVERSION "0" )
 
 if(NOT ZEPHYR_BASE)
    option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
-   option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" OFF)
+   option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
 else()
    # provided by zephyr/CMakeLists.txt and zephyr/Kconfig
 endif()
