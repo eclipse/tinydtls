@@ -235,7 +235,7 @@ typedef struct {
  *          - KeyConfig[slot_id] = 0x0013
  * @warning Slot ID must be different from ecc_slot_id.
  */
-static uint8_t ecdhe_slot_id;
+extern uint8_t ecdhe_slot_id;
 
 /**
  * @brief Slot id used to perform ECDSA operation.
@@ -243,7 +243,7 @@ static uint8_t ecdhe_slot_id;
  *        message. The associated public key is used to verify the signature.
  * @warning Slot ID must be different from ecdhe_slot_id.
  */
-static uint8_t ecc_slot_id;
+extern uint8_t ecc_slot_id;
 #endif
 
 /** 

@@ -59,6 +59,11 @@ memarray_t security_storage;
 
 #endif /* RIOT_VERSION */
 
+#ifdef DTLS_ATECC608A
+uint8_t ecdhe_slot_id;
+uint8_t ecc_slot_id;
+#endif
+
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
 
