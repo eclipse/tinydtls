@@ -30,6 +30,10 @@
 #include "hmac.h"
 #include "ccm.h"
 
+#ifdef DTLS_ATECC608A
+#include "cryptoauthlib.h"
+#endif /* ATECC608A */
+
 /* TLS_PSK_WITH_AES_128_CCM_8 */
 #define DTLS_MAC_KEY_LENGTH    0
 #define DTLS_KEY_LENGTH        16 /* AES-128 */
@@ -219,6 +223,28 @@ typedef struct {
 
 /* just for consistency */
 #define dtls_kb_digest_size(Param, Role) DTLS_MAC_LENGTH
+
+#ifdef DTLS_ATECC608A
+/**
+ * @brief Slot id used to perform ECDHE operation. 
+ *        Due to the last 'E', the operation is performed with 
+ *        ephemeral keys that must be generated and stored in the
+ *        the current slot.
+ *        I advise to use slot configured as follows:
+ *          - SlotConfig[slot_id] = 0x2087
+ *          - KeyConfig[slot_id] = 0x0013
+ * @warning Slot ID must be different from ecc_slot_id.
+ */
+static uint8_t ecdhe_slot_id;
+
+/**
+ * @brief Slot id used to perform ECDSA operation.
+ *        This slot must contains the private key used to sign the
+ *        message. The associated public key is used to verify the signature.
+ * @warning Slot ID must be different from ecdhe_slot_id.
+ */
+static uint8_t ecc_slot_id;
+#endif
 
 /** 
  * Expands the secret and key to a block of DTLS_HMAC_MAX 
@@ -467,7 +493,12 @@ void dtls_handshake_free(dtls_handshake_parameters_t *handshake);
 dtls_security_parameters_t *dtls_security_new(void);
 
 void dtls_security_free(dtls_security_parameters_t *security);
+
+#ifndef DTLS_ATECC608A  
 void crypto_init(void);
+#else
+void crypto_init(ATCAIfaceCfg *config);
+#endif /* ATECC608A */
 
 #endif /* _DTLS_CRYPTO_H_ */
 
