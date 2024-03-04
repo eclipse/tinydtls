@@ -1,9 +1,9 @@
 # About tinydtls
 
-tinydtls is a library for Datagram Transport Layer Security (DTLS)
-covering both the client and the server state machine. It is
-implemented in C and provides support for a minimal set of cipher
-suites suitable for the Internet of Things.
+tinydtls is a library for Datagram Transport Layer Security (DTLS 1.2 
+[RFC 6347](https://www.rfc-editor.org/rfc/rfc6347)) covering both the client
+and the server state machine. It is implemented in C and provides support
+for a minimal set of cipher suites suitable for the Internet of Things.
 
 This library contains functions and structures that can help
 constructing a single-threaded UDP server with DTLS support in
@@ -106,6 +106,25 @@ argument:
 make
 mv libtinydtls.so libtinydtls.dll # Apply Windows file extension
 ```
+
+# Implemented Cipher Suites
+
+| Name | ID | RFC |
+| ------ | ----------- | ------- |
+| TLS_PSK_WITH_AES_128_CCM | 0xC0A4 | [RFC 6655](https://www.rfc-editor.org/rfc/rfc6655) |
+| TLS_PSK_WITH_AES_128_CCM_8 | 0xC0A8 | [RFC 6655](https://www.rfc-editor.org/rfc/rfc6655) |
+| TLS_ECDHE_ECDSA_WITH_AES_128_CCM | 0xC0AC | [RFC 7251](https://www.rfc-editor.org/rfc/rfc7251) |
+| TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 | 0xC0AE | [RFC 7251](https://www.rfc-editor.org/rfc/rfc7251) |
+
+# Supported TLS Extensions
+
+| Name | RFC |
+| ------ | ------- |
+| Pre Shared Key (PSK) | [RFC 4279](https://www.rfc-editor.org/rfc/rfc4279) |
+| TLS Renegotiation Indication (minimal version) | [RFC 5746](https://www.rfc-editor.org/rfc/rfc5746) |
+| Raw Public Key (RPK) | [RFC 7250](https://www.rfc-editor.org/rfc/rfc7250) |
+| Extended Master Secret | [RFC 7627](https://www.rfc-editor.org/rfc/rfc7627) |
+| DTLS 1.2 Connection ID (client only, feature branch) | [RFC 9146](https://www.rfc-editor.org/rfc/rfc9146) |
 
 # License
 
