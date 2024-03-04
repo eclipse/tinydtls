@@ -498,15 +498,6 @@ void dtls_security_free(dtls_security_parameters_t *security);
 void crypto_init(void);
 #else
 void crypto_init(ATCAIfaceCfg *config);
-
-/**
- * @brief Set the slot id used to perform ECDHE operation.
- * @warning Slot ID must be different.
- * 
- * @param ecc_slot Slot ID used to perform ECDSA operation.
- * @param ecdhe_slot Slot ID used to perform ECDHE operation.
- */
-void dtls_set_slot_id(uint8_t ecc_slot, uint8_t ecdhe_slot);
 #endif /* ATECC608A */
 
 #endif /* _DTLS_CRYPTO_H_ */

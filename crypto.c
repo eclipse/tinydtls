@@ -151,12 +151,6 @@ void crypto_init(ATCAIfaceCfg *config)
       dtls_alert("atcab_init success\n");
   }
 }
-
-void dtls_set_slot_id(uint8_t ecc_slot, uint8_t ecdhe_slot)
-{
-  ecdhe_slot_id = ecdhe_slot;
-  ecc_slot_id = ecc_slot;
-}
 #endif /* DTLS_ATECC608A */
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc(void) {
