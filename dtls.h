@@ -257,7 +257,6 @@ void dtls_init(ATCAIfaceCfg *cfg);
 /**
  * @brief Set the slot id used to perform ECDHE operation.
  * @warning Slot ID must be different.
- * 
  * @param ecc_slot Slot ID used to perform ECDSA operation.
  * @param ecdhe_slot Slot ID used to perform ECDHE operation.
  */
