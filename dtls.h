@@ -251,6 +251,9 @@ typedef struct dtls_context_t {
 #ifndef DTLS_ATECC608A
 void dtls_init(void);
 
+#else
+void dtls_init(ATCAIfaceCfg *cfg);
+
 /**
  * @brief Set the slot id used to perform ECDHE operation.
  * @warning Slot ID must be different.
@@ -259,8 +262,6 @@ void dtls_init(void);
  * @param ecdhe_slot Slot ID used to perform ECDHE operation.
  */
 void dtls_set_slot_id(uint8_t ecc_slot, uint8_t ecdhe_slot);
-#else
-void dtls_init(ATCAIfaceCfg *cfg);
 
 void dtls_test_ATECC608A(void);
 #endif /* ATECC608A */
