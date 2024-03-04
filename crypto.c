@@ -77,9 +77,11 @@ static void dtls_cipher_context_release(void)
 }
 
 #if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+#ifndef DTLS_ATECC608A
 void crypto_init(void)
 {
 }
+#endif
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc(void) {
   return malloc(sizeof(dtls_handshake_parameters_t));
@@ -148,6 +150,12 @@ void crypto_init(ATCAIfaceCfg *config)
   {
       dtls_alert("atcab_init success\n");
   }
+}
+
+void dtls_set_slot_id(uint8_t ecc_slot, uint8_t ecdhe_slot)
+{
+  ecdhe_slot_id = ecdhe_slot;
+  ecc_slot_id = ecc_slot;
 }
 #endif /* DTLS_ATECC608A */
 
@@ -468,7 +476,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   unsigned char pub_key[2 * ATCA_KEY_SIZE];
   memcpy(pub_key, pub_key_x, ATCA_KEY_SIZE);
   memcpy(pub_key + ATCA_KEY_SIZE, pub_key_y, ATCA_KEY_SIZE);
-  ATCA_STATUS status = atcab_ecdh(ATECC_ECDH_KEY_ID, pub_key, result);
+  ATCA_STATUS status = atcab_ecdh(ecdhe_slot_id, pub_key, result);
   if (status != ATCA_SUCCESS) {
     dtls_alert("Failed to generate pre-master secret\n");
     return -1;
@@ -502,11 +510,12 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
 			unsigned char *pub_key_y,
 			size_t key_size) {
 #if defined (DTLS_ATECC608A)
-  // Generate a false private key
-  dtls_prng(priv_key, key_size);
+  // priv_key et key_size are not used in ATECC608A
+  (void)priv_key;
+  (void)key_size;
 
   unsigned char pub_key[2 * key_size];
-  ATCA_STATUS status = atcab_get_pubkey(ATECC_ECDSA_KEY_ID, pub_key);
+  ATCA_STATUS status = atcab_genkey(ecdhe_slot_id, pub_key);
   if (status != ATCA_SUCCESS) {
     dtls_crit("Failed to generate key\n");
   }
@@ -543,7 +552,7 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
   ATCA_STATUS status;
   unsigned char signature[2*key_size];
   
-  status = atcab_sign(ATECC_ECDSA_KEY_ID, sign_hash, signature);
+  status = atcab_sign(ecc_slot_id, sign_hash, signature);
   if (status != ATCA_SUCCESS) {
     dtls_crit("Failed to sign hash\n");
   }

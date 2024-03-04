@@ -25,6 +25,8 @@ project(tinydtls)
 
 include (AutoConf.cmake)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Include the toolchain file
 if (CMAKE_SYSTEM_NAME STREQUAL "Generic" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm")
     set(CMAKE_SYSTEM_NAME Generic)
@@ -95,7 +97,6 @@ target_include_directories(tinydtls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_C
 target_compile_definitions(tinydtls PUBLIC DTLSv12 WITH_SHA256 SHA2_USE_INTTYPES_H DTLS_CHECK_CONTENTTYPE)
 # Add the preprocessor definition
 target_compile_definitions(tinydtls PRIVATE DTLS_ATECC608A)
-# target_compile_definitions(tinydtls PRIVATE DTLS_MICRO_ECC)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "Export all symbols when compiling to a .dll" ON)
