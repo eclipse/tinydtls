@@ -40,6 +40,10 @@
 #include "global.h"
 #include "dtls_time.h"
 
+#ifdef DTLS_ATECC608A
+#include "cryptoauthlib.h"
+#endif /* ATECC608A */
+
 #ifndef DTLSv12
 #define DTLS_VERSION 0xfeff	/* DTLS v1.1 */
 #else
@@ -244,7 +248,13 @@ typedef struct dtls_context_t {
  * This function initializes the tinyDTLS memory management and must
  * be called first.
  */
+#ifndef DTLS_ATECC608A
 void dtls_init(void);
+#else
+void dtls_init(ATCAIfaceCfg *cfg);
+
+void dtls_test_ATECC608A(void);
+#endif /* ATECC608A */
 
 /** 
  * Creates a new context object. The storage allocated for the new

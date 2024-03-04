@@ -25,8 +25,23 @@ project(tinydtls)
 
 include (AutoConf.cmake)
 
+# Include the toolchain file
+if (CMAKE_SYSTEM_NAME STREQUAL "Generic" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm")
+    set(CMAKE_SYSTEM_NAME Generic)
+    set(CMAKE_SYSTEM_PROCESSOR arm)
+
+    set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+    set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
+    set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
+    set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
+
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+endif()
+
 if(NOT ZEPHYR_BASE)
-   option(BUILD_SHARED_LIBS "Link using shared libs" OFF)
+   option(BUILD_SHARED_LIBS "Link using shared libs" ON)
 else()
     # provided by the zephyr build system
 endif()
@@ -36,7 +51,7 @@ option(make_tests "Make test programs and examples" OFF)
 if(NOT PLATFORM)
    # PLATFORM seems to be not used
    set(PLATFORM "posix" CACHE STRING "Choose platform." FORCE)
-   set_property(CACHE PLATFORM PROPERTY STRINGS "contiki" "espidf" "posix" "riot" "zephyr" "windows")
+   set_property(CACHE PLATFORM PROPERTY STRINGS "posix" "riot")
 endif()
 
 set(PACKAGE_NAME "tinydtls")
@@ -45,7 +60,7 @@ set(SOVERSION "0" )
 
 if(NOT ZEPHYR_BASE)
    option(DTLS_ECC "disable/enable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8" ON )
-   option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" ON)
+   option(DTLS_PSK "disable/enable support for TLS_PSK_WITH_AES_128_CCM_8" OFF)
 else()
    # provided by zephyr/CMakeLists.txt and zephyr/Kconfig
 endif()
@@ -72,8 +87,15 @@ target_sources(tinydtls PRIVATE
    sha2/sha2.c
    ecc/ecc.c)
 
-target_include_directories(tinydtls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+set(CMAKE_CRYPTOAUTHLIB_PATH "/usr/include/cryptoauthlib")
+
+# Link cryptoauthlib to your project
+target_link_libraries(tinydtls cryptoauth)
+target_include_directories(tinydtls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CRYPTOAUTHLIB_PATH} ${CMAKE_PLATFORM_SPE})
 target_compile_definitions(tinydtls PUBLIC DTLSv12 WITH_SHA256 SHA2_USE_INTTYPES_H DTLS_CHECK_CONTENTTYPE)
+# Add the preprocessor definition
+target_compile_definitions(tinydtls PRIVATE DTLS_ATECC608A)
+# target_compile_definitions(tinydtls PRIVATE DTLS_MICRO_ECC)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "Export all symbols when compiling to a .dll" ON)

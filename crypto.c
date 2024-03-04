@@ -15,10 +15,13 @@
  *
  *******************************************************************************/
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "tinydtls.h"
-
+#ifdef DTLS_ATECC608A
+#include "cryptoauthlib.h"
+#endif
 #ifdef HAVE_ASSERT_H
 #include <assert.h>
 #else
@@ -121,11 +124,32 @@ static void dtls_security_dealloc(dtls_security_parameters_t *security) {
 }
 
 #elif defined (RIOT_VERSION)
-
+#ifndef DTLS_ATECC608A
 void crypto_init(void) {
   memarray_init(&handshake_storage, handshake_storage_data, sizeof(dtls_handshake_parameters_t), DTLS_HANDSHAKE_MAX);
   memarray_init(&security_storage, security_storage_data, sizeof(dtls_security_parameters_t), DTLS_SECURITY_MAX);
 }
+#else
+static ATCAIfaceCfg atecc608a;
+
+void crypto_init(ATCAIfaceCfg *config)
+{
+  printf("Using ATECC608A\n");
+  memarray_init(&handshake_storage, handshake_storage_data, sizeof(dtls_handshake_parameters_t), DTLS_HANDSHAKE_MAX);
+  memarray_init(&security_storage, security_storage_data, sizeof(dtls_security_parameters_t), DTLS_SECURITY_MAX);
+  atecc608a = *config;
+  ATCA_STATUS status = atcab_init(config);
+  if (status != ATCA_SUCCESS)
+  {
+      dtls_alert("atcab_init failed with ret=0x%08x\n", status);
+      return;
+  }
+  else
+  {
+      dtls_alert("atcab_init success\n");
+  }
+}
+#endif /* DTLS_ATECC608A */
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc(void) {
   return memarray_alloc(&handshake_storage);
@@ -438,6 +462,18 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
                                    size_t key_size,
                                    unsigned char *result,
                                    size_t result_len) {
+#if defined (DTLS_ATECC608A)
+  (void)result_len;
+  (void)priv_key;
+  unsigned char pub_key[2 * ATCA_KEY_SIZE];
+  memcpy(pub_key, pub_key_x, ATCA_KEY_SIZE);
+  memcpy(pub_key + ATCA_KEY_SIZE, pub_key_y, ATCA_KEY_SIZE);
+  ATCA_STATUS status = atcab_ecdh(ATECC_ECDH_KEY_ID, pub_key, result);
+  if (status != ATCA_SUCCESS) {
+    dtls_alert("Failed to generate pre-master secret\n");
+    return -1;
+  }
+#else
   uint32_t priv[8];
   uint32_t pub_x[8];
   uint32_t pub_y[8];
@@ -456,6 +492,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   ecc_ecdh(pub_x, pub_y, priv, result_x, result_y);
 
   dtls_ec_key_from_uint32(result_x, key_size, result);
+#endif /* DTLS_ATECC608A */
   return key_size;
 }
 
@@ -464,6 +501,21 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
 			unsigned char *pub_key_x,
 			unsigned char *pub_key_y,
 			size_t key_size) {
+#if defined (DTLS_ATECC608A)
+  // Generate a false private key
+  dtls_prng(priv_key, key_size);
+
+  unsigned char pub_key[2 * key_size];
+  ATCA_STATUS status = atcab_get_pubkey(ATECC_ECDSA_KEY_ID, pub_key);
+  if (status != ATCA_SUCCESS) {
+    dtls_crit("Failed to generate key\n");
+  }
+  else
+  {
+    memcpy(pub_key_x, pub_key, key_size);
+    memcpy(pub_key_y, pub_key + key_size, key_size);
+  }
+#else
   uint32_t priv[8];
   uint32_t pub_x[8];
   uint32_t pub_y[8];
@@ -477,6 +529,7 @@ dtls_ecdsa_generate_key(unsigned char *priv_key,
   dtls_ec_key_from_uint32(priv, key_size, priv_key);
   dtls_ec_key_from_uint32(pub_x, key_size, pub_key_x);
   dtls_ec_key_from_uint32(pub_y, key_size, pub_key_y);
+#endif /* DTLS_ATECC608A */
 }
 
 /* rfc4492#section-5.4 */
@@ -484,6 +537,22 @@ void
 dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   uint32_t point_r[9], uint32_t point_s[9]) {
+#if defined (DTLS_ATECC608A)
+  (void)sign_hash_size;
+  (void)priv_key;
+  ATCA_STATUS status;
+  unsigned char signature[2*key_size];
+  
+  status = atcab_sign(ATECC_ECDSA_KEY_ID, sign_hash, signature);
+  if (status != ATCA_SUCCESS) {
+    dtls_crit("Failed to sign hash\n");
+  }
+  else
+  {
+    dtls_ec_key_to_uint32(signature, key_size, point_r);
+    dtls_ec_key_to_uint32(signature + key_size, key_size, point_s);
+  }
+#else
   int ret;
   uint32_t priv[8];
   uint32_t hash[8];
@@ -495,6 +564,7 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
     dtls_prng((unsigned char *)randv, key_size);
     ret = ecc_ecdsa_sign(priv, hash, randv, point_r, point_s);
   } while (ret);
+#endif /* DTLS_ATECC608A */
 }
 
 void
@@ -522,6 +592,31 @@ dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			   const unsigned char *pub_key_y, size_t key_size,
 			   const unsigned char *sign_hash, size_t sign_hash_size,
 			   unsigned char *result_r, unsigned char *result_s) {
+#if defined (DTLS_ATECC608A)
+  (void)sign_hash_size;
+  unsigned char pub_key[2 * key_size];
+  memcpy(pub_key, pub_key_x, key_size);
+  memcpy(pub_key + key_size, pub_key_y, key_size);
+  unsigned char signature[2 * key_size];
+  memcpy(signature, result_r, key_size);
+  memcpy(signature + key_size, result_s, key_size);
+
+  int is_verified = 0;
+
+  ATCA_STATUS status = atcab_verify_extern(sign_hash, signature, pub_key, (bool*)&is_verified);
+  if (status != ATCA_SUCCESS) {
+    dtls_alert("Failed to verify signature : %x\n", status);
+    is_verified = -1;
+  }
+  else 
+  {
+    if (is_verified == 0) {
+      dtls_alert("Signature is not verified\n");
+      is_verified = -1;
+    }
+  }
+  return is_verified;
+#else
   uint32_t pub_x[8];
   uint32_t pub_y[8];
   uint32_t hash[8];
@@ -535,6 +630,7 @@ dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
   dtls_ec_key_to_uint32(sign_hash, sign_hash_size, hash);
 
   return ecc_ecdsa_validate(pub_x, pub_y, hash, point_r, point_s);
+#endif /* DTLS_ATECC608A */
 }
 
 int

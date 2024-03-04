@@ -324,6 +324,7 @@ free_context(dtls_context_t *context) {
 
 #endif /* WITH_POSIX */
 
+#ifndef DTLS_ATECC608A
 void
 dtls_init(void) {
   dtls_clock_init();
@@ -336,6 +337,20 @@ memarray_init(&dtlscontext_storage, dtlscontext_storage_data,
               sizeof(dtls_context_t), DTLS_CONTEXT_MAX);
 #endif /* RIOT_VERSION */
 }
+#else 
+void dtls_init(ATCAIfaceCfg *cfg)
+{
+  dtls_clock_init();
+  crypto_init(cfg);
+  netq_init();
+  peer_init();
+
+#ifdef RIOT_VERSION
+memarray_init(&dtlscontext_storage, dtlscontext_storage_data,
+              sizeof(dtls_context_t), DTLS_CONTEXT_MAX);
+#endif /* RIOT_VERSION */
+}
+#endif /* DTLS_ATECC608A */
 
 /* Calls cb_alert() with given arguments if defined, otherwise an
  * error message is logged and the result is -1. This is just an
@@ -653,7 +668,6 @@ static const dtls_user_parameters_t default_user_parameters = {
     {
 #ifdef DTLS_ECC
       TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
-      TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
 #endif /* DTLS_ECC */
 #ifdef DTLS_PSK
       TLS_PSK_WITH_AES_128_CCM_8,
@@ -695,7 +709,6 @@ static const struct cipher_suite_param_t cipher_suite_params[] = {
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
   { TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,  8, DTLS_KEY_EXCHANGE_ECDHE_ECDSA },
-  { TLS_ECDHE_ECDSA_WITH_AES_128_CCM,   16, DTLS_KEY_EXCHANGE_ECDHE_ECDSA },
 #endif /* DTLS_ECC */
  };
 
@@ -2432,15 +2445,15 @@ check_client_certificate_verify(dtls_context_t *ctx,
   copy_hs_hash(peer, &hs_hash);
 
   dtls_hash_finalize(sha256hash, &hs_hash);
-
+  
   ret = dtls_ecdsa_verify_sig_hash(config->keyx.ecdsa.other_pub_x,
                                    config->keyx.ecdsa.other_pub_y,
                                    sizeof(config->keyx.ecdsa.other_pub_x),
                                    sha256hash, sizeof(sha256hash),
                                    result_r, result_s);
-
+                                   
   if (ret < 0) {
-    dtls_alert("wrong signature err: %i\n", ret);
+    dtls_alert("check_client_certificate_verify : wrong signature err: %i\n", ret);
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   return 0;
@@ -2962,7 +2975,7 @@ dtls_send_client_key_exchange(dtls_context_t *ctx, dtls_peer_t *peer)
       p += DTLS_EC_KEY_SIZE;
       ephemeral_pub_y = p;
       p += DTLS_EC_KEY_SIZE;
-
+      
     dtls_ecdsa_generate_key(peer->handshake_params->keyx.ecdsa.own_eph_priv,
     			    ephemeral_pub_x, ephemeral_pub_y,
     			    DTLS_EC_KEY_SIZE);
@@ -3419,9 +3432,13 @@ check_server_certificate(dtls_context_t *ctx,
 	     config->keyx.ecdsa.other_pub_x,
 	     config->keyx.ecdsa.other_pub_y,
 	     sizeof(config->keyx.ecdsa.other_pub_x));
+       
   if (err < 0) {
     dtls_warn("The certificate was not accepted\n");
     return err;
+  }
+  else {
+    dtls_debug("The certificate was accepted\n");
   }
 
   return 0;
@@ -3458,14 +3475,14 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
   key_params = data;
 
   if (dtls_uint8_to_int(data) != TLS_EC_CURVE_TYPE_NAMED_CURVE) {
-    dtls_alert("Only named curves supported\n");
+    dtls_alert("Only named curves supported : %d\n", dtls_uint8_to_int(data));
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint8);
   data_length -= sizeof(uint8);
 
   if (dtls_uint16_to_int(data) != TLS_EXT_ELLIPTIC_CURVES_SECP256R1) {
-    dtls_alert("secp256r1 supported\n");
+    dtls_alert("secp256r1 supported : %d\n", dtls_uint16_to_int(data));
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   data += sizeof(uint16);
@@ -3509,7 +3526,7 @@ check_server_key_exchange_ecdsa(dtls_context_t *ctx,
 			    result_r, result_s);
 
   if (ret < 0) {
-    dtls_alert("wrong signature\n");
+    dtls_alert("check_server_key_exchange_ecdsa : wrong signature\n");
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
   }
   return 0;
