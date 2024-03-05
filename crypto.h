@@ -233,6 +233,8 @@ typedef struct {
  *        I advise to use slot configured as follows:
  *          - SlotConfig[slot_id] = 0x2087
  *          - KeyConfig[slot_id] = 0x0013
+ *        When using test_ecc608_configdata of cryptoauthlib tests, 
+ *        it corresponds to slot 2.
  * @warning Slot ID must be different from ecc_slot_id.
  */
 extern uint8_t ecdhe_slot_id;
@@ -241,6 +243,8 @@ extern uint8_t ecdhe_slot_id;
  * @brief Slot id used to perform ECDSA operation.
  *        This slot must contains the private key used to sign the
  *        message. The associated public key is used to verify the signature.
+ *        When using test_ecc608_configdata of cryptoauthlib tests, 
+ *        you can use slot 7.
  * @warning Slot ID must be different from ecdhe_slot_id.
  */
 extern uint8_t ecc_slot_id;
