@@ -226,28 +226,26 @@ typedef struct {
 
 #ifdef DTLS_ATECC608A
 /**
- * @brief Slot id used to perform ECDHE operation. 
- *        Due to the last 'E', the operation is performed with 
- *        ephemeral keys that must be generated and stored in the
- *        the current slot.
- *        I advise to use slot configured as follows:
- *          - SlotConfig[slot_id] = 0x2087
- *          - KeyConfig[slot_id] = 0x0013
- *        When using test_ecc608_configdata of cryptoauthlib tests, 
- *        it corresponds to slot 2.
- * @warning Slot ID must be different from ecc_slot_id.
+ * @brief Structure used to store if a slot is already used by ECDHE operation or not.
+ * 
  */
-extern uint8_t ecdhe_slot_id;
+typedef struct
+{
+  bool usage;
+  uint8_t slot;
+} ecdhe_slot_id_t;
 
 /**
- * @brief Slot id used to perform ECDSA operation.
- *        This slot must contains the private key used to sign the
- *        message. The associated public key is used to verify the signature.
- *        When using test_ecc608_configdata of cryptoauthlib tests, 
- *        you can use slot 7.
- * @warning Slot ID must be different from ecdhe_slot_id.
+ * @brief List of slots used to perform ECDHE operation.
+ * 
  */
-extern uint8_t ecc_slot_id;
+extern ecdhe_slot_id_t *ecdhe_slots_id;
+
+/**
+ * @brief Number of slots capable to perform ECDHE operation.
+ * 
+ */
+extern uint8_t ecdhe_nb_slots;
 #endif
 
 /** 

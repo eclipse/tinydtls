@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_ASSERT_H
 #include <assert.h>
 #endif
@@ -351,10 +352,15 @@ memarray_init(&dtlscontext_storage, dtlscontext_storage_data,
 #endif /* RIOT_VERSION */
 }
 
-void dtls_set_slot_id(uint8_t ecc_slot, uint8_t ecdhe_slot)
+void dtls_set_ecdhe_slots_id(uint8_t *ecdhe_slot, uint8_t nb_slots)
 {
-  ecdhe_slot_id = ecdhe_slot;
-  ecc_slot_id = ecc_slot;
+  ecdhe_slots_id = (ecdhe_slot_id_t*)malloc(nb_slots * sizeof(ecdhe_slot_id_t));
+  for (int i = 0; i < nb_slots; i++)
+  {
+    ecdhe_slots_id[i].slot = ecdhe_slot[i];
+    ecdhe_slots_id[i].usage = false;
+  }
+  ecdhe_nb_slots = nb_slots;
 }
 #endif /* DTLS_ATECC608A */
 

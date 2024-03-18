@@ -60,8 +60,8 @@ memarray_t security_storage;
 #endif /* RIOT_VERSION */
 
 #ifdef DTLS_ATECC608A
-uint8_t ecdhe_slot_id;
-uint8_t ecc_slot_id;
+ecdhe_slot_id_t *ecdhe_slots_id;
+uint8_t ecdhe_nb_slots;
 #endif
 
 #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
@@ -475,7 +475,7 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   unsigned char pub_key[2 * ATCA_KEY_SIZE];
   memcpy(pub_key, pub_key_x, ATCA_KEY_SIZE);
   memcpy(pub_key + ATCA_KEY_SIZE, pub_key_y, ATCA_KEY_SIZE);
-  ATCA_STATUS status = atcab_ecdh(ecdhe_slot_id, pub_key, result);
+  ATCA_STATUS status = atcab_ecdh(priv_key[1], pub_key, result);
   if (status != ATCA_SUCCESS) {
     dtls_alert("Failed to generate pre-master secret\n");
     return -1;
@@ -503,23 +503,47 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
   return key_size;
 }
 
+#ifdef DTLS_ATECC608A
+static ecdhe_slot_id_t get_ecdhe_slot_id(void)
+{
+  for (int i = 0 ; i < ecdhe_nb_slots ; i++)
+  {
+    if (!(ecdhe_slots_id[i].usage))
+    {
+      ecdhe_slots_id[i].usage = 1;
+      return ecdhe_slots_id[i];
+    }
+  }
+  // No slot available
+  dtls_crit("No slot available\n");
+  ecdhe_slot_id_t slot_id = {0, 0};
+  return slot_id;
+}
+#endif
+
 void
 dtls_ecdsa_generate_key(unsigned char *priv_key,
 			unsigned char *pub_key_x,
 			unsigned char *pub_key_y,
 			size_t key_size) {
 #if defined (DTLS_ATECC608A)
-  // priv_key et key_size are not used in ATECC608A
-  (void)priv_key;
+  // We fill the private key with the slot id
   (void)key_size;
+  ecdhe_slot_id_t slot_id = get_ecdhe_slot_id();
+  if (!slot_id.usage)
+  {
+    dtls_crit("No slot available\n");
+    return;
+  }
 
   unsigned char pub_key[2 * key_size];
-  ATCA_STATUS status = atcab_genkey(ecdhe_slot_id, pub_key);
+  ATCA_STATUS status = atcab_genkey(slot_id.slot, pub_key);
   if (status != ATCA_SUCCESS) {
     dtls_crit("Failed to generate key\n");
   }
   else
   {
+    memcpy(priv_key + 1, &(slot_id.slot), 1);
     memcpy(pub_key_x, pub_key, key_size);
     memcpy(pub_key_y, pub_key + key_size, key_size);
   }
@@ -551,7 +575,7 @@ dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
   ATCA_STATUS status;
   unsigned char signature[2*key_size];
   
-  status = atcab_sign(ecc_slot_id, sign_hash, signature);
+  status = atcab_sign(priv_key[1], sign_hash, signature);
   if (status != ATCA_SUCCESS) {
     dtls_crit("Failed to sign hash\n");
   }
