@@ -91,3 +91,9 @@ CMakeFiles
 tinydtls.dir
 Debug
 Release
+
+compile_commands.json
+
+.cache/
+
+libtinydtls.so*
