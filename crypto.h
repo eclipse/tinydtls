@@ -60,9 +60,18 @@ typedef uint8_t dtls_cipher_index_t;
 typedef enum { AES128=0 
 } dtls_crypto_alg;
 
-typedef enum {
-  DTLS_ECDH_CURVE_SECP256R1
-} dtls_ecdh_curve;
+/**
+ * Curve type as specified in the TLS supported elliptic curves
+ * extension (@see [RFC 8422, Section 5.1.1](https://www.rfc-editor.org/rfc/rfc8422#section-5.1.1).
+ *
+ * The only supported value so far is TLS_EXT_ELLIPTIC_CURVES_SECP256R1
+ */
+typedef uint16_t dtls_ecdh_curve;
+
+/**
+ * @deprecated {Defined for backwards compatibility.}
+ */
+#define DTLS_ECDH_CURVE_SECP256R1 TLS_EXT_ELLIPTIC_CURVES_SECP256R1
 
 /** Crypto context for TLS_PSK_WITH_AES_128_CCM_8 cipher suite. */
 typedef struct {
@@ -110,6 +119,17 @@ typedef struct {
     uint64_t bitfield;
 } seqnum_t;
 
+/* Maximum CID length. */
+#ifndef DTLS_MAX_CID_LENGTH
+#define DTLS_MAX_CID_LENGTH 16
+#endif
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+#ifndef DTLS_USE_CID_DEFAULT
+#define DTLS_USE_CID_DEFAULT 1
+#endif /* DTLS_USE_CID_DEFAULT */
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
 typedef struct {
   dtls_compression_t compression;	/**< compression method */
 
@@ -124,7 +144,12 @@ typedef struct {
    * access the components of the key block.
    */
   uint8 key_block[MAX_KEYBLOCK_LENGTH];
-  
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   seqnum_t cseq;        /**<sequence number of last record received*/
 } dtls_security_parameters_t;
 
@@ -141,6 +166,9 @@ typedef struct dtls_user_parameters_t {
   dtls_cipher_t cipher_suites[DTLS_MAX_CIPHER_SUITES + 1];
   unsigned int force_extended_master_secret:1; /** force extended master secret extension (RFC7627) */
   unsigned int force_renegotiation_info:1;     /** force renegotiation info extension (RFC5746) */
+#if (DTLS_MAX_CID_LENGTH > 0)
+  unsigned int support_cid:1;                  /** indicate CID support (RFC9146) */
+#endif
 } dtls_user_parameters_t;
 
 typedef struct {
@@ -158,6 +186,12 @@ typedef struct {
   dtls_compression_t compression;		/**< compression method */
   dtls_user_parameters_t user_parameters;	/**< user parameters */
   dtls_cipher_index_t cipher_index;		/**< internal index for cipher_suite_params, DTLS_CIPHER_INDEX_NULL for TLS_NULL_WITH_NULL_NULL */
+
+#if (DTLS_MAX_CID_LENGTH > 0)
+  uint8_t write_cid[DTLS_MAX_CID_LENGTH];
+  uint8_t write_cid_length;
+#endif /* DTLS_MAX_CID_LENGTH > 0 */
+
   unsigned int do_client_auth:1;
   unsigned int extended_master_secret:1;
   unsigned int renegotiation_info:1;
@@ -429,14 +463,69 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
                                 unsigned char *result,
                                 size_t result_len);
 
+/**
+ * Generates the pre_master_sercet from given own private key @p
+ * priv_key and remote public key @p pub_key for the curve @p curve.
+ * This function returns the generated shared secret in @p result of
+ * size @p result_len. On success, the return value give the actual
+ * number of bytes written to @p result. The return @c 0 indicates
+ * an error.
+ *
+ * @param priv_key    The own private key. The size of this key is
+ *                    defined by the selected @p curve and is passed
+ *                    in @p key_size.
+ * @param pub_key     The remote public key. The size of this key is
+ *                    defined by the selected @p curve (usually twice
+ *                    @p key_size.
+ * @param key_size    Length of @p priv_key in bytes.
+ * @param curve       The elliptic curve to use.
+ * @param result      The derived pre master secret.
+ * @param result_len  The maximum length of the derived pre master secret.
+ *                    in @p result.
+ * @return The actual length of @p result or <= 0 on error.
+ */
+int dtls_ecdh_pre_master_secret2(const unsigned char *priv_key,
+                                 const unsigned char *pub_key,
+                                 size_t key_size,
+                                 dtls_ecdh_curve curve,
+                                 unsigned char *result,
+                                 size_t result_len);
+
 void dtls_ecdsa_generate_key(unsigned char *priv_key,
 			     unsigned char *pub_key_x,
 			     unsigned char *pub_key_y,
 			     size_t key_size);
 
+/**
+ * Generates a key pair for the given curve @p curve and stores the
+ * private part in @p priv_key and the public part in @p pub_key.  The
+ * storage that must be provided for @p priv_key and @p pub_key is
+ * determined by @p curve. Usually, @p pub_key requires 2 * @p
+ * key_size. This function returns the actual number of bytes written
+ * into @p priv_key on success, or @c 0 otherwise.
+ *
+ * @param priv_key Storage for the generated private key.
+ * @param pub_key  Storage for the generated public key.
+ * @param key_size The amount of storage for @p priv_key.
+ * @param curve    Storage for the generated public key.
+ * @return The number of bytes written into @p priv_key, or @c 0 on error.
+ */
+int dtls_ecdsa_generate_key2(unsigned char *priv_key,
+                             unsigned char *pub_key,
+                             size_t key_size,
+                             dtls_ecdh_curve curve);
+
 void dtls_ecdsa_create_sig_hash(const unsigned char *priv_key, size_t key_size,
 				const unsigned char *sign_hash, size_t sign_hash_size,
 				uint32_t point_r[9], uint32_t point_s[9]);
+
+/**
+ * FIXME: document function
+ */
+int dtls_ecdsa_create_sig_hash2(const unsigned char *priv_key, size_t key_size,
+                                const unsigned char *sign_hash, size_t sign_hash_size,
+                                dtls_ecdh_curve curve,
+                                uint32_t point_r[9], uint32_t point_s[9]);
 
 void dtls_ecdsa_create_sig(const unsigned char *priv_key, size_t key_size,
 			   const unsigned char *client_random, size_t client_random_size,
@@ -448,6 +537,14 @@ int dtls_ecdsa_verify_sig_hash(const unsigned char *pub_key_x,
 			       const unsigned char *pub_key_y, size_t key_size,
 			       const unsigned char *sign_hash, size_t sign_hash_size,
 			       unsigned char *result_r, unsigned char *result_s);
+
+/**
+ * FIXME: document function
+ */
+int dtls_ecdsa_verify_sig_hash2(const unsigned char *pub_key, size_t key_size,
+                                const unsigned char *sign_hash, size_t sign_hash_size,
+                                dtls_ecdh_curve curve,
+                                unsigned char *result_r, unsigned char *result_s);
 
 int dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
 			  const unsigned char *pub_key_y, size_t key_size,

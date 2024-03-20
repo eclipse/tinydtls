@@ -23,6 +23,8 @@ jobs:
         CC: ["gcc", "clang" ]
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: setup
         run: |
           sudo apt-get update && sudo apt-get install -y libcunit1-dev libtool libtool-bin exuberant-ctags valgrind
@@ -48,6 +50,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - name: Build tinydtls
       run: |
         cmake -E make_directory build_test
@@ -60,6 +64,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - name: Build tinydtls
       run: |
         cmake -E make_directory build_test
@@ -73,6 +79,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - name: Build tinydtls
       run: |
         cmake -E make_directory build_test

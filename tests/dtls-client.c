@@ -69,7 +69,9 @@ static dtls_context_t *orig_dtls_context = NULL;
 static const dtls_cipher_t* ciphers = NULL;
 static unsigned int force_extended_master_secret = 0;
 static unsigned int force_renegotiation_info = 0;
-
+#if (DTLS_MAX_CID_LENGTH > 0)
+static unsigned int support_cid = 0;
+#endif
 
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
@@ -246,6 +248,9 @@ get_user_parameters(struct dtls_context_t *ctx,
   (void) session;
   user_parameters->force_extended_master_secret = force_extended_master_secret;
   user_parameters->force_renegotiation_info = force_renegotiation_info;
+#if (DTLS_MAX_CID_LENGTH > 0)
+  user_parameters->support_cid = support_cid;
+#endif
   if (ciphers) {
     int i = 0;
     while (i < DTLS_MAX_CIPHER_SUITES) {
@@ -359,14 +364,19 @@ usage( const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS client implementation\n"
-          "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
+          "(c) 2011-2024 Olaf Bergmann <bergmann@tzi.org>\n\n"
+          "usage: %s [-c cipher suites] [-e] "
 #ifdef DTLS_PSK
-          "usage: %s [-c cipher suites] [-e] [-i file] [-k file] [-o file]\n"
-          "       %*s [-p port] [-r] [-v num] addr [port]\n",
+          "[-i file] [-k file] [-o file]\n"
+          "       %*s [-p port] [-r] [-v num]"
 #else /*  DTLS_PSK */
-          "usage: %s [-c cipher suites] [-e] [-o file] [-p port] [-r]\n"
-          "       %*s [-v num] addr [port]\n",
+          "[-o file] [-p port] [-r]\n"
+          "       %*s [-v num]"
 #endif /* DTLS_PSK */
+#if (DTLS_MAX_CID_LENGTH > 0)
+          " [-z]"
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
+          " addr [port]\n",
           program, version, program, (int)strlen(program), "");
   cipher_suites_usage(stderr, "\t");
   fprintf(stderr, "\t-e\t\tforce extended master secret (RFC7627)\n"
@@ -376,9 +386,14 @@ usage( const char *program, const char *version) {
 #endif /* DTLS_PSK */
           "\t-o file\t\toutput received data to this file\n"
           "\t       \t\t(use '-' for STDOUT)\n"
-          "\t-p port\t\tlisten on specified port (default is %d)\n"
+          "\t-p port\t\tlisten on specified port\n"
+          "\t       \t\t(default is an ephemeral free port).\n"
           "\t-r\t\tforce renegotiation info (RFC5746)\n"
-          "\t-v num\t\tverbosity level (default: 3)\n",
+          "\t-v num\t\tverbosity level (default: 3)\n"
+#if (DTLS_MAX_CID_LENGTH > 0)
+          "\t-z\t\tsupport CID (RFC9146)\n"
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
+          "\tDefault destination port: %d\n",
           DEFAULT_PORT);
 }
 
@@ -411,21 +426,23 @@ int
 main(int argc, char **argv) {
   fd_set rfds, wfds;
   struct timeval timeout;
-  unsigned short port = DEFAULT_PORT;
-  char port_str[NI_MAXSERV] = "0";
+  unsigned short dst_port = 0;
+  unsigned short local_port = 0;
   log_t log_level = DTLS_LOG_WARN;
   int fd;
   ssize_t result;
   int on = 1;
   int opt, res;
   session_t dst;
+  session_t listen;
   char buf[200];
   size_t len = 0;
   int buf_ready = 0;
 
+  memset(&dst, 0, sizeof(session_t));
+  memset(&listen, 0, sizeof(session_t));
 
   dtls_init();
-  snprintf(port_str, sizeof(port_str), "%d", port);
 
 #ifdef DTLS_PSK
   psk_id_length = strlen(PSK_DEFAULT_IDENTITY);
@@ -434,7 +451,8 @@ main(int argc, char **argv) {
   memcpy(psk_key, PSK_DEFAULT_KEY, psk_key_length);
 #endif /* DTLS_PSK */
 
-  while ((opt = getopt(argc, argv, "c:eo:p:rv:" PSK_OPTIONS)) != -1) {
+  while (optind < argc) {
+    opt = getopt(argc, argv, "c:eo:p:rv:z" PSK_OPTIONS);
     switch (opt) {
 #ifdef DTLS_PSK
     case 'i' :
@@ -473,8 +491,7 @@ main(int argc, char **argv) {
       }
       break;
     case 'p' :
-      strncpy(port_str, optarg, NI_MAXSERV-1);
-      port_str[NI_MAXSERV - 1] = '\0';
+      local_port = atoi(optarg);
       break;
     case 'r' :
       force_renegotiation_info = 1;
@@ -482,31 +499,53 @@ main(int argc, char **argv) {
     case 'v' :
       log_level = strtol(optarg, NULL, 10);
       break;
+#if (DTLS_MAX_CID_LENGTH > 0)
+    case 'z' :
+      support_cid = 1;
+      break;
+#endif /* DTLS_MAX_CID_LENGTH > 0*/
+    case -1 :
+      /* handle arguments */
+      if (!dst.size) {
+        /* first argument: destination address */
+        /* resolve destination address where server should be sent */
+        res = resolve_address(argv[optind++], &dst.addr.sa);
+        if (res < 0) {
+          dtls_emerg("failed to resolve address\n");
+          exit(-1);
+        }
+        dst.size = res;
+      } else if (!dst_port) {
+        /* second argument: destination port (optional) */
+        dst_port = atoi(argv[optind++]);
+      } else {
+        dtls_warn("too many arguments!\n");
+        usage(argv[0], dtls_package_version());
+        exit(1);
+      }
+      break;
     default:
       usage(argv[0], dtls_package_version());
       exit(1);
     }
   }
 
-  dtls_set_log_level(log_level);
-
-  if (argc <= optind) {
+  if (!dst.size) {
+    dtls_warn("missing destination address!\n");
     usage(argv[0], dtls_package_version());
     exit(1);
   }
-
-  memset(&dst, 0, sizeof(session_t));
-  /* resolve destination address where server should be sent */
-  res = resolve_address(argv[optind++], &dst.addr.sa);
-  if (res < 0) {
-    dtls_emerg("failed to resolve address\n");
-    exit(-1);
+  if (!dst_port) {
+    /* destination port not provided, use default */
+    dst_port = DEFAULT_PORT;
   }
-  dst.size = res;
+  if (dst.addr.sa.sa_family == AF_INET6) {
+    dst.addr.sin6.sin6_port = htons(dst_port);
+  } else {
+    dst.addr.sin.sin_port = htons(dst_port);
+  }
 
-  /* use port number from command line when specified or the listen
-     port, otherwise */
-  dst.addr.sin.sin_port = htons(atoi(optind < argc ? argv[optind++] : port_str));
+  dtls_set_log_level(log_level);
 
   /* init socket and set it to non-blocking */
   fd = socket(dst.addr.sa.sa_family, SOCK_DGRAM, 0);
@@ -539,6 +578,24 @@ main(int argc, char **argv) {
   else {
     if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on) ) < 0) {
       dtls_alert("setsockopt IP_PKTINFO: %s\n", strerror(errno));
+    }
+  }
+
+  if (local_port) {
+    listen.addr = dst.addr;
+    listen.size = dst.size;
+    if (listen.addr.sa.sa_family == AF_INET6) {
+      listen.addr.sin6.sin6_addr = in6addr_any;
+      listen.addr.sin6.sin6_port = htons(local_port);
+      dtls_info("bind to local IPv6 port %u\n", local_port);
+    } else {
+      listen.addr.sin.sin_addr.s_addr = INADDR_ANY;
+      listen.addr.sin.sin_port = htons(local_port);
+      dtls_info("bind to local IPv4 port %u\n", local_port);
+    }
+    if (bind(fd, (struct sockaddr *)&listen.addr.sa, listen.size) < 0) {
+      dtls_alert("bind: %s\n", strerror(errno));
+      return EXIT_FAILURE;
     }
   }
 

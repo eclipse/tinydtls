@@ -308,7 +308,7 @@ usage(const char *program, const char *version) {
     program = ++p;
 
   fprintf(stderr, "%s v%s -- DTLS server implementation\n"
-         "(c) 2011-2014 Olaf Bergmann <bergmann@tzi.org>\n\n"
+         "(c) 2011-2024 Olaf Bergmann <bergmann@tzi.org>\n\n"
          "usage: %s [-A address] [-c cipher suites] [-e] [-p port] [-r] [-v num]\n"
          "\t-A address\t\tlisten on specified address (default is ::)\n",
          program, version, program);
@@ -385,6 +385,11 @@ main(int argc, char **argv) {
       usage(argv[0], dtls_package_version());
       exit(1);
     }
+  }
+  if (argc != optind) {
+    dtls_warn("no arguments supported!\n");
+    usage(argv[0], dtls_package_version());
+    exit(1);
   }
   listen_addr.sin6_port = port;
 

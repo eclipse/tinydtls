@@ -70,10 +70,12 @@ target_sources(tinydtls PRIVATE
    aes/rijndael.c
    aes/rijndael_wrap.c
    sha2/sha2.c
-   ecc/ecc.c)
+   ext/micro-ecc/uECC.c)
 
 target_include_directories(tinydtls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(tinydtls PUBLIC DTLSv12 WITH_SHA256 SHA2_USE_INTTYPES_H DTLS_CHECK_CONTENTTYPE)
+
+set_source_files_properties(ext/micro-ecc/uECC.c PROPERTIES COMPILE_OPTIONS "-Wno-pedantic;-Wno-unused-parameter;-Wno-missing-prototypes;-Wno-missing-declarations;-Wno-unknown-pragmas")
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "Export all symbols when compiling to a .dll" ON)

@@ -72,7 +72,13 @@ AC_ARG_WITH(ecc,
   [AS_HELP_STRING([--without-ecc],[disable support for TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8])],
   [],
   [AC_DEFINE(DTLS_ECC, 1, [Define to 1 if building with ECC support.])
-   OPT_OBJS="${OPT_OBJS} ecc/ecc.o"
+   OPT_OBJS="${OPT_OBJS} ext/micro-ecc/uECC.o"
+   dnl remove all ECC except for secp256r1
+   AC_DEFINE([uECC_SUPPORTS_secp160r1], [0], [Define to 1 if building with uECC curve secp160r1])
+   AC_DEFINE([uECC_SUPPORTS_secp192r1], [0], [Define to 1 if building with uECC curve secp192r1])
+   AC_DEFINE([uECC_SUPPORTS_secp224r1], [0], [Define to 1 if building with uECC curve secp224r1])
+   AC_DEFINE([uECC_SUPPORTS_secp256r1], [1], [Define to 1 if building with uECC curve secp256r1])
+   AC_DEFINE([uECC_SUPPORTS_secp256k1], [0], [Define to 1 if building with uECC curve secp256k1])
    DTLS_ECC=1])
 
 AC_ARG_WITH(psk,
@@ -116,7 +122,13 @@ AC_SUBST(NDEBUG)
 AC_SUBST(DTLS_ECC)
 AC_SUBST(DTLS_PSK)
 AC_SUBST(ENABLE_SHARED)
-AC_SUBST(AR)
+AC_SUBST(AC)
+
+AC_SUBST(uECC_SUPPORTS_secp160r1)
+AC_SUBST(uECC_SUPPORTS_secp192r1)
+AC_SUBST(uECC_SUPPORTS_secp224r1)
+AC_SUBST(uECC_SUPPORTS_secp256r1)
+AC_SUBST(uECC_SUPPORTS_secp256k1)
 
 # Checks for header files.
 AC_CHECK_HEADERS([assert.h arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/param.h sys/socket.h unistd.h])
@@ -148,6 +160,5 @@ AC_CONFIG_FILES([Makefile
                  platform-specific/Makefile
                  tinydtls.pc
 		 sha2/Makefile
-		 aes/Makefile
-		 ecc/Makefile])
+		 aes/Makefile])
 AC_OUTPUT
