@@ -464,7 +464,7 @@ dtls_create_cookie(dtls_context_t *ctx,
 		   uint8 *msg, size_t msglen,
 		   uint8 *cookie, int *clen) {
   unsigned char buf[DTLS_HMAC_MAX];
-  size_t e, fragment_length;
+  size_t e, compatability_length;
   int len;
 
   /* create cookie with HMAC-SHA256 over:
@@ -504,14 +504,23 @@ dtls_create_cookie(dtls_context_t *ctx,
   e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
   e += sizeof(uint8_t);
 
-  /* read fragment length and check for consistency */
-  fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
-  if ((fragment_length < e) || (e + DTLS_HS_LENGTH) > msglen)
+  /*
+   * Read in compatablility_length length and check for consistency
+   * The compatability_length is because a DTLS1.3 Client Hello may come in,
+   * and the re-transmit of the Client Hello with cookie may be different.
+   */
+   /* Get the Cipher Suites length + value */
+   compatability_length = dtls_uint16_to_int(msg + DTLS_HS_LENGTH + e) + 2;
+   /* Add in the Compression length byte + value */
+   compatability_length += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e
+                                             + compatability_length) + 1;
+
+   if (e + DTLS_HS_LENGTH + compatability_length > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
   dtls_hmac_update(&hmac_context,
 		   msg + DTLS_HS_LENGTH + e,
-		   fragment_length - e);
+		   compatability_length);
 
   len = dtls_hmac_finalize(&hmac_context, buf);
 
