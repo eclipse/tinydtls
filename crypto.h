@@ -94,6 +94,16 @@ typedef struct {
 /* This is the maximal supported length of the pre-shared key. */
 #define DTLS_PSK_MAX_KEY_LEN DTLS_KEY_LENGTH
 
+/* Ensure that extended master secret is forced in DTLS connections */
+#ifndef DTLS_FORCE_EXTENDED_MASTER_SECRET
+#define DTLS_FORCE_EXTENDED_MASTER_SECRET   (1)
+#endif
+
+/* Ensure that renegotiation info is forced in DTLS connections */
+#ifndef DTLS_FORCE_RENEGOTIATION_INFO
+#define DTLS_FORCE_RENEGOTIATION_INFO   (1)
+#endif
+
 typedef struct {
   uint16_t id_length;
   unsigned char identity[DTLS_PSK_MAX_CLIENT_IDENTITY_LEN];

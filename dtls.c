@@ -664,8 +664,8 @@ static const dtls_user_parameters_t default_user_parameters = {
        TLS_NULL_WITH_NULL_NULL
     },
 #endif /* DTLS_DEFAULT_CIPHER_SUITES */
-  .force_extended_master_secret = 1,
-  .force_renegotiation_info = 1,
+  .force_extended_master_secret = DTLS_FORCE_EXTENDED_MASTER_SECRET,
+  .force_renegotiation_info = DTLS_FORCE_RENEGOTIATION_INFO,
 };
 
 /** only one compression method is currently defined */
