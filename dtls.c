@@ -464,7 +464,7 @@ dtls_create_cookie(dtls_context_t *ctx,
 		   uint8 *msg, size_t msglen,
 		   uint8 *cookie, int *clen) {
   unsigned char buf[DTLS_HMAC_MAX];
-  size_t e, fragment_length;
+  uint8 *start;
   int len;
 
   /* create cookie with HMAC-SHA256 over:
@@ -475,6 +475,14 @@ dtls_create_cookie(dtls_context_t *ctx,
    * - session id
    * - cipher_suites
    * - compression method
+   *
+   * See RFC6347, 4.2.1.  Denial-of-Service Countermeasures, page 17
+   *
+   * "When responding to a HelloVerifyRequest, the client MUST use the same
+   *  parameter values (version, random, session_id, cipher_suites,
+   *  compression_method) as it did in the original ClientHello.  The
+   *  server SHOULD use those values to generate its cookie and verify that
+   *  they are correct upon cookie receipt."
    */
 
   /* Note that the buffer size must fit with the default hash algorithm. */
@@ -482,36 +490,37 @@ dtls_create_cookie(dtls_context_t *ctx,
   dtls_hmac_context_t hmac_context;
   dtls_hmac_init(&hmac_context, ctx->cookie_secret, DTLS_COOKIE_SECRET_LENGTH);
 
-  dtls_hmac_update(&hmac_context,
-		   (unsigned char *)&session->addr, session->size);
+  dtls_hmac_update(&hmac_context, (uint8 *)&session->addr, session->size);
 
-  /* feed in the beginning of the Client Hello up to and including the
-     session id */
-  e = DTLS_CH_LENGTH;
-  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
+  if (DTLS_HS_LENGTH + DTLS_CH_LENGTH > msglen)
     return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
 
-  e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e) + sizeof(uint8_t);
+  /* skip DTLS_HS_LENGTH */
+  msg += DTLS_HS_LENGTH;
+  msglen -= DTLS_HS_LENGTH;
+  start = msg;
 
-  if (e + DTLS_HS_LENGTH > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  /* add DTLS_CH_LENGTH by forward msg pointer */
+  msg += DTLS_CH_LENGTH;
+  msglen -= DTLS_CH_LENGTH;
 
-  dtls_hmac_update(&hmac_context, msg + DTLS_HS_LENGTH, e);
+  /* add session_id by forward msg pointer */
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, session_id");
 
-  if (e + DTLS_HS_LENGTH + sizeof(uint8_t) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
-  /* skip cookie bytes and length byte */
-  e += dtls_uint8_to_int(msg + DTLS_HS_LENGTH + e);
-  e += sizeof(uint8_t);
+  dtls_hmac_update(&hmac_context, start, msg - start);
 
-  /* read fragment length and check for consistency */
-  fragment_length = dtls_get_fragment_length(DTLS_HANDSHAKE_HEADER(msg));
-  if ((fragment_length < e) || (e + DTLS_HS_LENGTH) > msglen)
-    return dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+  /* skip cookie. */
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, cookie");
 
-  dtls_hmac_update(&hmac_context,
-		   msg + DTLS_HS_LENGTH + e,
-		   fragment_length - e);
+  /* add cipher suites and compression by forward msg pointer. */
+  start = msg;
+  SKIP_VAR_FIELD(msg, msglen, uint16, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, cipher-suites");
+  SKIP_VAR_FIELD(msg, msglen, uint8, DTLS_ALERT_HANDSHAKE_FAILURE,
+                 "create_cookie, compression");
+  dtls_hmac_update(&hmac_context, start, msg - start);
 
   len = dtls_hmac_finalize(&hmac_context, buf);
 
