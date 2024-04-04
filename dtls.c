@@ -670,6 +670,11 @@ dtls_set_handshake_header(uint8 type,
   return buf;
 }
 
+/**
+ * A copy of default_user_parameters are passed to the get_user_parameters
+ * callback provided in dtls_handler_t and may be adapted according the user's
+ * requirements.
+ */
 static const dtls_user_parameters_t default_user_parameters = {
   .cipher_suites =
 #ifdef DTLS_DEFAULT_CIPHER_SUITES
