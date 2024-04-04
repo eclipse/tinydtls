@@ -132,6 +132,10 @@ struct netq_t;
 
 /**
  * Set of user parameters used by the handshake.
+ *
+ * A copy of default_user_parameters (see dtls.c) are passed to the
+ * get_user_parameters callback provided in dtls_handler_t and may be
+ * adapted according the user's requirements.
  */
 typedef struct dtls_user_parameters_t {
   /**
