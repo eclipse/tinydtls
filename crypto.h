@@ -37,6 +37,9 @@
 #define DTLS_MAC_LENGTH        DTLS_HMAC_DIGEST_SIZE
 #define DTLS_IV_LENGTH         4  /* length of nonce_explicit */
 
+/* EC key size for curve secp256r1 */
+#define DTLS_EC_KEY_SIZE 32
+
 /** 
  * Maximum size of the generated keyblock. Note that MAX_KEYBLOCK_LENGTH must 
  * be large enough to hold the pre_master_secret, i.e. twice the length of the 
@@ -78,11 +81,11 @@ typedef struct dtls_cipher_context_t {
 } dtls_cipher_context_t;
 
 typedef struct {
-  uint8 own_eph_priv[32];
-  uint8 other_eph_pub_x[32];
-  uint8 other_eph_pub_y[32];
-  uint8 other_pub_x[32];
-  uint8 other_pub_y[32];
+  uint8 own_eph_priv[DTLS_EC_KEY_SIZE];
+  uint8 other_eph_pub_x[DTLS_EC_KEY_SIZE];
+  uint8 other_eph_pub_y[DTLS_EC_KEY_SIZE];
+  uint8 other_pub_x[DTLS_EC_KEY_SIZE];
+  uint8 other_pub_y[DTLS_EC_KEY_SIZE];
 } dtls_handshake_parameters_ecdsa_t;
 
 /* This is the maximal supported length of the psk client identity and psk
@@ -419,8 +422,6 @@ int dtls_decrypt(const unsigned char *src, size_t length,
  */
 int dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
 			       unsigned char *result, size_t result_len);
-
-#define DTLS_EC_KEY_SIZE 32
 
 int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
 				unsigned char *pub_key_x,
