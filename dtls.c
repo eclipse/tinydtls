@@ -2603,6 +2603,18 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 #define DTLS_EC_SUBJECTPUBLICKEY_SIZE (2 * DTLS_EC_KEY_SIZE + sizeof(cert_asn1_header))
 
 static int
+dtls_send_certificate_empty(dtls_context_t *ctx, dtls_peer_t *peer)
+{
+  uint8 buf[sizeof(uint24)];
+
+  /* length of this certificate */
+  dtls_int_to_uint24(buf, 0);
+
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE,
+				 buf, sizeof(buf));
+}
+
+static int
 dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
 			    const dtls_ecdsa_key_t *key)
 {
@@ -3694,12 +3706,12 @@ check_server_hellodone(dtls_context_t *ctx,
 
     res = CALL(ctx, get_ecdsa_key, &peer->session, &ecdsa_key);
     if (res < 0) {
-      dtls_crit("no ecdsa certificate to send in certificate\n");
-      return res;
+      dtls_warn("no ecdsa certificate to send in certificate\n");
+      res = dtls_send_certificate_empty(ctx, peer);
+      handshake->do_client_auth = 0;
+    } else {
+      res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
     }
-
-    res = dtls_send_certificate_ecdsa(ctx, peer, ecdsa_key);
-
     if (res < 0) {
       dtls_debug("dtls_server_hello: cannot prepare Certificate record\n");
       return res;
