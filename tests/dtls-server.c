@@ -50,6 +50,8 @@ static const dtls_cipher_t* ciphers = NULL;
 static unsigned int force_extended_master_secret = 0;
 static unsigned int force_renegotiation_info = 0;
 
+static volatile int quit = 0;
+
 #ifdef DTLS_ECC
 static const unsigned char ecdsa_priv_key[] = {
             0xD9, 0xE2, 0x70, 0x7A, 0x72, 0xDA, 0x6A, 0x05,
@@ -252,9 +254,8 @@ dtls_handle_read(struct dtls_context_t *ctx) {
 
 static void dtls_handle_signal(int sig)
 {
-  dtls_free_context(the_context);
-  signal(sig, SIG_DFL);
-  kill(getpid(), sig);
+  (void)sig;
+  quit = 1;
 }
 
 static int
@@ -455,7 +456,7 @@ main(int argc, char **argv) {
 
   dtls_set_handler(the_context, &cb);
 
-  while (1) {
+  while (!quit) {
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
 
