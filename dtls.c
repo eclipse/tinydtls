@@ -2133,42 +2133,45 @@ static inline int
 dtls_send_alert(dtls_context_t *ctx, dtls_peer_t *peer, dtls_alert_level_t level,
 		dtls_alert_t description) {
   uint8_t msg[] = { level, description };
+  netq_t *n = NULL;
 
   dtls_send(ctx, peer, DTLS_CT_ALERT, msg, sizeof(msg));
 
-  /* copy close alert in retransmit buffer to emulate timeout */
-  /* not resent, therefore don't copy the complete record */
-  netq_t *n = netq_node_new(2);
-  if (n) {
-    dtls_tick_t now;
-    dtls_ticks(&now);
-    n->t = now + 2 * CLOCK_SECOND;
-    n->retransmit_cnt = 0;
-    n->timeout = 2 * CLOCK_SECOND;
-    n->peer = peer;
-    n->epoch = peer->security_params[0]->epoch;
-    n->type = DTLS_CT_ALERT;
-    n->length = 2;
-    n->data[0] = level;
-    n->data[1] = description;
-    n->job = TIMEOUT;
+  if (description == DTLS_ALERT_CLOSE_NOTIFY && level == DTLS_ALERT_LEVEL_WARNING) {
+    /* copy close alert in retransmit buffer to emulate timeout */
+    /* not resent, therefore don't copy the complete record */
+    n = netq_node_new(2);
+    if (n) {
+      dtls_tick_t now;
+      dtls_ticks(&now);
+      n->t = now + 2 * CLOCK_SECOND;
+      n->retransmit_cnt = 0;
+      n->timeout = 2 * CLOCK_SECOND;
+      n->peer = peer;
+      n->epoch = peer->security_params[0]->epoch;
+      n->type = DTLS_CT_ALERT;
+      n->length = 2;
+      n->data[0] = level;
+      n->data[1] = description;
+      n->job = TIMEOUT;
 
-    if (!netq_insert_node(&ctx->sendqueue, n)) {
-      dtls_warn("cannot add alert to retransmit buffer\n");
-      netq_node_free(n);
-      n = NULL;
+      if (!netq_insert_node(&ctx->sendqueue, n)) {
+        dtls_warn("cannot add alert to retransmit buffer\n");
+        netq_node_free(n);
+        n = NULL;
 #ifdef WITH_CONTIKI
-    } else {
-      /* must set timer within the context of the retransmit process */
-      PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
-      etimer_set(&ctx->retransmit_timer, n->timeout);
-      PROCESS_CONTEXT_END(&dtls_retransmit_process);
+      } else {
+        /* must set timer within the context of the retransmit process */
+        PROCESS_CONTEXT_BEGIN(&dtls_retransmit_process);
+        etimer_set(&ctx->retransmit_timer, n->timeout);
+        PROCESS_CONTEXT_END(&dtls_retransmit_process);
 #else /* WITH_CONTIKI */
-      dtls_debug("alert copied to retransmit buffer\n");
+        dtls_debug("alert copied to retransmit buffer\n");
 #endif /* WITH_CONTIKI */
+      }
+    } else {
+      dtls_warn("cannot add alert, retransmit buffer full\n");
     }
-  } else {
-    dtls_warn("cannot add alert, retransmit buffer full\n");
   }
   if (!n) {
     /* timeout not registered */
@@ -4735,10 +4738,6 @@ dtls_handle_message(dtls_context_t *ctx,
         dtls_stop_retransmission(ctx, peer);
         dtls_alert_send_from_err(ctx, peer, err);
 
-        /* invalidate peer */
-        dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
-        peer = NULL;
-
         return err;
       }
       break;
@@ -4759,10 +4758,6 @@ dtls_handle_message(dtls_context_t *ctx,
           dtls_info("received close_notify alert, peer has been invalidated\n");
         else
           dtls_warn("received fatal alert, peer has been invalidated\n");
-        /* handle alert has invalidated peer */
-        peer = NULL;
-        err = -1;
-        /* no more valid records after fatal alerts */
         return 0;
       } else {
         dtls_stop_retransmission(ctx, peer);
@@ -4777,14 +4772,6 @@ dtls_handle_message(dtls_context_t *ctx,
                   " state %d\n", -err, dtls_handshake_type_to_name(data[0]),
                   data[0], peer->state);
         dtls_alert_send_from_err(ctx, peer, err);
-
-        if (peer && DTLS_ALERT_LEVEL_FATAL == ((-err) & 0xff00) >> 8) {
-          /* invalidate peer */
-          peer->state = DTLS_STATE_CLOSED;
-          dtls_stop_retransmission(ctx, peer);
-          dtls_destroy_peer(ctx, peer, DTLS_DESTROY_CLOSE);
-          peer = NULL;
-        }
         return err;
       }
       if (peer && peer->state == DTLS_STATE_CONNECTED) {
