@@ -6,40 +6,31 @@
  * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
  *
  * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
+ * and the Eclipse Distribution License is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Olaf Bergmann  - initial API and implementation
  *    Hauke Mehrtens - memory optimization, ECC integration
+ *    Achim Kraus    - session recovery
+ *    Sachin Agrawal - rehandshake support
  *    Jon Shallow    - platform dependent prng support
+ *    Lukas Luger    - adding psa crypto support
  *
  *******************************************************************************/
 
 #include "tinydtls.h"
+#include "dtls_prng.h"
+#include "psa/crypto.h"
 
-#if defined (WITH_CONTIKI)
-#include "platform-specific/dtls_prng_contiki.c"
+int
+dtls_prng(unsigned char *buf, size_t len) {
+  psa_generate_random(buf, len);
+  return len;
+}
 
-#elif defined (ESPIDF_VERSION)
-#include "platform-specific/dtls_prng_espidf.c"
+void
+dtls_prng_init(unsigned seed) {
+  (void) seed;
+}
 
-#elif defined (USE_PSA)
-#include "platform-specific/dtls_prng_psa.c"
-
-#elif defined (WITH_ZEPHYR)
-#include "platform-specific/dtls_prng_zephyr.c"
-
-#elif defined (IS_WINDOWS)
-#include "platform-specific/dtls_prng_win.c"
-
-#elif defined (WITH_LWIP)
-#include "platform-specific/dtls_prng_lwip.c"
-
-#elif defined (WITH_POSIX)
-#include "platform-specific/dtls_prng_posix.c"
-
-#else
-#error platform specific prng not defined
-
-#endif
