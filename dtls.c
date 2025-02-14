@@ -327,6 +327,9 @@ free_context(dtls_context_t *context) {
 
 void
 dtls_init(void) {
+#ifdef USE_PSA
+  psa_crypto_init();
+#endif
   dtls_clock_init();
   crypto_init();
   netq_init();
