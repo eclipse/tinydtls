@@ -27,6 +27,10 @@
 #include "dtls_debug.h"
 #include "hmac.h"
 
+#ifdef USE_PSA
+#include "platform-specific/dtls_hmac_psa.c"
+#else /* USE_PSA */
+
 void
 dtls_hmac_update(dtls_hmac_context_t *ctx,
 		 const unsigned char *input, size_t ilen) {
@@ -79,6 +83,7 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
 
   return len;
 }
+#endif /* !USE_PSA */
 
 #ifdef HMAC_TEST
 #include <stdio.h>
